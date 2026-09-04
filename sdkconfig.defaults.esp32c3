@@ -1,0 +1,6 @@
+# ESP32-C3. Also has USB-Serial-JTAG. A secondary console is output-only and
+# would never receive keystrokes, so the shell would appear to ignore input.
+CONFIG_IDF_TARGET="esp32c3"
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y

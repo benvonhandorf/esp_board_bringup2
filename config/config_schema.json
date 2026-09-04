@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "app_config",
+  "title": "Device configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["config_version", "wifi", "mqtt", "ntp", "http"],
+  "properties": {
+    "config_version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1,
+      "description": "Format version this firmware accepts. Raise the maximum when the firmware learns a newer layout; the check is generated, so it cannot be forgotten."
+    },
+    "device_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 31,
+      "default": "esp-device",
+      "description": "Identifies this unit: the mDNS hostname, the MQTT client id, and the substitution for $DEVICE$ in the MQTT topic prefix."
+    },
+    "instance_name": {
+      "type": "string",
+      "maxLength": 63,
+      "default": "",
+      "description": "Human-readable name shown by mDNS browsers"
+    },
+
+    "wifi": { "$ref": "wifi_manager/wifi_manager_config_schema.json" },
+    "mqtt": { "$ref": "mqtt_manager/mqtt_manager_config_schema.json" },
+    "ntp":  { "$ref": "ntp_manager/ntp_config_schema.json" },
+    "http": { "$ref": "http_server/http_server_config_schema.json" }
+  }
+}

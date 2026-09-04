@@ -1,105 +1,112 @@
-This project is a template for other ESP-IDF projects.  Along with associated components, it will provide a set of easily reusable patterns and components to allow faster prototyping with fewer required choices, while providing a firm foundation for more complicated work.
+# ESP-IDF project template
 
-## Goal
+A starting point for ESP32 firmware, with the things every project needs already
+decided: configuration, networking, MQTT, a command shell reachable over serial and a
+browser, an HTTP management interface, and over-the-air updates with rollback.
 
-- Provide a unified structure for multiple projects for common concerns
-- Share code and configuration to the degree possible
-- Self-documenting configurations for each component, where applicable
+Clone it, change the device name, and you have a device that joins a network, answers to
+a name, publishes status, takes a new configuration over HTTP and can be updated without
+a cable.
 
-## Architecture
+## What you get
 
-- FreeRTOS based
-- Separate tasks for different processing steps, using FreeRTOS queues to communicate
-- No allocation of data during normal execution.  
-  - Instead tasks communicate in data pipelines using producer-consumer with buffer recycling.  
-  - Buffers are pre-allocated and provided to the first task through a queue, then recycled back after processing that buffer is complete.
-- Re-use common components or patterns where possible.
+| | |
+|---|---|
+| **Configuration** | One JSON Schema per project. The parser, the C types and the top-level walker are generated from it; there is no second description of the config to keep in step. Reads from an SD card if one is present, otherwise from flash. |
+| **Shell** | `sys info`, `net status`, … over the serial port *and* a browser at the same time, with output from either appearing on both. |
+| **Networking** | WiFi with prioritised known networks, reconnect backoff, and a configuration access point when nothing is joinable. mDNS, NTP and MQTT start themselves when a link appears. |
+| **MQTT** | Topic-handler registry, retained status, last-will so subscribers know when the device drops, and the log forwarded to a topic. |
+| **HTTP** | Status, read and replace the configuration, and firmware upload — with Basic auth decided per route. |
+| **OTA** | A/B slots with rollback: firmware that does not boot cleanly undoes itself. |
 
-## Flash Choices
+## Getting started
 
-A minimal system should fit into 4 MB flash, although some projects may be too large
+```sh
+git clone <this repo> my-project && cd my-project
+git clone https://github.com/benvonhandorf/esp_components.git ../esp_components
 
-- OTA partitions
-	- A and B to allow fail-back on upgrade
-	- Manual flashing should flash the A partition and reset any OTA flags
-- 500 kB littlefs filesystem for configuration and static resources (e.g. web pages or templates)
+cp config/config.example.json fs/config.json   # then edit it
 
-## Project Baseline
+idf.py set-target esp32s3
+idf.py build
+./tools/flash_a.py -p /dev/ttyACM0
+```
 
-Items that should be provided for every project:
+Then rename the project in `CMakeLists.txt` (`project(idf_template)`) — it becomes the
+firmware name, and OTA refuses an image built under a different one.
 
-- Networking - Why are we using an ESP32 if not for wifi?  Unless it's for Bluetooth.
-	- Robust reconnection and retry framework
-	- MQTT
-		- Robust reconnection and retry framework
-		- Provides a system status topic
-			- Emmission frequency is project specific
-			- Format is project specific but based on JSON schema common across projects
-		- Provides a LWT topic to make it easy to know if the system is online or not
-		- 
-	- HTTP Server
-		- Provides a web console to the console system - Optional, for development (Authenticated)
-		- Provides a configuration read and write interface (Authenticated)
-		- Provides a system status retrieval endpoint
-	- OTA
-		- Using the esp-idf OTA setup with per-project keys for security
-	- mDNS 
-		- For discovery
-		- Per project service definition for easy discovery by other machines
-	- Logging
-		- Allow logging to filesystem, MQTT and web console
-	- Serial Console
-- Configuration 
-	- Part of every project.  Standardize on tooling and use of JSON schema
-- Console - Many projects need some sort of bring up.  Provide a standard interface for such.
-	- Menuing system
-	- Accessible via serial port or web interface
-	- Optional support for an LVGL console
+### Where the components come from
 
-### Additional components
-- Optional support for an LVGL console that integrates with the existing Console mechanism
-## Not part of the scaffolding, but common across projects
+While `esp_components` is a local checkout, the root `CMakeLists.txt` finds it beside this
+project, or wherever `ESP_COMPONENTS_DIR` points:
 
-- Device Driver Repository (1 or multiple)
-	- Centralize all the device drivers I write for use across multiple projects
-	- 
-## Distribution
+```sh
+idf.py -DESP_COMPONENTS_DIR=/path/to/esp_components build
+```
 
-- VS Code / ESP-IDF  Template on Github 
-	- Allow a new project to be created with settings
-	- Once a project is created, it need not get changes from the template, to improve project stability as the template evolves.
-	- How can the code be organized to minimize pain of recreation if necessary?
-- Drivers and compartmentalized should be ESP-IDF components where possible to allow versioning and upgrading without recreating the project
-	- Possibly a combination of public and private registries
+Once that repository is published, that block is replaced by version-pinned dependencies
+in `main/idf_component.yml`. Nothing else changes — components are found by name either
+way.
 
-## Approach
+## Configuration
 
-- JSON Schema for all components requiring configuration
-	- JSMN as a JSON parsing library into types generated by
-	- `json_schema_to_c`
-		- Python script to create C struct definitions and parsing routines from JSON Schema
-		- Custom build step to rebuild objects from schema changes.
-- Multiple components
-	- common - Common data across projects
-		- Common MQTT message sections for sensors and wifi, defined in JSON Schema
-		- Status message definition - Needs to be moved to the project
-		- Version information - Needs work, not really part of common
-	- jsmn - Base for generated 
-	- networking
-		- mdns_manager
-		- mqtt_manager
-		- http_server - Currently not part of scaffolding
-			- OTA
-	- config_reader 
-		- Currently baked into the project.  Should be a component.
-		- Leans on `littlefs` or `fat` for serialization option
-		- Optionally tries to read the config from SD card and then falls back to the cooked in littlefs filesystem.
+`config/config_schema.json` is the **one** description of this device's configuration.
+Each section `$ref`s the schema owned by the component that consumes it:
 
+```json
+"wifi": { "$ref": "wifi_manager/wifi_manager_config_schema.json" },
+"mqtt": { "$ref": "mqtt_manager/mqtt_manager_config_schema.json" }
+```
 
-## Projects
+From that, the build generates the C types, the parsers and a top-level walker that hands
+each section to its owning component to parse **in place**. Adding a section without
+wiring it up in `main/config_reader.c` does not compile.
 
-Copies of these projects are in the reference directory for use while creating the template and abstracting out drivers.  These will be removed after initial work.
+Defaults live in the schemas, so a device with no `config.json` still boots — onto its own
+access point, with the console running, ready to be configured. `fs/config.json` is
+gitignored; it holds real credentials.
 
-- Solar Power Monitor is currently the closest to a baseline
-- ESP Board Bringup has a strong console system that may be usable
-- Skycam 
+Replace it at runtime:
+
+```sh
+curl -u admin:secret -X POST --data-binary @fs/config.json http://device.local/api/config
+```
+
+It is parsed before it is stored, so a configuration that would not load cannot replace
+one that does.
+
+## Flashing, and why `flash_a.py`
+
+`idf.py flash` writes `ota_0`, but the bootloader follows `otadata`. After an OTA the
+device runs `ota_1`, so a plain flash writes the slot that is *not* selected and the
+device comes back running the old firmware — silently. `tools/flash_a.py` erases `otadata`
+as part of flashing.
+
+## Updating over the air
+
+```sh
+./tools/ota_upload.py device.local build/idf_template.bin -u admin
+```
+
+The image header is checked after about a kilobyte, so the wrong binary is refused
+quickly and by name. The new image boots on trial: `app_main()` confirms it only after
+everything has started, so firmware that crashes during start-up is rolled back on the
+next reset. Confirm or undo by hand with `sys confirm` and `sys rollback`.
+
+## Layout
+
+```
+config/       config_schema.json -- the one authored description; and an example
+fs/           contents of the LittleFS partition (config.json is gitignored)
+main/         app_main, config_reader, and this project's console commands,
+              HTTP routes and status message
+partitions/   4 MB / 8 MB / 16 MB A/B layouts
+tools/        flashing, OTA upload, status, MQTT tail
+docs/         how to extend the template
+```
+
+`main/app_status.c` is the file to edit first: what a device reports is the one thing no
+component can decide for you.
+
+See [AGENTS.md](AGENTS.md) for the conventions this project follows and
+[docs/](docs/README.md) for how to add a command, a route or a configuration section.

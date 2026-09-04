@@ -1,0 +1,34 @@
+{
+  "config_version": 1,
+  "device_name": "esp-device",
+  "instance_name": "Template Device",
+
+  "wifi": {
+    "hostname": "esp-device",
+    "known_networks": [
+      { "ssid": "your-network", "password": "your-passphrase", "priority": 10 }
+    ],
+    "ap_ssid": "esp-setup",
+    "ap_password": "configure-me",
+    "reachability_host": ""
+  },
+
+  "mqtt": {
+    "uri": "mqtt://broker.local:1883",
+    "username": "",
+    "password": "",
+    "topic_prefix": "device/$DEVICE$"
+  },
+
+  "ntp": {
+    "server": "pool.ntp.org",
+    "timezone": "UTC0"
+  },
+
+  "http": {
+    "port": 80,
+    "require_auth": true,
+    "username": "admin",
+    "password": "change-me"
+  }
+}

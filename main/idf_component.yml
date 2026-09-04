@@ -1,0 +1,4 @@
+dependencies:
+  # LittleFS backs the configuration partition. The application mounts it;
+  # config_store deliberately takes paths and mounts nothing itself.
+  joltwallet/littlefs: "^1.20"

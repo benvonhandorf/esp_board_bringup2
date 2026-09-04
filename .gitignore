@@ -82,3 +82,10 @@ Desktop.ini
 # hold real WiFi and MQTT credentials. Never commit them here; they are deleted
 # once extraction is finished.
 reference/
+
+# The device's real configuration: WiFi passphrase, broker password. Copy
+# config/config.example.json here and edit it. The projects this template was
+# extracted from committed theirs.
+fs/config.json
+
+# Generated config parsers live in the build tree only.
