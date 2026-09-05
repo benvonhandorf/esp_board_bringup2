@@ -7,8 +7,8 @@ changing code; it should save most of a codebase scan.
 
 An ESP-IDF firmware project built from a template. The parts that every project needs —
 configuration, WiFi, mDNS, NTP, MQTT, a command shell, HTTP, OTA — live in **shared
-components** in a separate repository (`esp_components`, found via `ESP_COMPONENTS_DIR`,
-by default beside this one). What is *here* is the part specific to this device.
+components** in a separate repository (`esp_components`), fetched by tag — see
+`main/idf_component.yml`. What is *here* is the part specific to this device.
 
 That split is the whole design. If you find yourself editing a shared component to make
 this project work, ask first whether the component is missing a general capability or
@@ -76,6 +76,18 @@ scalars — that is the shape that survives being graphed, alerted on and diffed
   call earlier; it would confirm images that never worked.
 - **`http_server` refuses to start with authentication enabled and no password.** That is
   not a bug. Set one in `config.json`.
+- **A shared component is pinned to a git tag, not a version range.** Upgrading one is
+  editing its `version:` in `main/idf_component.yml` to another tag; there is no range
+  that picks up a newer release on its own. To edit a component and this project
+  together, build with `-DESP_COMPONENTS_DIR=../esp_components` — a local component of
+  that name wins over the fetched one, and the pin is then ignored for it. Anything
+  changed that way has to be committed and tagged in `esp_components`, and the pin here
+  moved to the new tag, before a plain `idf.py build` sees it.
+- **A build with `ESP_COMPONENTS_DIR` set rewrites `dependencies.lock`**, replacing the
+  git pins with local paths — the component manager records what it resolved, and there
+  is no way to point it at a different lockfile. Committing that would un-pin the project
+  for everyone. A plain `idf.py reconfigure` puts the pins back; check `git diff` before
+  committing after working that way.
 - **`dependencies.lock` is committed and target-specific.** It pins the managed component
   versions, so `idf.py set-target` rewrites it. That churn belongs in the commit; do not
   gitignore it, or two people get different component versions.

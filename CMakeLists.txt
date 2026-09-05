@@ -1,40 +1,30 @@
 cmake_minimum_required(VERSION 3.22)
 
 #
-# Where the shared components come from.
+# The shared components are fetched by tag -- see main/idf_component.yml. Nothing
+# is needed here for a normal build, and nothing has to be cloned beside this
+# project.
 #
-# While esp_components is a local checkout, it is reached through
-# EXTRA_COMPONENT_DIRS. Override the location with -DESP_COMPONENTS_DIR=... or the
-# ESP_COMPONENTS_DIR environment variable.
+# ESP_COMPONENTS_DIR is the development override, for working on a component and
+# this project at the same time: a local component of the same name wins over the
+# fetched one, so the checkout is what gets built and the tags are ignored. It is
+# opt-in on purpose -- a checkout that shadowed the pinned versions merely by
+# existing would make "does this build" depend on what else is on the disk.
 #
-# Once that repository is published and tagged, delete this block and depend on
-# the components by version in main/idf_component.yml instead:
+#     idf.py -DESP_COMPONENTS_DIR=../esp_components build
 #
-#     dependencies:
-#       cli:
-#         git: https://github.com/benvonhandorf/esp_components.git
-#         path: cli
-#         version: cli-v0.1.0
-#
-# Nothing else in this project changes when you do -- the components are found by
-# name either way, which is the property the whole arrangement exists to have.
-#
-if(NOT DEFINED ESP_COMPONENTS_DIR)
-    if(DEFINED ENV{ESP_COMPONENTS_DIR})
-        set(ESP_COMPONENTS_DIR "$ENV{ESP_COMPONENTS_DIR}")
-    else()
-        set(ESP_COMPONENTS_DIR "${CMAKE_CURRENT_LIST_DIR}/../esp_components")
-    endif()
+if(NOT DEFINED ESP_COMPONENTS_DIR AND DEFINED ENV{ESP_COMPONENTS_DIR})
+    set(ESP_COMPONENTS_DIR "$ENV{ESP_COMPONENTS_DIR}")
 endif()
 
-if(EXISTS "${ESP_COMPONENTS_DIR}")
+if(DEFINED ESP_COMPONENTS_DIR)
+    if(NOT EXISTS "${ESP_COMPONENTS_DIR}")
+        message(FATAL_ERROR
+            "ESP_COMPONENTS_DIR is set to ${ESP_COMPONENTS_DIR}, which does not "
+            "exist.\nUnset it to build against the tags in main/idf_component.yml.")
+    endif()
     list(APPEND EXTRA_COMPONENT_DIRS "${ESP_COMPONENTS_DIR}")
-    message(STATUS "Shared components: ${ESP_COMPONENTS_DIR}")
-else()
-    message(FATAL_ERROR
-        "Shared components not found at ${ESP_COMPONENTS_DIR}.\n"
-        "Clone benvonhandorf/esp_components beside this project, or pass "
-        "-DESP_COMPONENTS_DIR=/path/to/esp_components.")
+    message(STATUS "Shared components overridden by checkout: ${ESP_COMPONENTS_DIR}")
 endif()
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)

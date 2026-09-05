@@ -23,7 +23,6 @@ a cable.
 
 ```sh
 git clone <this repo> my-project && cd my-project
-git clone https://github.com/benvonhandorf/esp_components.git ../esp_components
 
 cp config/config.example.json fs/config.json   # then edit it
 
@@ -37,16 +36,37 @@ firmware name, and OTA refuses an image built under a different one.
 
 ### Where the components come from
 
-While `esp_components` is a local checkout, the root `CMakeLists.txt` finds it beside this
-project, or wherever `ESP_COMPONENTS_DIR` points:
+`main/idf_component.yml` names each shared component and the tag it is pinned to; the
+component manager fetches them on the first build, into `managed_components/`. There is
+nothing to clone beside this project. Only the components this project uses directly are
+listed — each one names its own siblings, so `cli` brings `diag` with it.
 
-```sh
-idf.py -DESP_COMPONENTS_DIR=/path/to/esp_components build
+Upgrading is editing one line:
+
+```yaml
+  mqtt_manager:
+    git: https://github.com/benvonhandorf/esp_components.git
+    path: mqtt_manager
+    version: mqtt_manager-v0.2.0     # was v0.1.0
 ```
 
-Once that repository is published, that block is replaced by version-pinned dependencies
-in `main/idf_component.yml`. Nothing else changes — components are found by name either
-way.
+`version` is a **git ref**, not a semver range: the tag named is the code you get, and
+`dependencies.lock` records what was resolved.
+
+To work on a component and this project at the same time, point the build at a checkout.
+A local component of the same name wins over the fetched one, so the tags are ignored for
+whatever that directory contains:
+
+```sh
+git clone https://github.com/benvonhandorf/esp_components.git ../esp_components
+idf.py -DESP_COMPONENTS_DIR=../esp_components build
+```
+
+That override is opt-in: an unset `ESP_COMPONENTS_DIR` builds the pinned versions, so a
+checkout that happens to sit beside the project cannot silently change what is built.
+
+Building that way rewrites `dependencies.lock` to point at the checkout. Do not commit
+that — a plain `idf.py reconfigure` restores the pins.
 
 ## Configuration
 
