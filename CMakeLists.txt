@@ -28,7 +28,7 @@ if(DEFINED ESP_COMPONENTS_DIR)
 endif()
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(idf_template)
+project(esp_board_bringup)
 
 #
 # Build the LittleFS image from fs/ and flash it with the firmware.

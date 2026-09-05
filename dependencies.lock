@@ -228,5 +228,5 @@ direct_dependencies:
 - ota
 - wifi_manager
 manifest_hash: 0239bcf765b34283ae3dd75f21c56c5519a47ec72e0f644655d28dba4406e910
-target: esp32s3
+target: esp32c3
 version: 3.0.0
