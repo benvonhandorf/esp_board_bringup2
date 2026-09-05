@@ -38,6 +38,6 @@ direct_dependencies:
 - espressif/mqtt
 - idf
 - joltwallet/littlefs
-manifest_hash: ada3f02d0128fde054b5e8ffe140c65908017fe33fddcd9c9506c08c3bc02b87
-target: esp32c3
+manifest_hash: 8166948f27903f91ba464636a8c782038ce2d54c2869aac7e96eb978d977bc11
+target: esp32s3
 version: 3.0.0

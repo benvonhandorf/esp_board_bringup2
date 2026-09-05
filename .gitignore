@@ -77,10 +77,10 @@ Desktop.ini
 *.suo       # Visual Studio Solution User Options
 *.sln.docstates # Visual Studio
 
-# Working copies of the projects being extracted from. These are separate git
-# repositories, and solar_power_monitor's littlefs/config.json and local_scripts/
-# hold real WiFi and MQTT credentials. Never commit them here; they are deleted
-# once extraction is finished.
+# reference/ held working copies of the three projects this template was
+# extracted from. Extraction is finished and it has been removed; the originals
+# are unchanged in their own repositories. The entry stays so a stray copy is
+# never committed -- those trees carry real WiFi and MQTT credentials.
 reference/
 
 # The device's real configuration: WiFi passphrase, broker password. Copy
