@@ -255,14 +255,14 @@ static void report_scale_dropped(const hx711_change_report_t *change)
          * measured here: it came from a bench run at a different gain, where it
          * is wrong by exactly the gain ratio.
          */
-        diag_printf("The scale factor set by 'scale' was measured at the previous "
+        diag_printf("The scale factor set by 'loadcell scale' was measured at the previous "
                   "gain and is wrong here by exactly the gain ratio, so it has "
                   "been dropped along with the tare. Set a factor measured at "
                   "this gain, or give both at once with "
-                  "'init <dout> <sck> gain <n> scale <counts_per_unit>'.\n");
+                  "'loadcell init <dout> <sck> gain <n> scale <counts_per_unit>'.\n");
     } else {
         diag_printf("The tare and scale were captured at the previous gain and no "
-                  "longer apply; run 'tare' and 'calibrate' again.\n");
+                  "longer apply; run 'loadcell tare' and 'loadcell calibrate' again.\n");
     }
 }
 
@@ -298,12 +298,12 @@ static int parse_scale_arg(const char *token, double *counts_per_unit)
 {
     if (cli_parse_double_arg(token, counts_per_unit) < 0) {
         diag_error("The scale factor must be a number, as reported by "
-                 "'calibrate' or 'status'");
+                 "'loadcell calibrate' or 'loadcell status'");
         return -1;
     }
     if (*counts_per_unit == 0.0) {
         diag_error("A scale factor of zero would divide every weight to "
-                 "infinity. Use the number 'calibrate' reported.");
+                 "infinity. Use the number 'loadcell calibrate' reported.");
         return -1;
     }
     return 0;
@@ -343,11 +343,11 @@ static void print_init_usage(void)
               "<sck> the one on PD_SCK (clock, an output).\n");
     diag_printf("Gain defaults to 128 on channel A, which is the part's own "
               "reset default and what a load cell normally wants.\n");
-    diag_printf("'scale' installs a factor from an earlier bench calibration "
+    diag_printf("'loadcell scale' installs a factor from an earlier bench calibration "
               "instead of measuring one. Give it here rather than running "
-              "'scale' afterwards: init power-cycles the part and clears the "
+              "'loadcell scale' afterwards: init power-cycles the part and clears the "
               "scale, so a factor set before it does not survive. Still run "
-              "'tare' before weighing.\n");
+              "'loadcell tare' before weighing.\n");
 }
 
 /*
@@ -369,7 +369,7 @@ static void print_init_usage(void)
  *
  * The gain rides along in the comment because a factor is counts per unit at
  * one gain and is meaningless without it, and the precision because this is the
- * only moment the firmware knows it -- nothing downstream of 'calibrate' can
+ * only moment the firmware knows it -- nothing downstream of 'loadcell calibrate' can
  * recover how good the number was.
  */
 static void print_scale_for_consumer(double counts_per_unit, double precision,
@@ -456,7 +456,7 @@ int cmd_hx711_init(int argc, char **argv)
     for (int i = 3; i < argc; i++) {
         if (strcasecmp(argv[i], "gain") == 0) {
             if (++i >= argc) {
-                diag_error("Give the gain, e.g. 'init 5 6 gain 128'");
+                diag_error("Give the gain, e.g. 'loadcell init 5 6 gain 128'");
                 return -1;
             }
             if (parse_gain_arg(argv[i], &opts.mode) < 0) {
@@ -464,7 +464,7 @@ int cmd_hx711_init(int argc, char **argv)
             }
         } else if (strcasecmp(argv[i], "scale") == 0) {
             if (++i >= argc) {
-                diag_error("Give the scale factor, e.g. 'init 10 3 scale 1074.3'");
+                diag_error("Give the scale factor, e.g. 'loadcell init 10 3 scale 1074.3'");
                 return -1;
             }
             if (parse_scale_arg(argv[i], &opts.counts_per_unit) < 0) {
@@ -556,15 +556,15 @@ int cmd_hx711_init(int argc, char **argv)
     const hx711_scale_t *scale = hx711_get_scale(hx);
     if (scale->supplied) {
         diag_printf("Scale %.1f counts per unit (supplied, not measured). A "
-                  "factor fixes the span, not the zero: run 'tare' with no load "
+                  "factor fixes the span, not the zero: run 'loadcell tare' with no load "
                   "before weighing.\n", scale->counts_per_unit);
     }
     diag_printf("There is no ID register on this part, so nothing here proves it "
               "is an HX711 -- only that something drives DOUT and answers the "
               "clock. %s\n",
               scale->supplied
-                  ? "Run 'tare' with no load, then 'weight'."
-                  : "Run 'tare' with no load, then 'calibrate <known mass>'.");
+                  ? "Run 'loadcell tare' with no load, then 'loadcell weight'."
+                  : "Run 'loadcell tare' with no load, then 'loadcell calibrate <known mass>'.");
     return 0;
 }
 
@@ -647,7 +647,7 @@ int cmd_hx711_input(int argc, char **argv)
 int cmd_hx711_power(int argc, char **argv)
 {
     /*
-     * require_init() rather than require_ready(): 'power on' is the command
+     * require_init() rather than require_ready(): 'loadcell power on' is the command
      * that clears the powered-down state, so routing it through the readiness
      * guard would make that state unrecoverable.
      */
@@ -674,7 +674,7 @@ int cmd_hx711_power(int argc, char **argv)
                   "If the internal regulator feeds the bridge, that is powered "
                   "down too.\n", status.sck_gpio, HX711_POWERDOWN_US);
         diag_printf("Coming back up resets the part, so the channel and gain "
-                  "revert to A/128 and are re-applied by 'power on'.\n");
+                  "revert to A/128 and are re-applied by 'loadcell power on'.\n");
         return 0;
     }
 
@@ -835,7 +835,7 @@ int cmd_hx711_calibrate(int argc, char **argv)
 
     if (argc < 2) {
         diag_printf("Usage: calibrate <known mass> [samples]\n");
-        diag_printf("Run 'tare' with the scale empty first, then place a known "
+        diag_printf("Run 'loadcell tare' with the scale empty first, then place a known "
                   "mass and run this. The unit is whatever you use here.\n");
         return -1;
     }
@@ -858,19 +858,19 @@ int cmd_hx711_calibrate(int argc, char **argv)
     esp_err_t err = hx711_calibrate(hx, known, samples, &stats, &result);
 
     if (err == ESP_ERR_HX711_TOO_FEW_SAMPLES) {
-        diag_error("Both 'tare' and 'calibrate' need at least two samples: a "
+        diag_error("Both 'loadcell tare' and 'loadcell calibrate' need at least two samples: a "
                  "single conversion has no spread, so there is no way to tell a "
-                 "real change from noise. Re-run as 'tare 10' and "
-                 "'calibrate %g 10'.", known);
+                 "real change from noise. Re-run as 'loadcell tare 10' and "
+                 "'loadcell calibrate %g 10'.", known);
         return -1;
     }
     if (err == ESP_ERR_HX711_WITHIN_NOISE) {
         diag_error("The reading moved %.1f counts from the tare, and the two "
                  "averages are only known to +/-%.1f counts between them -- so "
                  "the move is within the noise. Is the mass on the cell, and "
-                 "was 'tare' run while it was empty? If the part is simply "
-                 "noisy, average harder: 'tare 100' then "
-                 "'calibrate %g 100' cuts the uncertainty by sqrt(10).",
+                 "was 'loadcell tare' run while it was empty? If the part is simply "
+                 "noisy, average harder: 'loadcell tare 100' then "
+                 "'loadcell calibrate %g 100' cuts the uncertainty by sqrt(10).",
                  result.net_counts, result.uncertainty, known);
         return -1;
     }
@@ -887,7 +887,7 @@ int cmd_hx711_calibrate(int argc, char **argv)
               result.precision_percent, result.uncertainty);
     if (result.precision_percent > 1.0) {
         diag_printf("For a tighter scale, average more: uncertainty falls as "
-                  "sqrt(samples), so 'tare 100' and 'calibrate %g 100' gets "
+                  "sqrt(samples), so 'loadcell tare 100' and 'loadcell calibrate %g 100' gets "
                   "about %.2f%%\n", known,
                   result.precision_percent / sqrt(100.0 / samples));
     }
@@ -916,9 +916,9 @@ int cmd_hx711_scale(int argc, char **argv)
 
     if (argc < 2) {
         if (!scale->calibrated) {
-            diag_printf("No scale factor. Either run 'tare' and "
-                      "'calibrate <known mass>', or set a factor from an "
-                      "earlier bench run with 'scale <counts_per_unit>'.\n");
+            diag_printf("No scale factor. Either run 'loadcell tare' and "
+                      "'loadcell calibrate <known mass>', or set a factor from an "
+                      "earlier bench run with 'loadcell scale <counts_per_unit>'.\n");
             return 0;
         }
         diag_printf("Scale %.1f counts per unit (%s)\n", scale->counts_per_unit,
@@ -943,11 +943,11 @@ int cmd_hx711_scale(int argc, char **argv)
 
     /*
      * The factor says nothing about where zero is, and the two are separate
-     * measurements. Saying so here is cheaper than letting 'weight' refuse and
+     * measurements. Saying so here is cheaper than letting 'loadcell weight' refuse and
      * be the first to mention it.
      */
     if (scale->tare_samples == 0) {
-        diag_printf("No tare yet. Run 'tare' with the cell empty before "
+        diag_printf("No tare yet. Run 'loadcell tare' with the cell empty before "
                   "weighing; a factor fixes the span, not the zero.\n");
     }
 
@@ -957,8 +957,8 @@ int cmd_hx711_scale(int argc, char **argv)
      * number in by hand.
      */
     diag_printf("This factor belongs to the gain now in force and is dropped by "
-              "'gain', 'input' and 'init'. To survive init, give it as "
-              "'init <dout> <sck> scale %.17g' instead.\n", counts_per_unit);
+              "'loadcell gain', 'loadcell input' and 'loadcell init'. To survive init, give it as "
+              "'loadcell init <dout> <sck> scale %.17g' instead.\n", counts_per_unit);
     return 0;
 }
 
@@ -971,14 +971,14 @@ int cmd_hx711_weight(int argc, char **argv)
     const hx711_scale_t *scale = hx711_get_scale(hx);
 
     if (!scale->calibrated) {
-        diag_error("Not calibrated. Run 'tare' with no load, then "
-                 "'calibrate <known mass>'.");
+        diag_error("Not calibrated. Run 'loadcell tare' with no load, then "
+                 "'loadcell calibrate <known mass>'.");
         return -1;
     }
 
     /*
-     * Reachable only with a supplied factor: 'calibrate' refuses without a tare
-     * of at least two samples, so before 'scale' existed a calibrated scale
+     * Reachable only with a supplied factor: 'loadcell calibrate' refuses without a tare
+     * of at least two samples, so before 'loadcell scale' existed a calibrated scale
      * implied a real zero. Without one the subtraction is against zero, and an
      * unloaded bridge sits tens of thousands of counts away from that -- which
      * would be reported as load, confidently. Refuse before spending the
@@ -1143,7 +1143,7 @@ int cmd_hx711_status(int argc, char **argv)
                                  status.mode);
         /*
          * The +/- on a weight has always been this session's noise propagated
-         * through a factor treated as exact -- 'calibrate' never folded its own
+         * through a factor treated as exact -- 'loadcell calibrate' never folded its own
          * precision into it either. That is easy to misread as accuracy, and a
          * supplied factor is where it would mislead most, since the firmware
          * cannot know how good the number is.
@@ -1155,7 +1155,7 @@ int cmd_hx711_status(int argc, char **argv)
         }
         if (status.scale.tare_samples == 0) {
             diag_printf("No tare yet -- a factor fixes the span, not the zero. "
-                      "Run 'tare' with the cell empty before weighing.\n");
+                      "Run 'loadcell tare' with the cell empty before weighing.\n");
         }
     }
 
@@ -1165,13 +1165,13 @@ int cmd_hx711_status(int argc, char **argv)
      *
      * Only half of it has to be lost, though, and that asymmetry is worth
      * stating: a scale factor is a property of the cell and the gain, so it can
-     * be measured once and compiled into a consumer or passed to 'init'. The
+     * be measured once and compiled into a consumer or passed to 'loadcell init'. The
      * tare cannot -- it is the bridge's own zero, and it moves.
      */
     diag_printf("The tare and scale live only in this firmware's memory; a reset "
               "loses them. A scale factor need not be re-measured, though: "
               "keep the pasteable line above and give it back with "
-              "'init <dout> <sck> scale <counts_per_unit>'. The tare is a "
+              "'loadcell init <dout> <sck> scale <counts_per_unit>'. The tare is a "
               "measurement and has to be repeated.\n");
     return reached ? 0 : -1;
 }

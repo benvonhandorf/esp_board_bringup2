@@ -207,7 +207,7 @@ static void report_health(const ina237_reading_t *reading)
     }
     if (!reading->shunt_cal_matches) {
         diag_error("      SHUNT_CAL reads %u, expected %d; the device has been "
-                 "reset since it was configured. Re-run 'config'.",
+                 "reset since it was configured. Re-run 'i2c-ina237 config'.",
                  reading->shunt_cal, INA237_SHUNT_CAL_VALUE);
     }
 }
@@ -265,8 +265,8 @@ int cmd_ina237_read(int argc, char **argv)
     }
 
     if (configured_count() == 0) {
-        diag_error("No INA237s configured. Run 'ina237 config <address> [ohms]', "
-                 "or 'ina237 read <address>' to use the default shunt.");
+        diag_error("No INA237s configured. Run 'i2c-ina237 config <address> [ohms]', "
+                 "or 'i2c-ina237 read <address>' to use the default shunt.");
         return -1;
     }
 

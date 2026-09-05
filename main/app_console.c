@@ -27,8 +27,12 @@
 #include <string.h>
 
 #include "app_status.h"
+#include "audio.h"
 #include "board.h"
 #include "cli.h"
+#include "codec_nau8822.h"
+#include "codec_ns4168.h"
+#include "codec_sph0645.h"
 #include "config_reader.h"
 #include "diag.h"
 #include "esp_app_desc.h"
@@ -388,6 +392,82 @@ static const cli_group_t spi_group = {
 };
 
 /* ------------------------------------------------------------------ */
+/* audio, audio-<part>                                                 */
+/*                                                                     */
+/* A capability group, not a bus group: it owns I2S and delegates the  */
+/* part to a codec driver. Adding a part is a new codec_*.c, a row in  */
+/* the registry in audio.c, and a group here.                          */
+/* ------------------------------------------------------------------ */
+
+static const cli_command_t audio_commands[] = {
+    {"bus",      "<bclk> <ws> <dout> [din <pin>] [mclk <pin>] [rate <hz>] [bits <n>]",
+                 "Initialize I2S and start its clocks",              cmd_audio_bus},
+    {"pdm",      "<clk> <data> [rate <hz>]", "Receive from a PDM microphone", cmd_audio_pdm},
+    {"info",     "",   "Show pins, format, clocks and the attached codec", cmd_audio_info},
+    {"codecs",   "",   "List the parts this firmware can drive",      cmd_audio_codecs},
+    {"tone",     "<hz> [seconds|continuous] [level <pct>] [left|right|both]",
+                 "Play a sine tone",                                  cmd_audio_tone},
+    {"sweep",    "<start_hz> <end_hz> [seconds] [level <pct>] [log|linear]",
+                 "Sweep a sine tone between two frequencies",         cmd_audio_sweep},
+    {"stop",     "",   "End a continuous tone",                       cmd_audio_stop},
+    {"record",   "[seconds]", "Capture the input and report levels and a spectrum", cmd_audio_record},
+    {"capture",  "[seconds]", "Record to sequential SD files at 48 kHz, 10 s rollover", cmd_audio_capture_file},
+    {"level",    "[seconds]", "Live input level meter",               cmd_audio_level},
+    {"loopback", "[hz] [seconds] [level <pct>]",
+                 "Play a tone and measure whether the input hears it", cmd_audio_loopback},
+    {"volume",   "[pct]",      "Show or set the codec's output volume", cmd_audio_volume},
+    {"mute",     "[on|off]",   "Mute or unmute the codec",             cmd_audio_mute},
+    {"close",    "",           "Detach the codec and release I2S",     cmd_audio_close},
+};
+
+static const cli_group_t audio_group = {
+    .name = "audio",
+    .help = "Audio over I2S: tone, sweep, microphone capture and loopback testing",
+    .commands = audio_commands,
+    .command_count = ARRAY_COUNT(audio_commands),
+};
+
+static const cli_command_t nau8822_commands[] = {
+    {"init",   "[address]",           "Power up and configure the codec (0x1a default)", cmd_nau8822_init},
+    {"status", "",                    "Show identity, routing and volume",  cmd_nau8822_status},
+    {"reg",    "<n> [value]",         "Read or write a 9-bit register",     cmd_nau8822_reg},
+    {"route",  "<hp|speaker|both>",   "Choose which outputs are driven",    cmd_nau8822_route},
+    {"input",  "<mic|line|off> [boost]", "Choose which input reaches the ADC", cmd_nau8822_input},
+    {"gain",   "[db]",                "Show or set the analog gain on the selected input", cmd_nau8822_gain},
+};
+
+static const cli_group_t nau8822_group = {
+    .name = "audio-nau8822",
+    .help = "Nuvoton NAU8822 stereo codec with speaker driver, I2C at 0x1a/0x1b",
+    .commands = nau8822_commands,
+    .command_count = ARRAY_COUNT(nau8822_commands),
+};
+
+static const cli_command_t ns4168_commands[] = {
+    {"init",   "[sd <pin>]", "Attach the amplifier and enable it", cmd_ns4168_init},
+    {"status", "",           "Show the enable pin and its state",  cmd_ns4168_status},
+};
+
+static const cli_group_t ns4168_group = {
+    .name = "audio-ns4168",
+    .help = "NS4168 mono I2S class-D amplifier (no control bus)",
+    .commands = ns4168_commands,
+    .command_count = ARRAY_COUNT(ns4168_commands),
+};
+
+static const cli_command_t sph0645_commands[] = {
+    {"init",   "[left|right] [sel <pin>]", "Attach the microphone and check the bus suits it", cmd_sph0645_init},
+    {"status", "",                         "Show the slot, clock and what the part guarantees", cmd_sph0645_status},
+};
+
+static const cli_group_t sph0645_group = {
+    .name = "audio-sph0645",
+    .help = "Knowles SPH0645LM4H-B I2S MEMS microphone (no control bus)",
+    .commands = sph0645_commands,
+    .command_count = ARRAY_COUNT(sph0645_commands),
+};
+
+/* ------------------------------------------------------------------ */
 /* sd                                                                  */
 /* ------------------------------------------------------------------ */
 
@@ -428,8 +508,8 @@ static const cli_group_t touch_group = {
 /* board, board-<name>                                                 */
 /*                                                                     */
 /* A preset runs fully qualified command lines, so a board's group can  */
-/* only offer what this firmware can already do. The audio presets      */
-/* arrive with the audio subsystem.                                    */
+/* only offer what this firmware can already do -- which is now all of  */
+/* it. `chip_matches()` refuses a preset for another chip.              */
 /* ------------------------------------------------------------------ */
 
 static const cli_command_t board_commands[] = {
@@ -444,8 +524,10 @@ static const cli_group_t board_group = {
 };
 
 static const cli_command_t board_cardputer_commands[] = {
-    {"pins", "", "Show the known pinout",                cmd_board_cardputer_pins},
-    {"sd",   "", "Bring the microSD slot up over SPI",   cmd_board_cardputer_sd},
+    {"pins",  "", "Show the known pinout",                          cmd_board_cardputer_pins},
+    {"audio", "", "Set up I2S and the NS4168 speaker amplifier",     cmd_board_cardputer_audio},
+    {"mic",   "", "Open the SPM1423 PDM microphone (releases the speaker)", cmd_board_cardputer_mic},
+    {"sd",    "", "Bring the microSD slot up over SPI",              cmd_board_cardputer_sd},
 };
 
 static const cli_group_t board_cardputer_group = {
@@ -457,6 +539,7 @@ static const cli_group_t board_cardputer_group = {
 
 static const cli_command_t board_xiao_commands[] = {
     {"pins", "", "Show the known pinout",              cmd_board_xiao_pins},
+    {"mic",  "", "Open the PDM microphone",            cmd_board_xiao_mic},
     {"sd",   "", "Bring the microSD slot up over SPI", cmd_board_xiao_sd},
 };
 
@@ -480,9 +563,10 @@ static const cli_group_t board_sensor_group = {
 };
 
 static const cli_command_t board_minstro_commands[] = {
-    {"pins", "", "Show the known pinout",              cmd_board_minstro_pins},
-    {"i2c",  "", "Initialize the I2C bus",             cmd_board_minstro_i2c},
-    {"sd",   "", "Initialize the 4-bit SD interface",  cmd_board_minstro_sd},
+    {"pins",  "", "Show the known pinout",                 cmd_board_minstro_pins},
+    {"audio", "", "Initialize I2S with the NAU8822 codec", cmd_board_minstro_audio},
+    {"i2c",   "", "Initialize the I2C bus",                cmd_board_minstro_i2c},
+    {"sd",    "", "Initialize the 4-bit SD interface",     cmd_board_minstro_sd},
 };
 
 static const cli_group_t board_minstro_group = {
@@ -493,9 +577,11 @@ static const cli_group_t board_minstro_group = {
 };
 
 static const cli_command_t board_core_basic_commands[] = {
-    {"pins", "", "Show the known pinout",              cmd_board_core_basic_pins},
-    {"i2c",  "", "Initialize the I2C bus",             cmd_board_core_basic_i2c},
-    {"sd",   "", "Bring the microSD slot up over SPI", cmd_board_core_basic_sd},
+    {"pins",  "", "Show the known pinout",                cmd_board_core_basic_pins},
+    {"audio", "", "Set up I2S for the speaker amplifier", cmd_board_core_basic_audio},
+    {"mic",   "", "Set up I2S for microphone capture",    cmd_board_core_basic_mic},
+    {"i2c",   "", "Initialize the I2C bus",               cmd_board_core_basic_i2c},
+    {"sd",    "", "Bring the microSD slot up over SPI",   cmd_board_core_basic_sd},
 };
 
 static const cli_group_t board_core_basic_group = {
@@ -518,6 +604,10 @@ static const cli_group_t *const groups[] = {
     &nau7802_group,
     &sht4x_group,
     &loadcell_group,
+    &audio_group,
+    &nau8822_group,
+    &ns4168_group,
+    &sph0645_group,
     &uart_group,
     &spi_group,
     &sd_group,

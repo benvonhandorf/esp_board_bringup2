@@ -387,7 +387,7 @@ int cmd_board_cardputer_audio(int argc, char **argv)
      */
     static const char *const lines[] = {
         "audio bus 41 43 42",
-        "audio ns4168 init",
+        "audio-ns4168 init",
     };
     return apply(&cardputer, lines, ARRAY_COUNT(lines));
 }
