@@ -34,11 +34,15 @@
 #include "esp_app_desc.h"
 #include "esp_system.h"
 #include "gpio.h"
+#include "hx711_cmd.h"
 #include "i2c.h"
+#include "ina237_cmd.h"
 #include "mqtt_manager.h"
+#include "nau7802_cmd.h"
 #include "ota.h"
 #include "pwm.h"
 #include "sd.h"
+#include "sht4x_cmd.h"
 #include "spi.h"
 #include "sys_hw.h"
 #include "touch.h"
@@ -244,6 +248,88 @@ static const cli_group_t i2c_group = {
 };
 
 /* ------------------------------------------------------------------ */
+/* i2c-<part>: the console half of a driver that lives in a component  */
+/* ------------------------------------------------------------------ */
+
+static const cli_command_t ina237_commands[] = {
+    {"config", "<address> [ohms]", "Register a monitor (shunt defaults to 0.004 ohm)", cmd_ina237_config},
+    {"read",   "[address]",        "Report bus voltage, current and power", cmd_ina237_read},
+    {"list",   "",                 "Show configured monitors and their calibration", cmd_ina237_list},
+};
+
+static const cli_group_t ina237_group = {
+    .name = "i2c-ina237",
+    .help = "TI INA237 current/voltage/power monitors at 0x40-0x4f",
+    .commands = ina237_commands,
+    .command_count = ARRAY_COUNT(ina237_commands),
+};
+
+static const cli_command_t sht4x_commands[] = {
+    {"read",   "[address] [high|medium|low]", "Measure temperature and humidity", cmd_sht4x_read},
+    {"serial", "[address]",                   "Read the sensor serial number",    cmd_sht4x_serial},
+    {"heater", "[address] <mW> <ms>",         "Pulse the heater, then measure",   cmd_sht4x_heater},
+    {"reset",  "[address]",                   "Soft-reset the sensor",            cmd_sht4x_reset},
+};
+
+static const cli_group_t sht4x_group = {
+    .name = "i2c-sht4x",
+    .help = "Sensirion SHT4x humidity/temperature sensors at 0x44-0x46",
+    .commands = sht4x_commands,
+    .command_count = ARRAY_COUNT(sht4x_commands),
+};
+
+static const cli_command_t nau7802_commands[] = {
+    {"init",      "[ldo <volts>] [drdy <pin>] [gain <1..128>] [scale <counts_per_unit>]", "Power up, configure and self-calibrate", cmd_nau7802_init},
+    {"status",    "",                    "Show configuration and calibration state", cmd_nau7802_status},
+    {"gain",      "[1..128]",            "Show or set the PGA gain",                 cmd_nau7802_gain},
+    {"rate",      "[10|20|40|80|320]",   "Show or set the sample rate in SPS",       cmd_nau7802_rate},
+    {"input",     "[a|b]",               "Show or set the input channel",            cmd_nau7802_input},
+    {"drdy",      "[<pin>|off]",         "Show or set the GPIO wired to the DRDY output", cmd_nau7802_drdy},
+    {"ldomode",   "[0|1]",               "Show or set the regulator loop compensation (AVDD cap ESR)", cmd_nau7802_ldomode},
+    {"pgacap",    "[on|off]",            "Show or set the PGA output bypass capacitor", cmd_nau7802_pgacap},
+    {"raw",       "[samples] [a|b]",     "Raw ADC readings for diagnostics",         cmd_nau7802_raw},
+    {"registers", "",                    "Dump all device registers",                cmd_nau7802_registers},
+    {"read",      "[samples]",           "Averaged raw ADC counts, in units if calibrated", cmd_nau7802_read},
+    {"tare",      "[samples]",           "Capture the zero offset with no load",     cmd_nau7802_tare},
+    {"calibrate", "<known mass> [samples]", "Derive the scale from a known mass",    cmd_nau7802_calibrate},
+    {"scale",     "[counts_per_unit]",   "Show or set the scale factor without measuring one", cmd_nau7802_scale},
+    {"weight",    "[samples]",           "Report the load in calibrated units",      cmd_nau7802_weight},
+};
+
+static const cli_group_t nau7802_group = {
+    .name = "i2c-nau7802",
+    .help = "Nuvoton NAU7802 24-bit bridge ADC / load cell at 0x2a",
+    .commands = nau7802_commands,
+    .command_count = ARRAY_COUNT(nau7802_commands),
+};
+
+/* ------------------------------------------------------------------ */
+/* loadcell -- the HX711 has no bus, so it is not under i2c            */
+/* ------------------------------------------------------------------ */
+
+static const cli_command_t loadcell_commands[] = {
+    {"init",      "<dout> <sck> [gain <32|64|128>] [scale <counts_per_unit>]", "Claim the pins and prove the part responds", cmd_hx711_init},
+    {"status",    "",                    "Show the pins, setting, measured rate and calibration state", cmd_hx711_status},
+    {"gain",      "[32|64|128]",         "Show or set the gain (32 is channel B only)", cmd_hx711_gain},
+    {"input",     "[a|b]",               "Show or set the input channel",            cmd_hx711_input},
+    {"power",     "[on|off]",            "Power the part down via PD_SCK, or wake it", cmd_hx711_power},
+    {"raw",       "[samples]",           "Raw ADC readings for diagnostics",         cmd_hx711_raw},
+    {"read",      "[samples]",           "Averaged raw ADC counts, in units if calibrated", cmd_hx711_read},
+    {"tare",      "[samples]",           "Capture the zero offset with no load",     cmd_hx711_tare},
+    {"calibrate", "<known mass> [samples]", "Derive the scale from a known mass",    cmd_hx711_calibrate},
+    {"scale",     "[counts_per_unit]",   "Show or set the scale factor without measuring one", cmd_hx711_scale},
+    {"weight",    "[samples]",           "Report the load in calibrated units",      cmd_hx711_weight},
+    {"close",     "",                    "Release both pins",                        cmd_hx711_close},
+};
+
+static const cli_group_t loadcell_group = {
+    .name = "loadcell",
+    .help = "HX711 24-bit load cell ADC, bit-banged on two pins (no bus)",
+    .commands = loadcell_commands,
+    .command_count = ARRAY_COUNT(loadcell_commands),
+};
+
+/* ------------------------------------------------------------------ */
 /* uart                                                                */
 /* ------------------------------------------------------------------ */
 
@@ -404,6 +490,10 @@ static const cli_group_t *const groups[] = {
     &gpio_group,
     &pwm_group,
     &i2c_group,
+    &ina237_group,
+    &nau7802_group,
+    &sht4x_group,
+    &loadcell_group,
     &uart_group,
     &spi_group,
     &sd_group,

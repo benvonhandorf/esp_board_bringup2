@@ -89,10 +89,30 @@ dependencies:
       path: http_server
       type: git
     version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
+  hx711:
+    component_hash: 6c0d29eed573a3d942c0f359e5216576f6c0a5c8c84ed9a2dd2325884d41a4b2
+    dependencies:
+    - name: idf
+      version: '>=5.3'
+    source:
+      git: https://github.com/benvonhandorf/esp_components.git
+      path: hx711
+      type: git
+    version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
   idf:
     source:
       type: idf
     version: 6.0.2
+  ina237:
+    component_hash: 214c060c068d5ae041031a6e2af04b20c5e2ff5a0a4ad1d9c040d39882b4f6b6
+    dependencies:
+    - name: idf
+      version: '>=5.3'
+    source:
+      git: https://github.com/benvonhandorf/esp_components.git
+      path: ina237
+      type: git
+    version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
   joltwallet/littlefs:
     component_hash: 3af20a3d75c49db9dc2286fd50862c34055c9f578419ad1f2bf7ed3ed01391fe
     dependencies:
@@ -153,6 +173,16 @@ dependencies:
       path: mqtt_manager
       type: git
     version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
+  nau7802:
+    component_hash: 051f2402ae90595d5697155808be25c8e57bc7b589866742d2208667e2b5c2fa
+    dependencies:
+    - name: idf
+      version: '>=5.3'
+    source:
+      git: https://github.com/benvonhandorf/esp_components.git
+      path: nau7802
+      type: git
+    version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
   net_events:
     component_hash: aeb8b133576349c7acf96cc8b125299bdd9f4e5d22a52d73762ea0a40544162c
     dependencies:
@@ -195,6 +225,16 @@ dependencies:
       path: ota
       type: git
     version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
+  sht4x:
+    component_hash: 70b2c82ed00b0e0554aef2b7bf753733be9a991b1d685418dfdc3ec7193cd307
+    dependencies:
+    - name: idf
+      version: '>=5.3'
+    source:
+      git: https://github.com/benvonhandorf/esp_components.git
+      path: sht4x
+      type: git
+    version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
   wifi_manager:
     component_hash: 9449ad14d2fd2476c8d0a09b1f80a6d227307982fe3156e7e79103710a2ada9b
     dependencies:
@@ -219,14 +259,18 @@ direct_dependencies:
 - config_store
 - diag
 - http_server
+- hx711
+- ina237
 - joltwallet/littlefs
 - js2c
 - mdns_manager
 - mqtt_manager
+- nau7802
 - net_events
 - ntp_manager
 - ota
+- sht4x
 - wifi_manager
-manifest_hash: 0239bcf765b34283ae3dd75f21c56c5519a47ec72e0f644655d28dba4406e910
+manifest_hash: 47c2e75909695862f31614f591de94c2c13eb18f72dc2f469f9068997ef760b7
 target: esp32c3
 version: 3.0.0

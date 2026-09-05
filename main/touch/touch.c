@@ -35,7 +35,7 @@
  * How many calibration-noise widths a delta must clear to be reported as a
  * touch -- the same shape of "reject anything within the observed noise"
  * guard that `nau7802 calibrate` uses
- * (components/nau7802/src/nau7802_scale.c).
+ * (nau7802_scale.c in the nau7802 component).
  */
 #define SIGNIFICANCE_MARGIN 6.0
 
