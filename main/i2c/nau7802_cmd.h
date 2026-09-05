@@ -5,7 +5,7 @@
  * Console commands for the NAU7802.
  *
  * The device itself is the nau7802 shared component, pinned in
- * main/idf_component.yml; which knows registers and
+ * main/idf_component.yml: it knows registers and
  * returns facts. This file is the other half: it parses arguments, calls the
  * driver, and turns those facts back into the prose documented in
  * docs/i2c.md. Nothing here touches a register.

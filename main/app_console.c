@@ -28,6 +28,7 @@
 
 #include "app_status.h"
 #include "audio.h"
+#include "aw9523b_cmd.h"
 #include "board.h"
 #include "cli.h"
 #include "codec_nau8822.h"
@@ -40,11 +41,16 @@
 #include "gpio.h"
 #include "hx711_cmd.h"
 #include "i2c.h"
+#include "ina219_cmd.h"
+#include "ina226_cmd.h"
 #include "ina237_cmd.h"
+#include "lm75bdp_cmd.h"
 #include "mqtt_manager.h"
 #include "nau7802_cmd.h"
 #include "ota.h"
+#include "pi4ioe5v6408_cmd.h"
 #include "pwm.h"
+#include "rx8130ce_cmd.h"
 #include "sd.h"
 #include "sht4x_cmd.h"
 #include "spi.h"
@@ -277,6 +283,87 @@ static const cli_group_t i2c_group = {
 /* ------------------------------------------------------------------ */
 /* i2c-<part>: the console half of a driver that lives in a component  */
 /* ------------------------------------------------------------------ */
+
+static const cli_command_t ina219_commands[] = {
+    {"config", "<address> [shunt_ohms] [max_amps]", "Register a monitor (0.1 ohm over 3.2 A by default)", cmd_ina219_config},
+    {"read",   "[address]", "Report bus voltage, current and power",   cmd_ina219_read},
+    {"list",   "",          "Show configured monitors and their calibration", cmd_ina219_list},
+};
+
+static const cli_group_t ina219_group = {
+    .name = "i2c-ina219",
+    .help = "TI INA219 current/voltage/power monitors at 0x40-0x4f",
+    .commands = ina219_commands,
+    .command_count = ARRAY_COUNT(ina219_commands),
+};
+
+static const cli_command_t ina226_commands[] = {
+    {"config", "<address> [shunt_ohms] [max_amps] [avg_samples]", "Register a monitor (0.01 ohm over 8.192 A, 16 samples)", cmd_ina226_config},
+    {"read",   "[address]", "Report bus voltage, current and power",   cmd_ina226_read},
+    {"list",   "",          "Show configured monitors and their calibration", cmd_ina226_list},
+};
+
+static const cli_group_t ina226_group = {
+    .name = "i2c-ina226",
+    .help = "TI INA226 current/voltage/power monitors at 0x40-0x4f",
+    .commands = ina226_commands,
+    .command_count = ARRAY_COUNT(ina226_commands),
+};
+
+static const cli_command_t lm75bdp_commands[] = {
+    {"read",   "[address]",                    "Measure temperature",  cmd_lm75bdp_read},
+    {"limits", "[address] <tos_C> <thyst_C>",  "Program the thermal watchdog thresholds", cmd_lm75bdp_limits},
+};
+
+static const cli_group_t lm75bdp_group = {
+    .name = "i2c-lm75bdp",
+    .help = "NXP LM75B temperature sensor and thermal watchdog at 0x48-0x4f",
+    .commands = lm75bdp_commands,
+    .command_count = ARRAY_COUNT(lm75bdp_commands),
+};
+
+static const cli_command_t rx8130ce_commands[] = {
+    {"time", "", "Read the clock, and compare it with the system time", cmd_rx8130ce_time},
+    {"set",  "", "Copy the system time into the clock",                 cmd_rx8130ce_set},
+};
+
+static const cli_group_t rx8130ce_group = {
+    .name = "i2c-rx8130ce",
+    .help = "Epson RX8130CE real-time clock with battery backup, at 0x32",
+    .commands = rx8130ce_commands,
+    .command_count = ARRAY_COUNT(rx8130ce_commands),
+};
+
+static const cli_command_t aw9523b_commands[] = {
+    {"init",  "[address] [p0in <mask>] [p1in <mask>] [p0init <mask>] [p1init <mask>] [pushpull]",
+              "Claim the part; every pin an input unless a mask says otherwise", cmd_aw9523b_init},
+    {"read",  "[port]",              "Read the pin levels of one port or both", cmd_aw9523b_read},
+    {"write", "<port> <value>",      "Drive a whole port",                      cmd_aw9523b_write},
+    {"set",   "<port> <pin> <0|1>",  "Drive one pin",                           cmd_aw9523b_set},
+};
+
+static const cli_group_t aw9523b_group = {
+    .name = "i2c-aw9523b",
+    .help = "Awinic AW9523B 16-bit I/O expander at 0x58-0x5b",
+    .commands = aw9523b_commands,
+    .command_count = ARRAY_COUNT(aw9523b_commands),
+};
+
+static const cli_command_t pi4ioe_commands[] = {
+    {"init",      "[address] [out <mask>] [init <mask>] [pull <mask>] [pullup <mask>] [int <mask>]",
+                  "Claim the part; every pin an input unless 'out' says otherwise", cmd_pi4ioe_init},
+    {"read",      "",             "Read the pin levels",              cmd_pi4ioe_read},
+    {"write",     "<value>",      "Drive the whole port",             cmd_pi4ioe_write},
+    {"set",       "<pin> <0|1>",  "Drive one pin",                    cmd_pi4ioe_set},
+    {"interrupt", "",             "Show which pins have changed, and clear the flags", cmd_pi4ioe_interrupt},
+};
+
+static const cli_group_t pi4ioe_group = {
+    .name = "i2c-pi4ioe",
+    .help = "Diodes PI4IOE5V6408 8-bit I/O expander, 5 V tolerant, at 0x43/0x44",
+    .commands = pi4ioe_commands,
+    .command_count = ARRAY_COUNT(pi4ioe_commands),
+};
 
 static const cli_command_t ina237_commands[] = {
     {"config", "<address> [ohms]", "Register a monitor (shunt defaults to 0.004 ohm)", cmd_ina237_config},
@@ -600,7 +687,13 @@ static const cli_group_t *const groups[] = {
     &gpio_group,
     &pwm_group,
     &i2c_group,
+    &aw9523b_group,
+    &ina219_group,
+    &ina226_group,
     &ina237_group,
+    &lm75bdp_group,
+    &pi4ioe_group,
+    &rx8130ce_group,
     &nau7802_group,
     &sht4x_group,
     &loadcell_group,

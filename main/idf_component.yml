@@ -72,18 +72,42 @@ dependencies:
   # Device drivers, from the same repository and pinned the same way. Each is a
   # part this rig can exercise; the console half of each stays in main/, because
   # a component returns facts and the application formats prose.
+  aw9523b:
+    git: https://github.com/benvonhandorf/esp_components.git
+    path: aw9523b
+    version: aw9523b-v0.1.0
   hx711:
     git: https://github.com/benvonhandorf/esp_components.git
     path: hx711
     version: hx711-v0.1.0
+  ina219:
+    git: https://github.com/benvonhandorf/esp_components.git
+    path: ina219
+    version: ina219-v0.2.0
+  ina226:
+    git: https://github.com/benvonhandorf/esp_components.git
+    path: ina226
+    version: ina226-v0.2.0
   ina237:
     git: https://github.com/benvonhandorf/esp_components.git
     path: ina237
     version: ina237-v0.1.0
+  lm75bdp:
+    git: https://github.com/benvonhandorf/esp_components.git
+    path: lm75bdp
+    version: lm75bdp-v0.1.0
   nau7802:
     git: https://github.com/benvonhandorf/esp_components.git
     path: nau7802
     version: nau7802-v0.2.0
+  pi4ioe5v6408:
+    git: https://github.com/benvonhandorf/esp_components.git
+    path: pi4ioe5v6408
+    version: pi4ioe5v6408-v0.1.0
+  rx8130ce:
+    git: https://github.com/benvonhandorf/esp_components.git
+    path: rx8130ce
+    version: rx8130ce-v0.1.0
   sht4x:
     git: https://github.com/benvonhandorf/esp_components.git
     path: sht4x

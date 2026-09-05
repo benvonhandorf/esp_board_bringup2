@@ -1,4 +1,14 @@
 dependencies:
+  aw9523b:
+    component_hash: 7374ef9fee7b9aa1caf9424620404226ea4cf7e64c1fb5e922e108669d4efc7b
+    dependencies:
+    - name: idf
+      version: '>=5.3'
+    source:
+      git: https://github.com/benvonhandorf/esp_components.git
+      path: aw9523b
+      type: git
+    version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
   cli:
     component_hash: a5f0abd92fdf174fa47cb5aba3918e7bc252bf7b33a9bbbefdd03e6fbe4d6122
     dependencies:
@@ -127,6 +137,26 @@ dependencies:
     source:
       type: idf
     version: 6.0.2
+  ina219:
+    component_hash: 7f6245eee604aee1bbce009f52b56c2760d59f925672509d215d14b042d7969b
+    dependencies:
+    - name: idf
+      version: '>=5.3'
+    source:
+      git: https://github.com/benvonhandorf/esp_components.git
+      path: ina219
+      type: git
+    version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
+  ina226:
+    component_hash: 36d36c98c900e405f0355c9938f536570f8a1f0abe9d55a9bceda81368489e0b
+    dependencies:
+    - name: idf
+      version: '>=5.3'
+    source:
+      git: https://github.com/benvonhandorf/esp_components.git
+      path: ina226
+      type: git
+    version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
   ina237:
     component_hash: 214c060c068d5ae041031a6e2af04b20c5e2ff5a0a4ad1d9c040d39882b4f6b6
     dependencies:
@@ -155,6 +185,16 @@ dependencies:
     source:
       git: https://github.com/benvonhandorf/esp_components.git
       path: js2c
+      type: git
+    version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
+  lm75bdp:
+    component_hash: e3b041d16603ae2d84d85b1c97b31157f739cd588d898044079580e38f15b0e4
+    dependencies:
+    - name: idf
+      version: '>=5.3'
+    source:
+      git: https://github.com/benvonhandorf/esp_components.git
+      path: lm75bdp
       type: git
     version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
   mdns_manager:
@@ -249,6 +289,26 @@ dependencies:
       path: ota
       type: git
     version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
+  pi4ioe5v6408:
+    component_hash: 188ccfaf9e1b7896eef75975a100d3654613f607bb5861e7d834dd46fb4ec809
+    dependencies:
+    - name: idf
+      version: '>=5.3'
+    source:
+      git: https://github.com/benvonhandorf/esp_components.git
+      path: pi4ioe5v6408
+      type: git
+    version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
+  rx8130ce:
+    component_hash: b8516c3608ce966d907cd0eaba280c567e6c6fc43e44a0fedd70dbde357923bb
+    dependencies:
+    - name: idf
+      version: '>=5.3'
+    source:
+      git: https://github.com/benvonhandorf/esp_components.git
+      path: rx8130ce
+      type: git
+    version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
   sht4x:
     component_hash: 70b2c82ed00b0e0554aef2b7bf753733be9a991b1d685418dfdc3ec7193cd307
     dependencies:
@@ -278,6 +338,7 @@ dependencies:
       type: git
     version: 0a21ed6de344d6fe7589ae316f19cf63bfca8f35
 direct_dependencies:
+- aw9523b
 - cli
 - cli_web
 - config_store
@@ -285,17 +346,22 @@ direct_dependencies:
 - espressif/iperf-cmd
 - http_server
 - hx711
+- ina219
+- ina226
 - ina237
 - joltwallet/littlefs
 - js2c
+- lm75bdp
 - mdns_manager
 - mqtt_manager
 - nau7802
 - net_events
 - ntp_manager
 - ota
+- pi4ioe5v6408
+- rx8130ce
 - sht4x
 - wifi_manager
-manifest_hash: df9c7e53e323f8ee2ea6e47d4e4174fb2d235ed4342fa8d92ac27ab5d8a17f0a
+manifest_hash: 20f7671899a3a15dcaa082d415832ea3057110512194d71026ed13298961c155
 target: esp32c3
 version: 3.0.0
