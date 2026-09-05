@@ -14,14 +14,40 @@ endif()
 # No REQUIRES, deliberately: project.cmake grants main an implicit dependency on
 # every component in the build only while REQUIRES and PRIV_REQUIRES are both
 # unset. Naming one component here would silently strip the rest.
+
+#
+# The subdirectories under main/ are plain source folders, NOT ESP-IDF
+# components: IDF only auto-discovers components under components/ or
+# EXTRA_COMPONENT_DIRS, so an idf_component_register() in main/gpio/ would be
+# silently ignored and those files never compiled. A new file must be added to
+# SRCS below or it does not get built, silently.
+#
 idf_component_register(
     SRCS         "main.c"
                  "config_reader.c"
                  "app_console.c"
                  "app_http.c"
                  "app_status.c"
+                 "board/board.c"
+                 "gpio/gpio.c"
+                 "gpio/pwm.c"
+                 "i2c/i2c.c"
+                 "sd/sd.c"
+                 "spi/spi.c"
+                 "sys/sys_hw.c"
+                 "touch/touch.c"
+                 "uart/uart.c"
                  "${GEN_C}"
-    INCLUDE_DIRS "." "${GEN_DIR}")
+    INCLUDE_DIRS "."
+                 "board"
+                 "gpio"
+                 "i2c"
+                 "sd"
+                 "spi"
+                 "sys"
+                 "touch"
+                 "uart"
+                 "${GEN_DIR}")
 
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wall -Wextra -Werror)
 
