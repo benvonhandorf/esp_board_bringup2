@@ -1,4 +1,16 @@
 dependencies:
+  cli:
+    dependencies: []
+    source:
+      path: ../esp_components/cli
+      type: local
+    version: 0.1.0
+  diag:
+    dependencies: []
+    source:
+      path: ../esp_components/diag
+      type: local
+    version: 0.1.0
   espressif/mdns:
     component_hash: e81ca7a7f53ea34e78274df054da692c272e1315572876b237b1748e267c013b
     dependencies:
@@ -19,6 +31,12 @@ dependencies:
       registry_url: https://components.espressif.com/
       type: service
     version: 1.1.0
+  http_server:
+    dependencies: []
+    source:
+      path: ../esp_components/http_server
+      type: local
+    version: 0.1.0
   idf:
     source:
       type: idf
@@ -33,11 +51,28 @@ dependencies:
       registry_url: https://components.espressif.com/
       type: service
     version: 1.22.3
+  js2c:
+    dependencies: []
+    source:
+      path: ../esp_components/js2c
+      type: local
+    version: 0.1.0
+  net_events:
+    dependencies: []
+    source:
+      path: ../esp_components/net_events
+      type: local
+    version: 0.1.0
 direct_dependencies:
+- cli
+- diag
 - espressif/mdns
 - espressif/mqtt
+- http_server
 - idf
 - joltwallet/littlefs
-manifest_hash: 8166948f27903f91ba464636a8c782038ce2d54c2869aac7e96eb978d977bc11
+- js2c
+- net_events
+manifest_hash: 68a1ef107c120f7bbebdcf2ed91d5f3626159e8ecb38b6bf1a8b0bfdc16c84be
 target: esp32s3
 version: 3.0.0

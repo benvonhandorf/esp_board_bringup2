@@ -28,7 +28,7 @@
 
     "wifi": { "$ref": "wifi_manager/wifi_manager_config_schema.json" },
     "mqtt": { "$ref": "mqtt_manager/mqtt_manager_config_schema.json" },
-    "ntp":  { "$ref": "ntp_manager/ntp_config_schema.json" },
+    "ntp":  { "$ref": "ntp_manager/ntp_manager_config_schema.json" },
     "http": { "$ref": "http_server/http_server_config_schema.json" }
   }
 }

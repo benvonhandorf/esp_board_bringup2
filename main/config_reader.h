@@ -15,7 +15,7 @@
  * each config concept, owned by the component that consumes it. */
 #include "http_server_config.h"
 #include "mqtt_manager_config.h"
-#include "ntp_config.h"
+#include "ntp_manager_config.h"
 #include "wifi_manager_config.h"
 
 /*
@@ -29,7 +29,7 @@ typedef struct {
     app_config_t           top;
     wifi_manager_config_t  wifi;
     mqtt_manager_config_t  mqtt;
-    ntp_config_t           ntp;
+    ntp_manager_config_t   ntp;
     http_server_config_t   http;
 } app_config_full_t;
 

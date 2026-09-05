@@ -27,7 +27,7 @@ static char s_source[8] = "none";
  */
 #define SECTION_PARSER_wifi json_parse_wifi_manager_config_with_len
 #define SECTION_PARSER_mqtt json_parse_mqtt_manager_config_with_len
-#define SECTION_PARSER_ntp  json_parse_ntp_config_with_len
+#define SECTION_PARSER_ntp  json_parse_ntp_manager_config_with_len
 #define SECTION_PARSER_http json_parse_http_server_config_with_len
 
 #define PARSE_SECTION(name)                                                   \
