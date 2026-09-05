@@ -1,4 +1,7 @@
 dependencies:
+  # iperf2-compatible throughput testing, used by `wifi iperf`.
+  espressif/iperf-cmd: "~1.0.2"
+
   # LittleFS backs the configuration partition. The application mounts it;
   # config_store deliberately takes paths and mounts nothing itself.
   joltwallet/littlefs: "^1.20"
@@ -64,7 +67,7 @@ dependencies:
   wifi_manager:
     git: https://github.com/benvonhandorf/esp_components.git
     path: wifi_manager
-    version: wifi_manager-v0.1.0
+    version: wifi_manager-v0.2.0
 
   # Device drivers, from the same repository and pinned the same way. Each is a
   # part this rig can exercise; the console half of each stays in main/, because

@@ -41,6 +41,7 @@ idf_component_register(
                  "sys/sys_hw.c"
                  "touch/touch.c"
                  "uart/uart.c"
+                 "wifi/wifi.c"
                  "${GEN_C}"
     INCLUDE_DIRS "."
                  "board"
@@ -52,6 +53,7 @@ idf_component_register(
                  "sys"
                  "touch"
                  "uart"
+                 "wifi"
                  "${GEN_DIR}")
 
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wall -Wextra -Werror)

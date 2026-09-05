@@ -47,6 +47,7 @@
 #include "sys_hw.h"
 #include "touch.h"
 #include "uart.h"
+#include "wifi.h"
 #include "wifi_manager.h"
 
 #define ARRAY_COUNT(a) (sizeof(a) / sizeof((a)[0]))
@@ -195,6 +196,28 @@ static const cli_group_t net_group = {
     .help = "Configured networking: the link this device joins on its own",
     .commands = net_commands,
     .command_count = ARRAY_COUNT(net_commands),
+};
+
+/* ------------------------------------------------------------------ */
+/* wifi -- the bench half; see main/wifi/wifi.h for the split from net */
+/* ------------------------------------------------------------------ */
+
+static const cli_command_t wifi_commands[] = {
+    {"scan",     "",                              "List nearby access points",       cmd_wifi_scan},
+    {"connect",  "<SSID> [password]",             "Join an access point not in the configuration", cmd_wifi_connect},
+    {"ap",       "[stop]",                        "Host the configured access point, or stop it", cmd_wifi_ap},
+    {"status",   "",                              "Association, PHY, signal and addresses", cmd_wifi_status},
+    {"off",      "",                              "Power the radio down completely, for quiet measurements", cmd_wifi_off},
+    {"on",       "",                              "Power the radio back up and rejoin", cmd_wifi_on},
+    {"iperf",    "<server>[:<port>] [continuous]", "Measure throughput (iperf2 TCP)", cmd_wifi_iperf},
+    {"netstats", "",                              "Show lwIP protocol drop/error counters", cmd_wifi_netstats},
+};
+
+static const cli_group_t wifi_group = {
+    .name = "wifi",
+    .help = "The radio itself: scanning, ad-hoc joins, throughput and turning it off",
+    .commands = wifi_commands,
+    .command_count = ARRAY_COUNT(wifi_commands),
 };
 
 /* ------------------------------------------------------------------ */
@@ -487,6 +510,7 @@ static const cli_group_t board_core_basic_group = {
 static const cli_group_t *const groups[] = {
     &sys_group,
     &net_group,
+    &wifi_group,
     &gpio_group,
     &pwm_group,
     &i2c_group,

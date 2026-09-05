@@ -51,6 +51,30 @@ dependencies:
       path: diag
       type: git
     version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
+  espressif/iperf:
+    component_hash: 9c95e1c897e9bce78a811682041a284ce22dac888fb61c3988867d5cb09b5961
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.3'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    version: 1.0.3
+  espressif/iperf-cmd:
+    component_hash: ac7c2fe10545367f79c3a10d72bcd497cc0d626e6424786c1a433b3538ee0327
+    dependencies:
+    - name: espressif/iperf
+      registry_url: https://components.espressif.com
+      require: private
+      version: =1.0.3
+    - name: idf
+      require: private
+      version: '>=4.3'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.0.3
   espressif/mdns:
     component_hash: e81ca7a7f53ea34e78274df054da692c272e1315572876b237b1748e267c013b
     dependencies:
@@ -236,7 +260,7 @@ dependencies:
       type: git
     version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
   wifi_manager:
-    component_hash: 9449ad14d2fd2476c8d0a09b1f80a6d227307982fe3156e7e79103710a2ada9b
+    component_hash: a0111a15572c6948a5664a4115e38912144493e5b699c5280758d89640c9d65b
     dependencies:
     - name: idf
       version: '>=5.0'
@@ -252,12 +276,13 @@ dependencies:
       git: https://github.com/benvonhandorf/esp_components.git
       path: wifi_manager
       type: git
-    version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
+    version: 0a21ed6de344d6fe7589ae316f19cf63bfca8f35
 direct_dependencies:
 - cli
 - cli_web
 - config_store
 - diag
+- espressif/iperf-cmd
 - http_server
 - hx711
 - ina237
@@ -271,6 +296,6 @@ direct_dependencies:
 - ota
 - sht4x
 - wifi_manager
-manifest_hash: 47c2e75909695862f31614f591de94c2c13eb18f72dc2f469f9068997ef760b7
+manifest_hash: df9c7e53e323f8ee2ea6e47d4e4174fb2d235ed4342fa8d92ac27ab5d8a17f0a
 target: esp32c3
 version: 3.0.0
