@@ -22,7 +22,7 @@ a cable.
 ## Getting started
 
 ```sh
-git clone <this repo> my-project && cd my-project
+git clone git@github.com:benvonhandorf/esp_template.git my-project && cd my-project
 
 cp config/config.example.json fs/config.json   # then edit it
 
