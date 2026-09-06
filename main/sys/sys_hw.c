@@ -65,11 +65,9 @@ static void print_memory(const char *label, uint32_t caps)
     size_t free_now = heap_caps_get_free_size(caps);
     size_t low_water = heap_caps_get_minimum_free_size(caps);
 
-    diag_printf("  %-10s %7u KB total, %7u KB free (low water %u KB)\n",
-              label,
-              (unsigned)(total / 1024),
-              (unsigned)(free_now / 1024),
-              (unsigned)(low_water / 1024));
+    STRRES_PRINTF(STR_SYS_MEMORY_ROW,
+                  label, (unsigned)(total / 1024), (unsigned)(free_now / 1024),
+                  (unsigned)(low_water / 1024));
 }
 
 void sys_hw_print_chip_info(void)
@@ -77,39 +75,37 @@ void sys_hw_print_chip_info(void)
     esp_chip_info_t info;
     esp_chip_info(&info);
 
-    diag_printf("Chip:      %s rev v%d.%d, %d core%s\n",
-              app_chip_model_name(info.model),
-              info.revision / 100, info.revision % 100,
-              info.cores, info.cores == 1 ? "" : "s");
+    STRRES_PRINTF(STR_SYS_CHIP,
+                  app_chip_model_name(info.model), info.revision / 100, info.revision % 100,
+                  info.cores, info.cores == 1 ? "" : "s");
 
-    diag_printf("Features: %s%s%s%s%s\n",
-              info.features & CHIP_FEATURE_WIFI_BGN ? " WiFi-b/g/n" : "",
-              info.features & CHIP_FEATURE_BT ? " BT" : "",
-              info.features & CHIP_FEATURE_BLE ? " BLE" : "",
-              info.features & CHIP_FEATURE_IEEE802154 ? " 802.15.4" : "",
-              info.features & CHIP_FEATURE_EMB_FLASH ? " embedded-flash" : "");
+    STRRES_PRINTF(STR_SYS_FEATURES,
+                  info.features & CHIP_FEATURE_WIFI_BGN ? " WiFi-b/g/n" : "",
+                  info.features & CHIP_FEATURE_BT ? " BT" : "",
+                  info.features & CHIP_FEATURE_BLE ? " BLE" : "",
+                  info.features & CHIP_FEATURE_IEEE802154 ? " 802.15.4" : "",
+                  info.features & CHIP_FEATURE_EMB_FLASH ? " embedded-flash" : "");
 
     uint32_t flash_size = 0;
     esp_err_t err = esp_flash_get_size(NULL, &flash_size);
     if (err == ESP_OK) {
-        diag_printf("Flash:     %lu KB\n", (unsigned long)(flash_size / 1024));
+        STRRES_PRINTF(STR_SYS_FLASH, (unsigned long)(flash_size / 1024));
     } else {
-        diag_printf("Flash:     unavailable (%s)\n", esp_err_to_name(err));
+        STRRES_PRINTF(STR_SYS_FLASH_UNAVAILABLE, esp_err_to_name(err));
     }
 
-    diag_printf("Memory:\n");
+    STRRES_PRINTF(STR_SYS_MEMORY_HEADER);
     print_memory("internal", MALLOC_CAP_INTERNAL | MALLOC_CAP_DEFAULT);
     print_memory("DMA", MALLOC_CAP_DMA);
     print_memory("PSRAM", MALLOC_CAP_SPIRAM);
 
     uint8_t mac[6] = {0};
     if (esp_read_mac(mac, ESP_MAC_WIFI_STA) == ESP_OK) {
-        diag_printf("MAC (STA): %02x:%02x:%02x:%02x:%02x:%02x\n",
-                  mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        STRRES_PRINTF(STR_SYS_MAC, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     }
 
-    diag_printf("Reset:     %s\n", reset_reason_name(esp_reset_reason()));
-    diag_printf("Uptime:    %llu s\n", (unsigned long long)(esp_timer_get_time() / 1000000));
+    STRRES_PRINTF(STR_SYS_RESET, reset_reason_name(esp_reset_reason()));
+    STRRES_PRINTF(STR_SYS_UPTIME, (unsigned long long)(esp_timer_get_time() / 1000000));
 }
 
 /*
@@ -137,32 +133,29 @@ int cmd_sys_lfxtal(int argc, char **argv)
 
     soc_rtc_slow_clk_src_t original = rtc_clk_slow_src_get();
 
-    diag_printf("Main XTAL:      %d MHz\n", (int)rtc_clk_xtal_freq_get());
-    diag_printf("RTC slow clock: currently %s\n",
-              original == SOC_RTC_SLOW_CLK_SRC_XTAL32K ? "XTAL32K"
-                                                       : "internal RC oscillator");
+    STRRES_PRINTF(STR_SYS_XTAL, (int)rtc_clk_xtal_freq_get());
+    STRRES_PRINTF(STR_SYS_RTC_SLOW_SOURCE,
+                  original == SOC_RTC_SLOW_CLK_SRC_XTAL32K ? "XTAL32K" : "internal RC oscillator");
 
-    diag_printf("Enabling the 32kHz crystal oscillator...\n");
+    STRRES_PRINTF(STR_SYS_LFXTAL_ENABLING);
     rtc_clk_32k_enable(true);
     vTaskDelay(pdMS_TO_TICKS(LFXTAL_SETTLE_MS));
 
     uint32_t measured = measure_clock_hz(CLK_CAL_32K_XTAL, LFXTAL_CAL_CYCLES);
     if (measured == 0) {
         rtc_clk_32k_enable(false);
-        diag_error("LFXTAL is not oscillating (calibration timed out). "
-                 "No 32.768kHz crystal fitted, wrong loading capacitors, "
-                 "or the XTAL_32K pins are used for something else.");
+        STRRES_ERROR(STR_SYS_LFXTAL_ABSENT);
         return -1;
     }
 
-    diag_printf("LFXTAL oscillating at a measured %lu Hz\n", (unsigned long)measured);
+    STRRES_PRINTF(STR_SYS_LFXTAL_MEASURED, (unsigned long)measured);
 
     if (measured < LFXTAL_NOMINAL_HZ - LFXTAL_TOLERANCE_HZ ||
         measured > LFXTAL_NOMINAL_HZ + LFXTAL_TOLERANCE_HZ) {
         rtc_clk_32k_enable(false);
-        diag_error("%lu Hz is too far from 32768 Hz to trust; leaving the RTC "
-                 "slow clock on %s.", (unsigned long)measured,
-                 original == SOC_RTC_SLOW_CLK_SRC_XTAL32K ? "XTAL32K" : "the RC oscillator");
+        STRRES_ERROR(STR_SYS_LFXTAL_OFF_FREQUENCY,
+                     (unsigned long)measured,
+                     original == SOC_RTC_SLOW_CLK_SRC_XTAL32K ? "XTAL32K" : "the RC oscillator");
         return -1;
     }
 
@@ -172,12 +165,11 @@ int cmd_sys_lfxtal(int argc, char **argv)
 
     if (rtc_clk_slow_src_get() != SOC_RTC_SLOW_CLK_SRC_XTAL32K) {
         rtc_clk_slow_src_set(original);
-        diag_error("RTC slow clock would not switch to XTAL32K; restored the "
-                 "previous source.");
+        STRRES_ERROR(STR_SYS_LFXTAL_SWITCH_FAILED);
         return -1;
     }
 
-    diag_printf("RTC slow clock now runs from XTAL32K\n");
-    diag_printf("LFXTAL configuration: OK\n");
+    STRRES_PRINTF(STR_SYS_LFXTAL_SWITCHED);
+    STRRES_PRINTF(STR_SYS_LFXTAL_OK);
     return 0;
 }

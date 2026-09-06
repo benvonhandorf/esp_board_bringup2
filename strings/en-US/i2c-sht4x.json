@@ -1,0 +1,33 @@
+{
+  "section": "i2c-sht4x",
+  "strings": {
+    "address_range": "Address must be 0x%02X-0x%02X (fixed by the part variant: A=0x44, B=0x45, C=0x46)",
+    "crc_first_word": "0x%02X: CRC error in the first word (got 0x%02X, computed 0x%02X)",
+    "crc_second_word": "0x%02X: CRC error in the second word (got 0x%02X, computed 0x%02X)",
+    "driver_create_failed": "Cannot create the SHT4x driver: %s",
+    "group.help": "Sensirion SHT4x humidity/temperature sensors at 0x44-0x46",
+    "heater.help": "Pulse the heater, then measure",
+    "heater.usage": "[address] <mW> <ms>",
+    "heater_args_numeric": "Power and duration must be numbers",
+    "heater_duration_invalid": "Duration must be 100 or 1000 ms",
+    "heater_power_invalid": "Power must be 20, 110 or 200 mW",
+    "heater_running": "Running the heater at %d mW for %d ms; the sensor measures once just before it switches off.\n",
+    "humidity_cropped": "      Note: uncropped humidity was %.2f %%RH, cropped to the physical 0-100 range\n",
+    "no_response": "No response from 0x%02X: %s",
+    "read.help": "Measure temperature and humidity",
+    "read.usage": "[address] [high|medium|low]",
+    "read_failed": "Reading 0x%02X: %s",
+    "read_line": "0x%02X  Temp %7.2f C (%7.2f F)  Humidity %6.2f %%RH\n",
+    "read_raw": "      raw T 0x%04X  RH 0x%04X  (%s repeatability)\n",
+    "repeatability_invalid": "Repeatability must be high, medium or low (got '%s')",
+    "reset.help": "Soft-reset the sensor",
+    "reset.usage": "[address]",
+    "reset_done": "0x%02X soft reset\n",
+    "reset_failed": "Resetting 0x%02X: %s",
+    "serial": "0x%02X  Serial number 0x%04X%04X\n",
+    "serial.help": "Read the sensor serial number",
+    "serial.usage": "[address]",
+    "usage_heater": "Usage: heater [address] <power_mw> <duration_ms>\n",
+    "usage_heater_values": "Power is 20, 110 or 200 mW; duration is 100 or 1000 ms.\n"
+  }
+}

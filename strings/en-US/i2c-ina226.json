@@ -1,0 +1,33 @@
+{
+  "section": "i2c-ina226",
+  "strings": {
+    "address_range": "Address must be 0x%02X-0x%02X (set by the A0/A1 pins)",
+    "addressing_failed": "Addressing 0x%02X: %s",
+    "averaging_invalid": "Averaging must be 1, 4, 16, 64, 128, 256, 512 or 1024 samples",
+    "config.help": "Register a monitor (0.01 ohm over 8.192 A, 16 samples)",
+    "config.usage": "<address> [shunt_ohms] [max_amps] [avg_samples]",
+    "configured": "0x%02X configured: shunt %.4f ohm, %.4f mA/LSB, range +/-%.3f A\n",
+    "configured_calibration": "      Averaging %u samples, CALIBRATION 0x%04X, manufacturer 0x%04X die 0x%04X\n",
+    "current_invalid": "Full-scale current must be a positive number of amps, e.g. 8.192",
+    "group.help": "TI INA226 current/voltage/power monitors at 0x40-0x4f",
+    "list.help": "Show configured monitors and their calibration",
+    "list.usage": "",
+    "list_empty": "No INA226s configured.\n",
+    "list_header": "%-8s %12s %14s %14s %6s %8s\n",
+    "list_row": "0x%02X     %12.4f %11.4f mA %11.3f A %6u   0x%04X\n",
+    "none_configured": "No INA226s configured. Run 'i2c-ina226 config <address> [shunt_ohms] [max_amps] [avg]', or 'i2c-ina226 read <address>' to use the defaults.",
+    "not_an_ina226": "0x%02X is not an INA226: manufacturer 0x%04X, die 0x%04X; expected 0x5449 and 0x2260.",
+    "range_unreachable": "0x%02X: that shunt and range need a full-scale drop outside 5.12-81.92 mV, and this part has no PGA.",
+    "read.help": "Report bus voltage, current and power",
+    "read.usage": "[address]",
+    "read_detail": "      Shunt %8.3f mV  %.4f mA/LSB over +/-%.3f A, %u-sample average\n",
+    "read_failed": "Reading 0x%02X: %s",
+    "read_line": "0x%02X  Bus %8.3f V  Current %8.4f A  Power %8.3f W\n",
+    "read_unconfigured": "0x%02X is not configured; using %.3f ohm over %.3f A.\n",
+    "shunt_invalid": "Shunt resistance must be a positive number of ohms, e.g. 0.01",
+    "stage_failed": "0x%02X: %s failed: %s",
+    "too_many": "Cannot track more than %d INA226s",
+    "usage_config": "Usage: config <address> [shunt_ohms] [max_amps] [avg_samples]\n",
+    "usage_config_defaults": "Address is 0x%02X-0x%02X; defaults are %.3f ohm, %.3f A and %u samples.\n"
+  }
+}

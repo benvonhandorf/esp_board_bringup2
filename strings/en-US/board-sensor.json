@@ -1,0 +1,10 @@
+{
+  "section": "board-sensor",
+  "strings": {
+    "group.help": "ESP32-C3 sensor board (esp32c3)",
+    "i2c.help": "Initialize the I2C bus",
+    "i2c.usage": "",
+    "pins.help": "Show the known pinout",
+    "pins.usage": ""
+  }
+}

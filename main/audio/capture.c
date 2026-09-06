@@ -546,24 +546,21 @@ static const char *rx_description(void)
 void audio_capture_report(const audio_capture_t *cap)
 {
     if (cap->error != ESP_OK && cap->frames == 0) {
-        diag_error("Capture failed: %s", esp_err_to_name(cap->error));
+        STRRES_ERROR(STR_AUDIO_CAPTURE_FAILED, esp_err_to_name(cap->error));
         return;
     }
 
-    diag_printf("Captured %llu frames at %lu Hz from %s, %u-bit (full scale "
-              "%.0f)\n", (unsigned long long)cap->frames,
-              (unsigned long)cap->rate, rx_description(), cap->bits,
-              cap->full_scale);
+    STRRES_PRINTF(STR_AUDIO_CAPTURED,
+                  (unsigned long long)cap->frames, (unsigned long)cap->rate, rx_description(),
+                  cap->bits, cap->full_scale);
 
-    diag_printf("%-6s %11s %11s %9s %10s %12s %10s\n",
-              "slot", "min", "max", "mean", "stdev", "rms", "peak");
+    STRRES_PRINTF(STR_AUDIO_HEADER, "slot", "min", "max", "mean", "stdev", "rms", "peak");
     for (int ch = 0; ch < 2; ch++) {
-        diag_printf("%-6s %11ld %11ld %9.1f %10.1f %9.1f dB %7.1f dB\n",
-                  ch == 0 ? "left" : "right",
-                  (long)cap->min[ch], (long)cap->max[ch], cap->mean[ch],
-                  cap->stdev[ch],
-                  audio_dbfs(cap->stdev[ch], cap->full_scale),
-                  audio_dbfs(cap->peak[ch], cap->full_scale));
+        STRRES_PRINTF(STR_AUDIO_ROW,
+                      ch == 0 ? "left" : "right", (long)cap->min[ch], (long)cap->max[ch],
+                      cap->mean[ch], cap->stdev[ch],
+                      audio_dbfs(cap->stdev[ch], cap->full_scale),
+                      audio_dbfs(cap->peak[ch], cap->full_scale));
     }
 
     /*
@@ -586,27 +583,23 @@ void audio_capture_report(const audio_capture_t *cap)
      */
     for (int ch = 0; ch < 2; ch++) {
         if (cap->stdev[ch] == 0.0 && cap->frames > 0) {
-            diag_printf("The %s slot never changed -- all %llu samples read "
-                      "%ld. Check the part is clocked and the data pin is the "
-                      "right one.\n", ch == 0 ? "left" : "right",
-                      (unsigned long long)cap->frames, (long)cap->min[ch]);
+            STRRES_PRINTF(STR_AUDIO_SLOT_STUCK,
+                          ch == 0 ? "left" : "right", (unsigned long long)cap->frames,
+                          (long)cap->min[ch]);
         }
     }
 
     if (cap->clipped[0] || cap->clipped[1]) {
-        diag_printf("Clipped: %llu left, %llu right -- the input is overdriven "
-                  "and every level above is a floor, not a measurement.\n",
-                  (unsigned long long)cap->clipped[0],
-                  (unsigned long long)cap->clipped[1]);
+        STRRES_PRINTF(STR_AUDIO_CLIPPED,
+                      (unsigned long long)cap->clipped[0], (unsigned long long)cap->clipped[1]);
     }
 
     if (cap->overruns) {
-        diag_printf("%d read%s came up short; the receiver overran and samples "
-                  "were lost.\n", cap->overruns, cap->overruns == 1 ? "" : "s");
+        STRRES_PRINTF(STR_AUDIO_SHORT_READS, cap->overruns, cap->overruns == 1 ? "" : "s");
     }
 
     if (cap->error != ESP_OK) {
-        diag_error("Capture ended early: %s", esp_err_to_name(cap->error));
+        STRRES_ERROR(STR_AUDIO_CAPTURE_ENDED_EARLY, esp_err_to_name(cap->error));
     }
 }
 
@@ -623,9 +616,8 @@ void audio_capture_spectrum(const audio_capture_t *cap)
      * the broadband RMS above -- which is the property that lets the two
      * halves of this report be checked against each other.
      */
-    diag_printf("\nPower per half octave, %llu frames analysed (%.1f Hz bins)\n",
-              (unsigned long long)cap->analysed,
-              (double)cap->rate / (double)cap->analysed);
+    STRRES_PRINTF(STR_AUDIO_SPECTRUM_HEADER,
+                  (unsigned long long)cap->analysed, (double)cap->rate / (double)cap->analysed);
 
     const int width = 40;
     const double floor_db = -90.0;
@@ -644,10 +636,9 @@ void audio_capture_spectrum(const audio_capture_t *cap)
             memset(bar[ch], '#', (size_t)cells);
             bar[ch][cells] = '\0';
         }
-        diag_printf("%8.0f Hz  L %-40s %6.1f\n", cap->band_hz[i], bar[0],
-                  cap->band_dbfs[0][i]);
-        diag_printf("%8s     R %-40s %6.1f\n", "", bar[1], cap->band_dbfs[1][i]);
+        STRRES_PRINTF(STR_AUDIO_SPECTRUM_ROW_L,
+                      cap->band_hz[i], bar[0], cap->band_dbfs[0][i]);
+        STRRES_PRINTF(STR_AUDIO_SPECTRUM_ROW_R, "", bar[1], cap->band_dbfs[1][i]);
     }
-    diag_printf("Bars run from %.0f dBFS to 0; the figure on the right is "
-              "dBFS.\n", floor_db);
+    STRRES_PRINTF(STR_AUDIO_SPECTRUM_NOTE, floor_db);
 }

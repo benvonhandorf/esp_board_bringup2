@@ -100,10 +100,8 @@ void audio_bus_rx_pins(int *clk, int *din)
 bool audio_bus_rx_require(void)
 {
     if (!rx_chan) {
-        diag_error("Nothing is set up to receive audio");
-        diag_printf("Add a receive line to the I2S bus ('audio bus <bclk> <ws> "
-                  "<dout> din <pin>'), or open a PDM microphone ('audio pdm "
-                  "<clk> <data>').\n");
+        STRRES_ERROR(STR_AUDIO_NO_RECEIVER);
+        STRRES_PRINTF(STR_AUDIO_NO_RECEIVER_NOTE);
         return false;
     }
     return true;
@@ -117,7 +115,7 @@ bool audio_bus_ready(void)
 bool audio_bus_require(void)
 {
     if (!bus_open) {
-        diag_error("I2S not initialized. Run 'audio bus <bclk> <ws> <dout>' first.");
+        STRRES_ERROR(STR_AUDIO_NOT_INITIALIZED);
         return false;
     }
     return true;
@@ -399,7 +397,7 @@ esp_err_t audio_bus_open_pdm(int clk, int din, const audio_format_t *fmt)
     (void)clk; (void)din; (void)fmt;
 
 #if !SOC_I2S_SUPPORTS_PDM_RX
-    diag_error("%s cannot receive PDM at all", CONFIG_IDF_TARGET);
+    STRRES_ERROR(STR_AUDIO_NO_PDM, CONFIG_IDF_TARGET);
 #else
     /*
      * The peripheral can clock a PDM microphone but has no PDM-to-PCM filter,
@@ -408,11 +406,8 @@ esp_err_t audio_bus_open_pdm(int clk, int din, const audio_format_t *fmt)
      * rather than the sound, and would look like plausible numbers while
      * meaning nothing. Refusing is more useful than that.
      */
-    diag_error("%s can clock a PDM microphone but has no PDM-to-PCM filter",
-             CONFIG_IDF_TARGET);
-    diag_printf("The raw bitstream would need decimating in software before any "
-              "of it means anything, which this firmware does not do. An I2S "
-              "microphone on 'audio bus ... din <pin>' works here.\n");
+    STRRES_ERROR(STR_AUDIO_PDM_NO_FILTER, CONFIG_IDF_TARGET);
+    STRRES_PRINTF(STR_AUDIO_PDM_NO_FILTER_NOTE);
 #endif
     return ESP_ERR_NOT_SUPPORTED;
 }
@@ -502,8 +497,7 @@ bool audio_bus_ready(void) { return false; }
 
 bool audio_bus_require(void)
 {
-    diag_error("%s has no I2S peripheral, so audio cannot be tested on it",
-             CONFIG_IDF_TARGET);
+    STRRES_ERROR(STR_AUDIO_NO_I2S, CONFIG_IDF_TARGET);
     return false;
 }
 

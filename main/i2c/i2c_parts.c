@@ -23,8 +23,8 @@
 typedef struct {
     uint8_t     first;         /* inclusive; first == last for a fixed address */
     uint8_t     last;
-    const char *part;
-    const char *what;
+    const char *part;          /* the marking on the package, not prose */
+    strres_id_t what;          /* one line of prose, so it lives on `res` */
     const char *group;         /* the console group that drives it */
     const char *verb;          /* its first useful command */
     bool        takes_address; /* whether that command takes the address */
@@ -37,43 +37,43 @@ typedef struct {
  */
 static const i2c_part_t parts[] = {
     {NAU8822_ADDR_LOW, NAU8822_ADDR_HIGH,
-     "NAU8822", "stereo codec, speaker driver, I2S audio",
+     "NAU8822", STR_I2C_PART_NAU8822,
      "audio-nau8822", "init", true},
 
     {NAU7802_I2C_ADDRESS, NAU7802_I2C_ADDRESS,
-     "NAU7802", "24-bit bridge ADC, load cell front end",
+     "NAU7802", STR_I2C_PART_NAU7802,
      "i2c-nau7802", "init", false},
 
     {RX8130CE_I2C_ADDR_DEFAULT, RX8130CE_I2C_ADDR_DEFAULT,
-     "RX8130CE", "real-time clock with battery backup",
+     "RX8130CE", STR_I2C_PART_RX8130CE,
      "i2c-rx8130ce", "time", false},
 
     {INA219_I2C_ADDR_DEFAULT, INA219_I2C_ADDR_DEFAULT + 0x0f,
-     "INA219", "current/voltage/power monitor",
+     "INA219", STR_I2C_PART_INA219,
      "i2c-ina219", "read", true},
 
     {INA226_I2C_ADDR_DEFAULT, INA226_I2C_ADDR_DEFAULT + 0x0f,
-     "INA226", "current/voltage/power monitor",
+     "INA226", STR_I2C_PART_INA226,
      "i2c-ina226", "read", true},
 
     {INA237_ADDR_FIRST, INA237_ADDR_LAST,
-     "INA237", "current/voltage/power monitor",
+     "INA237", STR_I2C_PART_INA237,
      "i2c-ina237", "read", true},
 
     {PI4IOE5V6408_I2C_ADDR_DEFAULT, PI4IOE5V6408_I2C_ADDR_DEFAULT + 1,
-     "PI4IOE5V6408", "8-bit I/O expander, 5 V tolerant",
+     "PI4IOE5V6408", STR_I2C_PART_PI4IOE5V6408,
      "i2c-pi4ioe", "init", true},
 
     {SHT4X_ADDR_FIRST, SHT4X_ADDR_LAST,
-     "SHT4x", "humidity/temperature; A/B/C = 0x44/45/46",
+     "SHT4x", STR_I2C_PART_SHT4X,
      "i2c-sht4x", "read", true},
 
     {LM75BDP_I2C_ADDR_DEFAULT, LM75BDP_I2C_ADDR_DEFAULT + 0x07,
-     "LM75BDP", "temperature sensor, thermal watchdog",
+     "LM75BDP", STR_I2C_PART_LM75BDP,
      "i2c-lm75bdp", "read", true},
 
     {AW9523B_I2C_ADDR_DEFAULT, AW9523B_I2C_ADDR_DEFAULT + 0x03,
-     "AW9523B", "16-bit I/O expander",
+     "AW9523B", STR_I2C_PART_AW9523B,
      "i2c-aw9523b", "init", true},
 };
 
@@ -132,7 +132,11 @@ static void print_row(const char *address, const i2c_part_t *part, const char *a
         snprintf(next, sizeof(next), "%s %s", part->group, part->verb);
     }
 
-    diag_printf(ROW_FORMAT, address, part->part, part->what, next);
+    /* The description is a string resource, and the column is width-limited,
+     * so it has to be a value here rather than something merely printed. */
+    char what[APP_STR_LEN];
+    diag_printf(ROW_FORMAT, address, part->part,
+                app_str(part->what, what, sizeof(what)), next);
 }
 
 void i2c_parts_print_address(uint8_t address)

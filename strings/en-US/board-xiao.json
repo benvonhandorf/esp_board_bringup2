@@ -1,0 +1,12 @@
+{
+  "section": "board-xiao",
+  "strings": {
+    "group.help": "Seeed XIAO ESP32-S3 Sense (esp32s3)",
+    "mic.help": "Open the PDM microphone",
+    "mic.usage": "",
+    "pins.help": "Show the known pinout",
+    "pins.usage": "",
+    "sd.help": "Bring the microSD slot up over SPI",
+    "sd.usage": ""
+  }
+}

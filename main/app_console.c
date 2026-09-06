@@ -75,10 +75,10 @@ static int cmd_sys_info(int argc, char **argv)
 
     sys_hw_print_chip_info();
 
-    diag_printf("Firmware:  %s %s\n", app->project_name, app->version);
-    diag_printf("Built:     %s %s\n", app->date, app->time);
-    diag_printf("ESP-IDF:   %s\n", app->idf_ver);
-    diag_printf("Config:    %s\n", config_reader_source());
+    STRRES_PRINTF(STR_SYS_INFO_FIRMWARE, app->project_name, app->version);
+    STRRES_PRINTF(STR_SYS_INFO_BUILT, app->date, app->time);
+    STRRES_PRINTF(STR_SYS_INFO_IDF, app->idf_ver);
+    STRRES_PRINTF(STR_SYS_INFO_CONFIG, config_reader_source());
     return 0;
 }
 
@@ -87,7 +87,7 @@ static int cmd_sys_status(int argc, char **argv)
     (void)argc; (void)argv;
     char buf[512];
     if (app_status_serialize(buf, sizeof(buf)) < 0) {
-        diag_error("status does not fit");
+        STRRES_ERROR(STR_SYS_STATUS_TOO_LARGE);
         return -1;
     }
     diag_printf("%s\n", buf);
@@ -97,7 +97,7 @@ static int cmd_sys_status(int argc, char **argv)
 static int cmd_sys_restart(int argc, char **argv)
 {
     (void)argc; (void)argv;
-    diag_printf("restarting\n");
+    STRRES_PRINTF(STR_SYS_RESTARTING);
 
     /* Let the console -- and any attached browser -- flush before the CPU
      * restarts, or the message is lost. */
@@ -112,43 +112,57 @@ static int cmd_sys_confirm(int argc, char **argv)
 {
     (void)argc; (void)argv;
     if (!ota_pending_verify()) {
-        diag_printf("nothing to confirm; this image is already marked good\n");
+        STRRES_PRINTF(STR_SYS_OTA_NOTHING_TO_CONFIRM);
         return 0;
     }
     esp_err_t err = ota_mark_valid();
     if (err != ESP_OK) {
-        diag_error("confirming this image: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_SYS_OTA_CONFIRM_FAILED, esp_err_to_name(err));
         return -1;
     }
-    diag_printf("image confirmed; it will not be rolled back\n");
+    STRRES_PRINTF(STR_SYS_OTA_CONFIRMED);
     return 0;
 }
 
 static int cmd_sys_rollback(int argc, char **argv)
 {
     (void)argc; (void)argv;
-    diag_printf("rolling back to the previous firmware\n");
+    STRRES_PRINTF(STR_SYS_OTA_ROLLING_BACK);
     fflush(stdout);
     ota_rollback_and_reboot();
     /* Only reached if there is nothing to roll back to. */
-    diag_error("no previous firmware to roll back to");
+    STRRES_ERROR(STR_SYS_OTA_NO_PREVIOUS);
     return -1;
 }
 
 static const cli_command_t sys_commands[] = {
-    {"info",     "",  "Chip, memory, flash, firmware and reset reason", cmd_sys_info},
-    {"status",   "",  "The status message, as published",               cmd_sys_status},
-    {"lfxtal",   "",  "Configure and report the 32kHz crystal",         cmd_sys_lfxtal},
-    {"restart",  "",  "Restart the device",                             cmd_sys_restart},
-    {"confirm",  "",  "Mark this image good, cancelling rollback",      cmd_sys_confirm},
-    {"rollback", "",  "Return to the previous firmware",                cmd_sys_rollback},
+    {"info",     NULL, NULL, cmd_sys_info},
+    {"status",   NULL, NULL, cmd_sys_status},
+    {"lfxtal",   NULL, NULL, cmd_sys_lfxtal},
+    {"restart",  NULL, NULL, cmd_sys_restart},
+    {"confirm",  NULL, NULL, cmd_sys_confirm},
+    {"rollback", NULL, NULL, cmd_sys_rollback},
 };
+
+/* Parallel to sys_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t sys_text[] = {
+    {STR_SYS_INFO_USAGE,      STR_SYS_INFO_HELP},
+    {STR_SYS_STATUS_USAGE,    STR_SYS_STATUS_HELP},
+    {STR_SYS_LFXTAL_USAGE,    STR_SYS_LFXTAL_HELP},
+    {STR_SYS_RESTART_USAGE,   STR_SYS_RESTART_HELP},
+    {STR_SYS_CONFIRM_USAGE,   STR_SYS_CONFIRM_HELP},
+    {STR_SYS_ROLLBACK_USAGE,  STR_SYS_ROLLBACK_HELP},
+};
+_Static_assert(ARRAY_COUNT(sys_text) == ARRAY_COUNT(sys_commands),
+               "sys help ids and commands must be the same length");
 
 static const cli_group_t sys_group = {
     .name = "sys",
-    .help = "Device information and control",
     .commands = sys_commands,
     .command_count = ARRAY_COUNT(sys_commands),
+    .command_text = sys_text,
+    .help_id = STR_SYS_GROUP_HELP,
 };
 
 /* ------------------------------------------------------------------ */
@@ -164,11 +178,10 @@ static int cmd_net_status(int argc, char **argv)
     wifi_manager_get_address(ip, sizeof(ip));
     wifi_manager_get_rssi(&rssi);
 
-    diag_printf("wifi:  state %d, ip %s, rssi %d\n",
-                (int)wifi_manager_get_state(), ip[0] ? ip : "-", rssi);
-    diag_printf("mqtt:  %s", mqtt_manager_is_connected() ? "connected" : "disconnected");
+    STRRES_PRINTF(STR_SYS_NET_WIFI, (int)wifi_manager_get_state(), ip[0] ? ip : "-", rssi);
+    STRRES_PRINTF(STR_SYS_NET_MQTT, mqtt_manager_is_connected() ? "connected" : "disconnected");
     if (mqtt_manager_topic_prefix()) {
-        diag_printf(" under %s", mqtt_manager_topic_prefix());
+        STRRES_PRINTF(STR_SYS_NET_MQTT_UNDER, mqtt_manager_topic_prefix());
     }
     diag_printf("\n");
     return 0;
@@ -179,10 +192,10 @@ static int cmd_net_scan(int argc, char **argv)
     (void)argc; (void)argv;
     esp_err_t err = wifi_manager_scan_and_connect();
     if (err != ESP_OK) {
-        diag_error("scan: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_SYS_NET_SCAN_FAILED, esp_err_to_name(err));
         return -1;
     }
-    diag_printf("scanning; results arrive asynchronously\n");
+    STRRES_PRINTF(STR_SYS_NET_SCANNING);
     return 0;
 }
 
@@ -191,23 +204,34 @@ static int cmd_net_ap(int argc, char **argv)
     (void)argc; (void)argv;
     esp_err_t err = wifi_manager_start_ap_mode();
     if (err != ESP_OK) {
-        diag_error("starting the access point: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_SYS_NET_AP_START_FAILED, esp_err_to_name(err));
         return -1;
     }
     return 0;
 }
 
 static const cli_command_t net_commands[] = {
-    {"status", "", "WiFi and MQTT connection state",       cmd_net_status},
-    {"scan",   "", "Scan and join the best known network", cmd_net_scan},
-    {"ap",     "", "Serve the configuration access point", cmd_net_ap},
+    {"status", NULL, NULL, cmd_net_status},
+    {"scan",   NULL, NULL, cmd_net_scan},
+    {"ap",     NULL, NULL, cmd_net_ap},
 };
+
+/* Parallel to net_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t net_text[] = {
+    {STR_NET_STATUS_USAGE,  STR_NET_STATUS_HELP},
+    {STR_NET_SCAN_USAGE,    STR_NET_SCAN_HELP},
+    {STR_NET_AP_USAGE,      STR_NET_AP_HELP},
+};
+_Static_assert(ARRAY_COUNT(net_text) == ARRAY_COUNT(net_commands),
+               "net help ids and commands must be the same length");
 
 static const cli_group_t net_group = {
     .name = "net",
-    .help = "Configured networking: the link this device joins on its own",
     .commands = net_commands,
     .command_count = ARRAY_COUNT(net_commands),
+    .command_text = net_text,
+    .help_id = STR_NET_GROUP_HELP,
 };
 
 /* ------------------------------------------------------------------ */
@@ -348,111 +372,199 @@ static const cli_group_t i2c_group = {
 /* ------------------------------------------------------------------ */
 
 static const cli_command_t ina219_commands[] = {
-    {"config", "<address> [shunt_ohms] [max_amps]", "Register a monitor (0.1 ohm over 3.2 A by default)", cmd_ina219_config},
-    {"read",   "[address]", "Report bus voltage, current and power",   cmd_ina219_read},
-    {"list",   "",          "Show configured monitors and their calibration", cmd_ina219_list},
+    {"config", NULL, NULL, cmd_ina219_config},
+    {"read",   NULL, NULL, cmd_ina219_read},
+    {"list",   NULL, NULL, cmd_ina219_list},
 };
+
+/* Parallel to ina219_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t ina219_text[] = {
+    {STR_I2C_INA219_CONFIG_USAGE,  STR_I2C_INA219_CONFIG_HELP},
+    {STR_I2C_INA219_READ_USAGE,    STR_I2C_INA219_READ_HELP},
+    {STR_I2C_INA219_LIST_USAGE,    STR_I2C_INA219_LIST_HELP},
+};
+_Static_assert(ARRAY_COUNT(ina219_text) == ARRAY_COUNT(ina219_commands),
+               "i2c-ina219 help ids and commands must be the same length");
 
 static const cli_group_t ina219_group = {
     .name = "i2c-ina219",
-    .help = "TI INA219 current/voltage/power monitors at 0x40-0x4f",
     .commands = ina219_commands,
     .command_count = ARRAY_COUNT(ina219_commands),
+    .command_text = ina219_text,
+    .help_id = STR_I2C_INA219_GROUP_HELP,
 };
 
 static const cli_command_t ina226_commands[] = {
-    {"config", "<address> [shunt_ohms] [max_amps] [avg_samples]", "Register a monitor (0.01 ohm over 8.192 A, 16 samples)", cmd_ina226_config},
-    {"read",   "[address]", "Report bus voltage, current and power",   cmd_ina226_read},
-    {"list",   "",          "Show configured monitors and their calibration", cmd_ina226_list},
+    {"config", NULL, NULL, cmd_ina226_config},
+    {"read",   NULL, NULL, cmd_ina226_read},
+    {"list",   NULL, NULL, cmd_ina226_list},
 };
+
+/* Parallel to ina226_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t ina226_text[] = {
+    {STR_I2C_INA226_CONFIG_USAGE,  STR_I2C_INA226_CONFIG_HELP},
+    {STR_I2C_INA226_READ_USAGE,    STR_I2C_INA226_READ_HELP},
+    {STR_I2C_INA226_LIST_USAGE,    STR_I2C_INA226_LIST_HELP},
+};
+_Static_assert(ARRAY_COUNT(ina226_text) == ARRAY_COUNT(ina226_commands),
+               "i2c-ina226 help ids and commands must be the same length");
 
 static const cli_group_t ina226_group = {
     .name = "i2c-ina226",
-    .help = "TI INA226 current/voltage/power monitors at 0x40-0x4f",
     .commands = ina226_commands,
     .command_count = ARRAY_COUNT(ina226_commands),
+    .command_text = ina226_text,
+    .help_id = STR_I2C_INA226_GROUP_HELP,
 };
 
 static const cli_command_t lm75bdp_commands[] = {
-    {"read",   "[address]",                    "Measure temperature",  cmd_lm75bdp_read},
-    {"limits", "[address] <tos_C> <thyst_C>",  "Program the thermal watchdog thresholds", cmd_lm75bdp_limits},
+    {"read",   NULL, NULL, cmd_lm75bdp_read},
+    {"limits", NULL, NULL, cmd_lm75bdp_limits},
 };
+
+/* Parallel to lm75bdp_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t lm75bdp_text[] = {
+    {STR_I2C_LM75BDP_READ_USAGE,    STR_I2C_LM75BDP_READ_HELP},
+    {STR_I2C_LM75BDP_LIMITS_USAGE,  STR_I2C_LM75BDP_LIMITS_HELP},
+};
+_Static_assert(ARRAY_COUNT(lm75bdp_text) == ARRAY_COUNT(lm75bdp_commands),
+               "i2c-lm75bdp help ids and commands must be the same length");
 
 static const cli_group_t lm75bdp_group = {
     .name = "i2c-lm75bdp",
-    .help = "NXP LM75B temperature sensor and thermal watchdog at 0x48-0x4f",
     .commands = lm75bdp_commands,
     .command_count = ARRAY_COUNT(lm75bdp_commands),
+    .command_text = lm75bdp_text,
+    .help_id = STR_I2C_LM75BDP_GROUP_HELP,
 };
 
 static const cli_command_t rx8130ce_commands[] = {
-    {"time", "", "Read the clock, and compare it with the system time", cmd_rx8130ce_time},
-    {"set",  "", "Copy the system time into the clock",                 cmd_rx8130ce_set},
+    {"time", NULL, NULL, cmd_rx8130ce_time},
+    {"set",  NULL, NULL, cmd_rx8130ce_set},
 };
+
+/* Parallel to rx8130ce_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t rx8130ce_text[] = {
+    {STR_I2C_RX8130CE_TIME_USAGE,  STR_I2C_RX8130CE_TIME_HELP},
+    {STR_I2C_RX8130CE_SET_USAGE,   STR_I2C_RX8130CE_SET_HELP},
+};
+_Static_assert(ARRAY_COUNT(rx8130ce_text) == ARRAY_COUNT(rx8130ce_commands),
+               "i2c-rx8130ce help ids and commands must be the same length");
 
 static const cli_group_t rx8130ce_group = {
     .name = "i2c-rx8130ce",
-    .help = "Epson RX8130CE real-time clock with battery backup, at 0x32",
     .commands = rx8130ce_commands,
     .command_count = ARRAY_COUNT(rx8130ce_commands),
+    .command_text = rx8130ce_text,
+    .help_id = STR_I2C_RX8130CE_GROUP_HELP,
 };
 
 static const cli_command_t aw9523b_commands[] = {
-    {"init",  "[address] [p0in <mask>] [p1in <mask>] [p0init <mask>] [p1init <mask>] [pushpull]",
-              "Claim the part; every pin an input unless a mask says otherwise", cmd_aw9523b_init},
-    {"read",  "[port]",              "Read the pin levels of one port or both", cmd_aw9523b_read},
-    {"write", "<port> <value>",      "Drive a whole port",                      cmd_aw9523b_write},
-    {"set",   "<port> <pin> <0|1>",  "Drive one pin",                           cmd_aw9523b_set},
+    {"init",  NULL, NULL, cmd_aw9523b_init},
+    {"read",  NULL, NULL, cmd_aw9523b_read},
+    {"write", NULL, NULL, cmd_aw9523b_write},
+    {"set",   NULL, NULL, cmd_aw9523b_set},
 };
+
+/* Parallel to aw9523b_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t aw9523b_text[] = {
+    {STR_I2C_AW9523B_INIT_USAGE,   STR_I2C_AW9523B_INIT_HELP},
+    {STR_I2C_AW9523B_READ_USAGE,   STR_I2C_AW9523B_READ_HELP},
+    {STR_I2C_AW9523B_WRITE_USAGE,  STR_I2C_AW9523B_WRITE_HELP},
+    {STR_I2C_AW9523B_SET_USAGE,    STR_I2C_AW9523B_SET_HELP},
+};
+_Static_assert(ARRAY_COUNT(aw9523b_text) == ARRAY_COUNT(aw9523b_commands),
+               "i2c-aw9523b help ids and commands must be the same length");
 
 static const cli_group_t aw9523b_group = {
     .name = "i2c-aw9523b",
-    .help = "Awinic AW9523B 16-bit I/O expander at 0x58-0x5b",
     .commands = aw9523b_commands,
     .command_count = ARRAY_COUNT(aw9523b_commands),
+    .command_text = aw9523b_text,
+    .help_id = STR_I2C_AW9523B_GROUP_HELP,
 };
 
 static const cli_command_t pi4ioe_commands[] = {
-    {"init",      "[address] [out <mask>] [init <mask>] [pull <mask>] [pullup <mask>] [int <mask>]",
-                  "Claim the part; every pin an input unless 'out' says otherwise", cmd_pi4ioe_init},
-    {"read",      "",             "Read the pin levels",              cmd_pi4ioe_read},
-    {"write",     "<value>",      "Drive the whole port",             cmd_pi4ioe_write},
-    {"set",       "<pin> <0|1>",  "Drive one pin",                    cmd_pi4ioe_set},
-    {"interrupt", "",             "Show which pins have changed, and clear the flags", cmd_pi4ioe_interrupt},
+    {"init",      NULL, NULL, cmd_pi4ioe_init},
+    {"read",      NULL, NULL, cmd_pi4ioe_read},
+    {"write",     NULL, NULL, cmd_pi4ioe_write},
+    {"set",       NULL, NULL, cmd_pi4ioe_set},
+    {"interrupt", NULL, NULL, cmd_pi4ioe_interrupt},
 };
+
+/* Parallel to pi4ioe_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t pi4ioe_text[] = {
+    {STR_I2C_PI4IOE_INIT_USAGE,       STR_I2C_PI4IOE_INIT_HELP},
+    {STR_I2C_PI4IOE_READ_USAGE,       STR_I2C_PI4IOE_READ_HELP},
+    {STR_I2C_PI4IOE_WRITE_USAGE,      STR_I2C_PI4IOE_WRITE_HELP},
+    {STR_I2C_PI4IOE_SET_USAGE,        STR_I2C_PI4IOE_SET_HELP},
+    {STR_I2C_PI4IOE_INTERRUPT_USAGE,  STR_I2C_PI4IOE_INTERRUPT_HELP},
+};
+_Static_assert(ARRAY_COUNT(pi4ioe_text) == ARRAY_COUNT(pi4ioe_commands),
+               "i2c-pi4ioe help ids and commands must be the same length");
 
 static const cli_group_t pi4ioe_group = {
     .name = "i2c-pi4ioe",
-    .help = "Diodes PI4IOE5V6408 8-bit I/O expander, 5 V tolerant, at 0x43/0x44",
     .commands = pi4ioe_commands,
     .command_count = ARRAY_COUNT(pi4ioe_commands),
+    .command_text = pi4ioe_text,
+    .help_id = STR_I2C_PI4IOE_GROUP_HELP,
 };
 
 static const cli_command_t ina237_commands[] = {
-    {"config", "<address> [ohms]", "Register a monitor (shunt defaults to 0.004 ohm)", cmd_ina237_config},
-    {"read",   "[address]",        "Report bus voltage, current and power", cmd_ina237_read},
-    {"list",   "",                 "Show configured monitors and their calibration", cmd_ina237_list},
+    {"config", NULL, NULL, cmd_ina237_config},
+    {"read",   NULL, NULL, cmd_ina237_read},
+    {"list",   NULL, NULL, cmd_ina237_list},
 };
+
+/* Parallel to ina237_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t ina237_text[] = {
+    {STR_I2C_INA237_CONFIG_USAGE,  STR_I2C_INA237_CONFIG_HELP},
+    {STR_I2C_INA237_READ_USAGE,    STR_I2C_INA237_READ_HELP},
+    {STR_I2C_INA237_LIST_USAGE,    STR_I2C_INA237_LIST_HELP},
+};
+_Static_assert(ARRAY_COUNT(ina237_text) == ARRAY_COUNT(ina237_commands),
+               "i2c-ina237 help ids and commands must be the same length");
 
 static const cli_group_t ina237_group = {
     .name = "i2c-ina237",
-    .help = "TI INA237 current/voltage/power monitors at 0x40-0x4f",
     .commands = ina237_commands,
     .command_count = ARRAY_COUNT(ina237_commands),
+    .command_text = ina237_text,
+    .help_id = STR_I2C_INA237_GROUP_HELP,
 };
 
 static const cli_command_t sht4x_commands[] = {
-    {"read",   "[address] [high|medium|low]", "Measure temperature and humidity", cmd_sht4x_read},
-    {"serial", "[address]",                   "Read the sensor serial number",    cmd_sht4x_serial},
-    {"heater", "[address] <mW> <ms>",         "Pulse the heater, then measure",   cmd_sht4x_heater},
-    {"reset",  "[address]",                   "Soft-reset the sensor",            cmd_sht4x_reset},
+    {"read",   NULL, NULL, cmd_sht4x_read},
+    {"serial", NULL, NULL, cmd_sht4x_serial},
+    {"heater", NULL, NULL, cmd_sht4x_heater},
+    {"reset",  NULL, NULL, cmd_sht4x_reset},
 };
+
+/* Parallel to sht4x_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t sht4x_text[] = {
+    {STR_I2C_SHT4X_READ_USAGE,    STR_I2C_SHT4X_READ_HELP},
+    {STR_I2C_SHT4X_SERIAL_USAGE,  STR_I2C_SHT4X_SERIAL_HELP},
+    {STR_I2C_SHT4X_HEATER_USAGE,  STR_I2C_SHT4X_HEATER_HELP},
+    {STR_I2C_SHT4X_RESET_USAGE,   STR_I2C_SHT4X_RESET_HELP},
+};
+_Static_assert(ARRAY_COUNT(sht4x_text) == ARRAY_COUNT(sht4x_commands),
+               "i2c-sht4x help ids and commands must be the same length");
 
 static const cli_group_t sht4x_group = {
     .name = "i2c-sht4x",
-    .help = "Sensirion SHT4x humidity/temperature sensors at 0x44-0x46",
     .commands = sht4x_commands,
     .command_count = ARRAY_COUNT(sht4x_commands),
+    .command_text = sht4x_text,
+    .help_id = STR_I2C_SHT4X_GROUP_HELP,
 };
 
 static const cli_command_t nau7802_commands[] = {
@@ -806,82 +918,149 @@ static const cli_group_t touch_group = {
 /* ------------------------------------------------------------------ */
 
 static const cli_command_t board_commands[] = {
-    {"list", "", "List the boards this firmware knows", cmd_board_list},
+    {"list", NULL, NULL, cmd_board_list},
 };
+
+/* Parallel to board_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t board_text[] = {
+    {STR_BOARD_LIST_USAGE,  STR_BOARD_LIST_HELP},
+};
+_Static_assert(ARRAY_COUNT(board_text) == ARRAY_COUNT(board_commands),
+               "board help ids and commands must be the same length");
 
 static const cli_group_t board_group = {
     .name = "board",
-    .help = "Known board pinouts and per-subsystem setup presets",
     .commands = board_commands,
     .command_count = ARRAY_COUNT(board_commands),
+    .command_text = board_text,
+    .help_id = STR_BOARD_GROUP_HELP,
 };
 
 static const cli_command_t board_cardputer_commands[] = {
-    {"pins",  "", "Show the known pinout",                          cmd_board_cardputer_pins},
-    {"audio", "", "Set up I2S and the NS4168 speaker amplifier",     cmd_board_cardputer_audio},
-    {"mic",   "", "Open the SPM1423 PDM microphone (releases the speaker)", cmd_board_cardputer_mic},
-    {"sd",    "", "Bring the microSD slot up over SPI",              cmd_board_cardputer_sd},
+    {"pins",  NULL, NULL, cmd_board_cardputer_pins},
+    {"audio", NULL, NULL, cmd_board_cardputer_audio},
+    {"mic",   NULL, NULL, cmd_board_cardputer_mic},
+    {"sd",    NULL, NULL, cmd_board_cardputer_sd},
 };
+
+/* Parallel to board_cardputer_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t board_cardputer_text[] = {
+    {STR_BOARD_CARDPUTER_PINS_USAGE,   STR_BOARD_CARDPUTER_PINS_HELP},
+    {STR_BOARD_CARDPUTER_AUDIO_USAGE,  STR_BOARD_CARDPUTER_AUDIO_HELP},
+    {STR_BOARD_CARDPUTER_MIC_USAGE,    STR_BOARD_CARDPUTER_MIC_HELP},
+    {STR_BOARD_CARDPUTER_SD_USAGE,     STR_BOARD_CARDPUTER_SD_HELP},
+};
+_Static_assert(ARRAY_COUNT(board_cardputer_text) == ARRAY_COUNT(board_cardputer_commands),
+               "board-cardputer help ids and commands must be the same length");
 
 static const cli_group_t board_cardputer_group = {
     .name = "board-cardputer",
-    .help = "M5Stack Cardputer (esp32s3)",
     .commands = board_cardputer_commands,
     .command_count = ARRAY_COUNT(board_cardputer_commands),
+    .command_text = board_cardputer_text,
+    .help_id = STR_BOARD_CARDPUTER_GROUP_HELP,
 };
 
 static const cli_command_t board_xiao_commands[] = {
-    {"pins", "", "Show the known pinout",              cmd_board_xiao_pins},
-    {"mic",  "", "Open the PDM microphone",            cmd_board_xiao_mic},
-    {"sd",   "", "Bring the microSD slot up over SPI", cmd_board_xiao_sd},
+    {"pins", NULL, NULL, cmd_board_xiao_pins},
+    {"mic",  NULL, NULL, cmd_board_xiao_mic},
+    {"sd",   NULL, NULL, cmd_board_xiao_sd},
 };
+
+/* Parallel to board_xiao_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t board_xiao_text[] = {
+    {STR_BOARD_XIAO_PINS_USAGE,  STR_BOARD_XIAO_PINS_HELP},
+    {STR_BOARD_XIAO_MIC_USAGE,   STR_BOARD_XIAO_MIC_HELP},
+    {STR_BOARD_XIAO_SD_USAGE,    STR_BOARD_XIAO_SD_HELP},
+};
+_Static_assert(ARRAY_COUNT(board_xiao_text) == ARRAY_COUNT(board_xiao_commands),
+               "board-xiao help ids and commands must be the same length");
 
 static const cli_group_t board_xiao_group = {
     .name = "board-xiao",
-    .help = "Seeed XIAO ESP32-S3 Sense (esp32s3)",
     .commands = board_xiao_commands,
     .command_count = ARRAY_COUNT(board_xiao_commands),
+    .command_text = board_xiao_text,
+    .help_id = STR_BOARD_XIAO_GROUP_HELP,
 };
 
 static const cli_command_t board_sensor_commands[] = {
-    {"pins", "", "Show the known pinout", cmd_board_sensor_pins},
-    {"i2c",  "", "Initialize the I2C bus", cmd_board_sensor_i2c},
+    {"pins", NULL, NULL, cmd_board_sensor_pins},
+    {"i2c",  NULL, NULL, cmd_board_sensor_i2c},
 };
+
+/* Parallel to board_sensor_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t board_sensor_text[] = {
+    {STR_BOARD_SENSOR_PINS_USAGE,  STR_BOARD_SENSOR_PINS_HELP},
+    {STR_BOARD_SENSOR_I2C_USAGE,   STR_BOARD_SENSOR_I2C_HELP},
+};
+_Static_assert(ARRAY_COUNT(board_sensor_text) == ARRAY_COUNT(board_sensor_commands),
+               "board-sensor help ids and commands must be the same length");
 
 static const cli_group_t board_sensor_group = {
     .name = "board-sensor",
-    .help = "ESP32-C3 sensor board (esp32c3)",
     .commands = board_sensor_commands,
     .command_count = ARRAY_COUNT(board_sensor_commands),
+    .command_text = board_sensor_text,
+    .help_id = STR_BOARD_SENSOR_GROUP_HELP,
 };
 
 static const cli_command_t board_minstro_commands[] = {
-    {"pins",  "", "Show the known pinout",                 cmd_board_minstro_pins},
-    {"audio", "", "Initialize I2S with the NAU8822 codec", cmd_board_minstro_audio},
-    {"i2c",   "", "Initialize the I2C bus",                cmd_board_minstro_i2c},
-    {"sd",    "", "Initialize the 4-bit SD interface",     cmd_board_minstro_sd},
+    {"pins",  NULL, NULL, cmd_board_minstro_pins},
+    {"audio", NULL, NULL, cmd_board_minstro_audio},
+    {"i2c",   NULL, NULL, cmd_board_minstro_i2c},
+    {"sd",    NULL, NULL, cmd_board_minstro_sd},
 };
+
+/* Parallel to board_minstro_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t board_minstro_text[] = {
+    {STR_BOARD_MINSTRO_PINS_USAGE,   STR_BOARD_MINSTRO_PINS_HELP},
+    {STR_BOARD_MINSTRO_AUDIO_USAGE,  STR_BOARD_MINSTRO_AUDIO_HELP},
+    {STR_BOARD_MINSTRO_I2C_USAGE,    STR_BOARD_MINSTRO_I2C_HELP},
+    {STR_BOARD_MINSTRO_SD_USAGE,     STR_BOARD_MINSTRO_SD_HELP},
+};
+_Static_assert(ARRAY_COUNT(board_minstro_text) == ARRAY_COUNT(board_minstro_commands),
+               "board-minstro help ids and commands must be the same length");
 
 static const cli_group_t board_minstro_group = {
     .name = "board-minstro",
-    .help = "Minstro ESP32-S3 board (esp32s3)",
     .commands = board_minstro_commands,
     .command_count = ARRAY_COUNT(board_minstro_commands),
+    .command_text = board_minstro_text,
+    .help_id = STR_BOARD_MINSTRO_GROUP_HELP,
 };
 
 static const cli_command_t board_core_basic_commands[] = {
-    {"pins",  "", "Show the known pinout",                cmd_board_core_basic_pins},
-    {"audio", "", "Set up I2S for the speaker amplifier", cmd_board_core_basic_audio},
-    {"mic",   "", "Set up I2S for microphone capture",    cmd_board_core_basic_mic},
-    {"i2c",   "", "Initialize the I2C bus",               cmd_board_core_basic_i2c},
-    {"sd",    "", "Bring the microSD slot up over SPI",   cmd_board_core_basic_sd},
+    {"pins",  NULL, NULL, cmd_board_core_basic_pins},
+    {"audio", NULL, NULL, cmd_board_core_basic_audio},
+    {"mic",   NULL, NULL, cmd_board_core_basic_mic},
+    {"i2c",   NULL, NULL, cmd_board_core_basic_i2c},
+    {"sd",    NULL, NULL, cmd_board_core_basic_sd},
 };
+
+/* Parallel to board_core_basic_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t board_core_basic_text[] = {
+    {STR_BOARD_CORE_BASIC_PINS_USAGE,   STR_BOARD_CORE_BASIC_PINS_HELP},
+    {STR_BOARD_CORE_BASIC_AUDIO_USAGE,  STR_BOARD_CORE_BASIC_AUDIO_HELP},
+    {STR_BOARD_CORE_BASIC_MIC_USAGE,    STR_BOARD_CORE_BASIC_MIC_HELP},
+    {STR_BOARD_CORE_BASIC_I2C_USAGE,    STR_BOARD_CORE_BASIC_I2C_HELP},
+    {STR_BOARD_CORE_BASIC_SD_USAGE,     STR_BOARD_CORE_BASIC_SD_HELP},
+};
+_Static_assert(ARRAY_COUNT(board_core_basic_text) == ARRAY_COUNT(board_core_basic_commands),
+               "board-core-basic help ids and commands must be the same length");
 
 static const cli_group_t board_core_basic_group = {
     .name = "board-core-basic",
-    .help = "M5Stack Core Basic (esp32)",
     .commands = board_core_basic_commands,
     .command_count = ARRAY_COUNT(board_core_basic_commands),
+    .command_text = board_core_basic_text,
+    .help_id = STR_BOARD_CORE_BASIC_GROUP_HELP,
 };
 
 /* ------------------------------------------------------------------ */

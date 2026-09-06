@@ -27,7 +27,7 @@ static uint8_t port_inputs[2] = {0xff, 0xff};
 static bool require_init(void)
 {
     if (!handle) {
-        diag_error("AW9523B not initialized. Run 'i2c-aw9523b init [address]' first.");
+        STRRES_ERROR(STR_I2C_AW9523B_NOT_INITIALIZED);
         return false;
     }
     return true;
@@ -39,7 +39,7 @@ static bool reattach(void)
 {
     i2c_master_dev_handle_t dev = NULL;
     if (i2c_device_handle(handle_address, &dev) != ESP_OK) {
-        diag_error("Addressing 0x%02X failed", handle_address);
+        STRRES_ERROR(STR_I2C_AW9523B_ADDRESSING_FAILED, handle_address);
         return false;
     }
     aw9523b_set_device(handle, dev, NULL);
@@ -49,7 +49,7 @@ static bool reattach(void)
 static int take_port(const char *token, int *out)
 {
     if (cli_parse_int_arg(token, out) < 0 || *out < 0 || *out > 1) {
-        diag_error("Port must be 0 or 1");
+        STRRES_ERROR(STR_I2C_AW9523B_PORT_INVALID);
         return -1;
     }
     return 0;
@@ -58,7 +58,7 @@ static int take_port(const char *token, int *out)
 static int take_byte(const char *token, int *out)
 {
     if (cli_parse_num_arg(token, out) < 0 || *out < 0 || *out > 0xff) {
-        diag_error("Expected a byte, 0-255 or 0x00-0xff");
+        STRRES_ERROR(STR_I2C_AW9523B_BYTE_INVALID);
         return -1;
     }
     return 0;
@@ -79,8 +79,7 @@ int cmd_aw9523b_init(int argc, char **argv)
     if (index < argc && argv[index][0] != 'p' && argv[index][0] != 'i') {
         if (cli_parse_num_arg(argv[index], &address) < 0 ||
             address < AW9523B_ADDR_FIRST || address > AW9523B_ADDR_LAST) {
-            diag_error("Address must be 0x%02X-0x%02X (set by the AD0/AD1 pins)",
-                       AW9523B_ADDR_FIRST, AW9523B_ADDR_LAST);
+            STRRES_ERROR(STR_I2C_AW9523B_ADDRESS_RANGE, AW9523B_ADDR_FIRST, AW9523B_ADDR_LAST);
             return -1;
         }
         index++;
@@ -94,7 +93,7 @@ int cmd_aw9523b_init(int argc, char **argv)
             continue;
         }
         if (index + 1 >= argc) {
-            diag_error("'%s' needs a value", token);
+            STRRES_ERROR(STR_I2C_AW9523B_OPTION_NEEDS_VALUE, token);
             return -1;
         }
         int value = 0;
@@ -110,14 +109,13 @@ int cmd_aw9523b_init(int argc, char **argv)
             index += 2;
             continue;
         }
-        diag_error("Unknown option '%s'. Expected p0in, p1in, p0init, p1init "
-                   "or pushpull.", token);
+        STRRES_ERROR(STR_I2C_AW9523B_UNKNOWN_OPTION, token);
         return -1;
     }
 
     i2c_master_dev_handle_t dev = NULL;
     if (i2c_device_handle((uint8_t)address, &dev) != ESP_OK) {
-        diag_error("Addressing 0x%02X failed", address);
+        STRRES_ERROR(STR_I2C_AW9523B_ADDRESSING_FAILED, address);
         return -1;
     }
 
@@ -139,11 +137,11 @@ int cmd_aw9523b_init(int argc, char **argv)
     esp_err_t err = aw9523b_create(&config, &handle, &report);
     if (err != ESP_OK) {
         if (report.failed_stage == AW9523B_STAGE_IDENTIFY) {
-            diag_error("0x%02X is not an AW9523B: chip ID reads 0x%02X, expected 0x23",
-                       address, report.chip_id);
+            STRRES_ERROR(STR_I2C_AW9523B_NOT_AN_AW9523B, address, report.chip_id);
         } else {
-            diag_error("0x%02X: %s failed: %s", address,
-                       aw9523b_stage_name(report.failed_stage), esp_err_to_name(err));
+            STRRES_ERROR(STR_I2C_AW9523B_STAGE_FAILED,
+                         address, aw9523b_stage_name(report.failed_stage),
+                         esp_err_to_name(err));
         }
         handle = NULL;
         return -1;
@@ -153,13 +151,14 @@ int cmd_aw9523b_init(int argc, char **argv)
     port_inputs[0] = inputs[0];
     port_inputs[1] = inputs[1];
 
-    diag_printf("AW9523B ready at 0x%02X (chip ID 0x%02X)\n", address, report.chip_id);
-    diag_printf("Port 0: inputs 0x%02X, outputs preset to 0x%02X, %s\n",
-                inputs[0], initial[0],
-                push_pull ? "push-pull" : "open-drain (add 'pushpull' to drive high)");
-    diag_printf("Port 1: inputs 0x%02X, outputs preset to 0x%02X, push-pull\n",
-                inputs[1], initial[1]);
-    diag_printf("Levels were established before any pin became an output\n");
+    STRRES_PRINTF(STR_I2C_AW9523B_READY, address, report.chip_id);
+    if (push_pull) {
+        STRRES_PRINTF(STR_I2C_AW9523B_PORT0_LINE_PUSH_PULL, inputs[0], initial[0]);
+    } else {
+        STRRES_PRINTF(STR_I2C_AW9523B_PORT0_LINE_OPEN_DRAIN, inputs[0], initial[0]);
+    }
+    STRRES_PRINTF(STR_I2C_AW9523B_PORT1_LINE, inputs[1], initial[1]);
+    STRRES_PRINTF(STR_I2C_AW9523B_LEVELS_NOTE);
     return 0;
 }
 
@@ -181,14 +180,14 @@ int cmd_aw9523b_read(int argc, char **argv)
         uint8_t value = 0;
         esp_err_t err = aw9523b_read_port(handle, (uint8_t)port, &value);
         if (err != ESP_OK) {
-            diag_error("Reading port %d: %s", port, esp_err_to_name(err));
+            STRRES_ERROR(STR_I2C_AW9523B_PORT_READ_FAILED, port, esp_err_to_name(err));
             return -1;
         }
-        diag_printf("P%d: 0x%02X  ", port, value);
+        STRRES_PRINTF(STR_I2C_AW9523B_PORT_VALUE, port, value);
         for (int bit = 7; bit >= 0; bit--) {
             diag_printf("%d", (value >> bit) & 1);
         }
-        diag_printf("  (P%d.7 first; inputs 0x%02X)\n", port, port_inputs[port]);
+        STRRES_PRINTF(STR_I2C_AW9523B_PORT_BIT_ORDER, port, port_inputs[port]);
     }
 
     /*
@@ -196,8 +195,7 @@ int cmd_aw9523b_read(int argc, char **argv)
      * levels. On an output pin that is what the pin is actually at, which may
      * differ from what was driven if something else is holding it.
      */
-    diag_printf("These are pin levels, not the output register -- the part has "
-                "none to read.\n");
+    STRRES_PRINTF(STR_I2C_AW9523B_LEVELS_NOT_REGISTER);
     return 0;
 }
 
@@ -208,7 +206,7 @@ int cmd_aw9523b_write(int argc, char **argv)
     }
 
     if (argc != 3) {
-        diag_printf("Usage: write <port> <value>\n");
+        STRRES_PRINTF(STR_I2C_AW9523B_USAGE_WRITE);
         return -1;
     }
 
@@ -219,12 +217,11 @@ int cmd_aw9523b_write(int argc, char **argv)
 
     esp_err_t err = aw9523b_write_port(handle, (uint8_t)port, (uint8_t)value);
     if (err != ESP_OK) {
-        diag_error("Writing port %d: %s", port, esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_AW9523B_PORT_WRITE_FAILED, port, esp_err_to_name(err));
         return -1;
     }
 
-    diag_printf("P%d driven to 0x%02X; pins configured as inputs (0x%02X) ignore it\n",
-                port, value, port_inputs[port]);
+    STRRES_PRINTF(STR_I2C_AW9523B_PORT_WRITTEN, port, value, port_inputs[port]);
     return 0;
 }
 
@@ -235,7 +232,7 @@ int cmd_aw9523b_set(int argc, char **argv)
     }
 
     if (argc != 4) {
-        diag_printf("Usage: set <port> <pin> <0|1>\n");
+        STRRES_PRINTF(STR_I2C_AW9523B_USAGE_SET);
         return -1;
     }
 
@@ -244,7 +241,7 @@ int cmd_aw9523b_set(int argc, char **argv)
         return -1;
     }
     if (cli_parse_int_arg(argv[2], &pin) < 0 || pin < 0 || pin > 7) {
-        diag_error("Pin must be 0-7 within the port");
+        STRRES_ERROR(STR_I2C_AW9523B_PIN_RANGE);
         return -1;
     }
 
@@ -256,7 +253,7 @@ int cmd_aw9523b_set(int argc, char **argv)
                strcasecmp(argv[3], "low") == 0 || strcasecmp(argv[3], "off") == 0) {
         high = false;
     } else {
-        diag_error("State must be 0/1, low/high, off/on or false/true");
+        STRRES_ERROR(STR_I2C_AW9523B_STATE_INVALID);
         return -1;
     }
 
@@ -267,18 +264,16 @@ int cmd_aw9523b_set(int argc, char **argv)
      */
     esp_err_t err = aw9523b_set_pin(handle, (uint8_t)port, (uint8_t)pin, high);
     if (err != ESP_OK) {
-        diag_error("Setting P%d.%d: %s", port, pin, esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_AW9523B_SET_FAILED, port, pin, esp_err_to_name(err));
         return -1;
     }
 
     if (port_inputs[port] & (1u << pin)) {
-        diag_printf("P%d.%d set %s, but it is configured as an input and will "
-                    "not drive. Re-run 'i2c-aw9523b init' with a p%din mask "
-                    "that clears bit %d.\n", port, pin, high ? "high" : "low",
-                    port, pin);
+        STRRES_PRINTF(STR_I2C_AW9523B_SET_BUT_INPUT,
+                      port, pin, high ? "high" : "low", port, pin);
         return 0;
     }
 
-    diag_printf("P%d.%d driven %s\n", port, pin, high ? "high" : "low");
+    STRRES_PRINTF(STR_I2C_AW9523B_DRIVEN, port, pin, high ? "high" : "low");
     return 0;
 }

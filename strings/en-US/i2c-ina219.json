@@ -1,0 +1,32 @@
+{
+  "section": "i2c-ina219",
+  "strings": {
+    "address_range": "Address must be 0x%02X-0x%02X (set by the A0/A1 pins)",
+    "addressing_failed": "Addressing 0x%02X: %s",
+    "config.help": "Register a monitor (0.1 ohm over 3.2 A by default)",
+    "config.usage": "<address> [shunt_ohms] [max_amps]",
+    "configured": "0x%02X configured: shunt %.4f ohm, %.4f mA/LSB, range +/-%.3f A\n",
+    "configured_calibration": "      CALIBRATION 0x%04X, so the resolution above is what the part has, not what was asked for.\n",
+    "current_invalid": "Full-scale current must be a positive number of amps, e.g. 3.2",
+    "group.help": "TI INA219 current/voltage/power monitors at 0x40-0x4f",
+    "list.help": "Show configured monitors and their calibration",
+    "list.usage": "",
+    "list_empty": "No INA219s configured.\n",
+    "list_header": "%-8s %12s %14s %14s %8s\n",
+    "list_row": "0x%02X     %12.4f %11.4f mA %11.3f A   0x%04X\n",
+    "none_configured": "No INA219s configured. Run 'i2c-ina219 config <address> [shunt_ohms] [max_amps]', or 'i2c-ina219 read <address>' to use the defaults.",
+    "not_an_ina219": "0x%02X does not behave like an INA219: the calibration register did not read back what was written, so something else answers here.",
+    "range_unreachable": "0x%02X: that shunt and range need a full-scale drop outside the PGA's 20-320 mV.",
+    "read.help": "Report bus voltage, current and power",
+    "read.usage": "[address]",
+    "read_detail": "      Shunt %8.3f mV  %.4f mA/LSB over +/-%.3f A\n",
+    "read_failed": "Reading 0x%02X: %s",
+    "read_line": "0x%02X  Bus %8.3f V  Current %8.4f A  Power %8.3f W\n",
+    "read_unconfigured": "0x%02X is not configured; using %.3f ohm over %.1f A.\n",
+    "shunt_invalid": "Shunt resistance must be a positive number of ohms, e.g. 0.1",
+    "stage_failed": "0x%02X: %s failed: %s",
+    "too_many": "Cannot track more than %d INA219s",
+    "usage_config": "Usage: config <address> [shunt_ohms] [max_amps]\n",
+    "usage_config_defaults": "Address is 0x%02X-0x%02X; defaults are %.3f ohm and %.1f A.\n"
+  }
+}

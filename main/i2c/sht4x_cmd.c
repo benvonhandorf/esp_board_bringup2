@@ -29,7 +29,7 @@ static bool ensure_handle(void)
     const sht4x_config_t config = {.dev = NULL};
     esp_err_t err = sht4x_create(&config, &sht);
     if (err != ESP_OK) {
-        diag_error("Cannot create the SHT4x driver: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_SHT4X_DRIVER_CREATE_FAILED, esp_err_to_name(err));
         return false;
     }
     return true;
@@ -91,8 +91,7 @@ static int take_address(int argc, char **argv, int required_after,
     }
 
     if (value < SHT4X_ADDR_FIRST || value > SHT4X_ADDR_LAST) {
-        diag_error("Address must be 0x%02X-0x%02X (fixed by the part variant: "
-                 "A=0x44, B=0x45, C=0x46)", SHT4X_ADDR_FIRST, SHT4X_ADDR_LAST);
+        STRRES_ERROR(STR_I2C_SHT4X_ADDRESS_RANGE, SHT4X_ADDR_FIRST, SHT4X_ADDR_LAST);
         *ok = false;
         return 1;
     }
@@ -105,39 +104,38 @@ static int take_address(int argc, char **argv, int required_after,
 static void report_crc_error(uint8_t address, const sht4x_crc_error_t *crc)
 {
     if (crc->word == 1) {
-        diag_error("0x%02X: CRC error in the first word (got 0x%02X, computed 0x%02X)",
-                 address, crc->received, crc->computed);
+        STRRES_ERROR(STR_I2C_SHT4X_CRC_FIRST_WORD, address, crc->received, crc->computed);
     } else {
-        diag_error("0x%02X: CRC error in the second word (got 0x%02X, computed 0x%02X)",
-                 address, crc->received, crc->computed);
+        STRRES_ERROR(STR_I2C_SHT4X_CRC_SECOND_WORD, address, crc->received, crc->computed);
     }
 }
 
 /* Shared by `read` and `heater`, both of which return a measurement. */
 static int report_measurement(uint8_t address, const sht4x_measurement_t *m,
-                              esp_err_t err, const char *description)
+                              esp_err_t err, const char *repeatability)
 {
     if (err == ESP_ERR_SHT4X_CRC) {
         report_crc_error(address, &m->crc_error);
         return -1;
     }
     if (err != ESP_OK) {
-        diag_error("Reading 0x%02X: %s", address, esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_SHT4X_READ_FAILED, address, esp_err_to_name(err));
         return -1;
     }
 
-    diag_printf("0x%02X  Temp %7.2f C (%7.2f F)  Humidity %6.2f %%RH\n",
-              address, m->temperature_c, m->temperature_c * 9.0 / 5.0 + 32.0,
-              m->humidity_pct_cropped);
-    diag_printf("      raw T 0x%04X  RH 0x%04X  (%s)\n",
-              m->temperature_ticks, m->humidity_ticks, description);
+    STRRES_PRINTF(STR_I2C_SHT4X_READ_LINE,
+                  address, m->temperature_c, m->temperature_c * 9.0 / 5.0 + 32.0,
+                  m->humidity_pct_cropped);
+    /* The driver owns the word -- "high", "medium", "low" -- and this owns the
+     * sentence it sits in. */
+    STRRES_PRINTF(STR_I2C_SHT4X_READ_RAW,
+                  m->temperature_ticks, m->humidity_ticks, repeatability);
 
     /* The conversion can yield non-physical values just outside 0-100 %RH.
      * The datasheet expects those to be cropped, but say so when it happens:
      * during bringup a wildly out-of-range value means a real problem. */
     if (m->humidity_was_cropped) {
-        diag_printf("      Note: uncropped humidity was %.2f %%RH, cropped to the "
-                  "physical 0-100 range\n", m->humidity_pct);
+        STRRES_PRINTF(STR_I2C_SHT4X_HUMIDITY_CROPPED, m->humidity_pct);
     }
 
     return 0;
@@ -161,23 +159,18 @@ int cmd_sht4x_read(int argc, char **argv)
     if (index < argc) {
         const char *mode = argv[index];
         if (sht4x_repeatability_from_name(mode, &repeatability) != ESP_OK) {
-            diag_error("Repeatability must be high, medium or low (got '%s')", mode);
+            STRRES_ERROR(STR_I2C_SHT4X_REPEATABILITY_INVALID, mode);
             return -1;
         }
     }
-
-    /* "high repeatability", "medium repeatability", "low repeatability" -- the
-     * driver owns the word, this owns the sentence it sits in. */
-    char description[32];
-    snprintf(description, sizeof(description), "%s repeatability",
-             sht4x_repeatability_name(repeatability));
 
     sht4x_measurement_t measurement = {0};
     esp_err_t err = attach_device(address);
     if (err == ESP_OK) {
         err = sht4x_measure(sht, repeatability, &measurement);
     }
-    return report_measurement(address, &measurement, err, description);
+    return report_measurement(address, &measurement, err,
+                              sht4x_repeatability_name(repeatability));
 }
 
 int cmd_sht4x_serial(int argc, char **argv)
@@ -204,14 +197,14 @@ int cmd_sht4x_serial(int argc, char **argv)
         return -1;
     }
     if (err != ESP_OK) {
-        diag_error("No response from 0x%02X: %s", address, esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_SHT4X_NO_RESPONSE, address, esp_err_to_name(err));
         return -1;
     }
 
     /* The SHT4x has no ID register; a serial number that reads back with valid
      * CRCs is the available evidence that a real sensor is present. */
-    diag_printf("0x%02X  Serial number 0x%04X%04X\n", address,
-              (unsigned)(serial >> 16), (unsigned)(serial & 0xFFFF));
+    STRRES_PRINTF(STR_I2C_SHT4X_SERIAL,
+                  address, (unsigned)(serial >> 16), (unsigned)(serial & 0xFFFF));
     return 0;
 }
 
@@ -229,8 +222,8 @@ int cmd_sht4x_heater(int argc, char **argv)
     }
 
     if (argc - index < 2) {
-        diag_printf("Usage: heater [address] <power_mw> <duration_ms>\n");
-        diag_printf("Power is 20, 110 or 200 mW; duration is 100 or 1000 ms.\n");
+        STRRES_PRINTF(STR_I2C_SHT4X_USAGE_HEATER);
+        STRRES_PRINTF(STR_I2C_SHT4X_USAGE_HEATER_VALUES);
         return -1;
     }
 
@@ -238,7 +231,7 @@ int cmd_sht4x_heater(int argc, char **argv)
     int duration = 0;
     if (cli_parse_int_arg(argv[index], &power) < 0 ||
         cli_parse_int_arg(argv[index + 1], &duration) < 0) {
-        diag_error("Power and duration must be numbers");
+        STRRES_ERROR(STR_I2C_SHT4X_HEATER_ARGS_NUMERIC);
         return -1;
     }
 
@@ -246,18 +239,17 @@ int cmd_sht4x_heater(int argc, char **argv)
      * duration is checked first so that a bad duration is named as such rather
      * than being reported as a bad power. */
     if (duration != 1000 && duration != 100) {
-        diag_error("Duration must be 100 or 1000 ms");
+        STRRES_ERROR(STR_I2C_SHT4X_HEATER_DURATION_INVALID);
         return -1;
     }
 
     sht4x_heater_t heater;
     if (sht4x_heater_from_values(power, duration, &heater) != ESP_OK) {
-        diag_error("Power must be 20, 110 or 200 mW");
+        STRRES_ERROR(STR_I2C_SHT4X_HEATER_POWER_INVALID);
         return -1;
     }
 
-    diag_printf("Running the heater at %d mW for %d ms; the sensor measures once "
-              "just before it switches off.\n", power, duration);
+    STRRES_PRINTF(STR_I2C_SHT4X_HEATER_RUNNING, power, duration);
 
     sht4x_measurement_t measurement = {0};
     esp_err_t err = attach_device(address);
@@ -285,10 +277,10 @@ int cmd_sht4x_reset(int argc, char **argv)
         err = sht4x_soft_reset(sht);
     }
     if (err != ESP_OK) {
-        diag_error("Resetting 0x%02X: %s", address, esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_SHT4X_RESET_FAILED, address, esp_err_to_name(err));
         return -1;
     }
 
-    diag_printf("0x%02X soft reset\n", address);
+    STRRES_PRINTF(STR_I2C_SHT4X_RESET_DONE, address);
     return 0;
 }

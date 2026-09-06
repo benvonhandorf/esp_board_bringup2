@@ -1,0 +1,24 @@
+{
+  "section": "i2c-lm75bdp",
+  "strings": {
+    "address_range": "Address must be 0x%02X-0x%02X (set by the A0-A2 pins)",
+    "addressing_failed": "Addressing 0x%02X failed",
+    "group.help": "NXP LM75B temperature sensor and thermal watchdog at 0x48-0x4f",
+    "limits.help": "Program the thermal watchdog thresholds",
+    "limits.usage": "[address] <tos_C> <thyst_C>",
+    "limits_quantised": "      Asked for %.2f / %.2f C; thresholds quantise to 0.5 C and clamp to -128..+127.5 C.\n",
+    "limits_set": "0x%02X  OS asserts above %.1f C, releases below %.1f C\n",
+    "no_acknowledge": "Nothing acknowledged at 0x%02X. 'i2c scan' lists what is actually on the bus.",
+    "not_an_lm75b": "Nothing answering as an LM75B at 0x%02X: the configuration register did not read back what was written (%s)",
+    "read.help": "Measure temperature",
+    "read.usage": "[address]",
+    "read_failed": "Reading 0x%02X: %s",
+    "read_line": "0x%02X  Temp %7.3f C (%7.2f F)   0.125 C resolution\n",
+    "stage_failed": "0x%02X: %s failed: %s",
+    "threshold_write_failed": "Writing thresholds to 0x%02X: %s (%s)",
+    "thresholds_numeric": "Both thresholds must be numbers in degrees Celsius",
+    "thyst_above_tos": "thyst (%.2f C) is above tos (%.2f C); the output would never release",
+    "usage_limits": "Usage: limits [address] <tos_C> <thyst_C>\n",
+    "usage_limits_note": "The OS output asserts above tos and releases below thyst. Equal values make it chatter around the threshold.\n"
+  }
+}

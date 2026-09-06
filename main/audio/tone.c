@@ -307,25 +307,24 @@ static void report(const play_result_t *result)
     uint32_t configured = audio_bus_actual_rate();
 
     if (result->error != ESP_OK) {
-        diag_error("Playback failed: %s", esp_err_to_name(result->error));
+        STRRES_ERROR(STR_AUDIO_PLAYBACK_FAILED, esp_err_to_name(result->error));
         return;
     }
 
     double dbfs = 20.0 * log10((double)sig->level_pct / 100.0);
 
     if (sig->end_hz == sig->start_hz) {
-        diag_printf("Played %.1f Hz", sig->start_hz);
+        STRRES_PRINTF(STR_AUDIO_PLAYED, sig->start_hz);
     } else {
-        diag_printf("Swept %.1f -> %.1f Hz (%s)", sig->start_hz, sig->end_hz,
-                  sig->logarithmic ? "logarithmic" : "linear");
+        STRRES_PRINTF(STR_AUDIO_SWEPT,
+                      sig->start_hz, sig->end_hz, sig->logarithmic ? "logarithmic" : "linear");
     }
-    diag_printf(" at %d%% (%.1f dBFS), %llu frames\n", sig->level_pct, dbfs,
-              (unsigned long long)result->frames_written);
+    STRRES_PRINTF(STR_AUDIO_AT_LEVEL,
+                  sig->level_pct, dbfs, (unsigned long long)result->frames_written);
 
-    diag_printf("Sample rate: %lu requested",
-              (unsigned long)(fmt ? fmt->rate_hz : 0));
+    STRRES_PRINTF(STR_AUDIO_RATE_REQUESTED, (unsigned long)(fmt ? fmt->rate_hz : 0));
     if (configured) {
-        diag_printf(", %lu configured", (unsigned long)configured);
+        STRRES_PRINTF(STR_AUDIO_RATE_CONFIGURED, (unsigned long)configured);
     }
 
     /*
@@ -337,16 +336,15 @@ static void report(const play_result_t *result)
         result->measure_end_us > result->measure_start_us) {
         double seconds = (double)(result->measure_end_us - result->measure_start_us) / 1e6;
         uint64_t frames = result->frames_at_end - result->frames_at_start;
-        diag_printf(", %.0f measured\n", frames / seconds);
+        STRRES_PRINTF(STR_AUDIO_RATE_MEASURED, frames / seconds);
     } else {
         diag_printf("\n");
-        diag_printf("Too short to measure the rate; the run barely outlasts the "
-                  "DMA buffer.\n");
+        STRRES_PRINTF(STR_AUDIO_TOO_SHORT_TO_MEASURE);
     }
 
     if (result->short_writes) {
-        diag_printf("%d block%s timed out on the way to the DMA buffer.\n",
-                  result->short_writes, result->short_writes == 1 ? "" : "s");
+        STRRES_PRINTF(STR_AUDIO_BLOCKS_TIMED_OUT,
+                      result->short_writes, result->short_writes == 1 ? "" : "s");
     }
 }
 
@@ -371,7 +369,7 @@ int audio_play(const audio_signal_t *signal)
         return -1;
     }
     if (player.running) {
-        diag_error("Already playing. Run 'audio stop' first.");
+        STRRES_ERROR(STR_AUDIO_ALREADY_PLAYING);
         return -1;
     }
 
@@ -379,7 +377,7 @@ int audio_play(const audio_signal_t *signal)
 
     esp_err_t err = audio_bus_tx_enable(true);
     if (err != ESP_OK) {
-        diag_error("Enabling the I2S transmitter: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_AUDIO_TRANSMITTER_ENABLE_FAILED, esp_err_to_name(err));
         return -1;
     }
 
@@ -408,7 +406,7 @@ int audio_play(const audio_signal_t *signal)
         player.finished = xSemaphoreCreateBinary();
         if (!player.finished) {
             player.running = false;
-            diag_error("Out of memory");
+            STRRES_ERROR(STR_AUDIO_OUT_OF_MEMORY);
             return -1;
         }
     }
@@ -422,12 +420,12 @@ int audio_play(const audio_signal_t *signal)
      * command parsing; it spends nearly all its time blocked in the write. */
     if (xTaskCreate(player_task, "audio_play", 4096, NULL, 4, NULL) != pdPASS) {
         player.running = false;
-        diag_error("Could not start the playback task");
+        STRRES_ERROR(STR_AUDIO_TASK_START_FAILED);
         return -1;
     }
 
     if (!signal->quiet) {
-        diag_printf("Playing continuously. Enter 'audio stop' to end it.\n");
+        STRRES_PRINTF(STR_AUDIO_PLAYING_CONTINUOUSLY);
     }
     return 0;
 }
@@ -435,7 +433,7 @@ int audio_play(const audio_signal_t *signal)
 int audio_play_stop(void)
 {
     if (!player.running) {
-        diag_printf("Nothing is playing.\n");
+        STRRES_PRINTF(STR_AUDIO_NOTHING_PLAYING);
         return 0;
     }
 
@@ -445,7 +443,7 @@ int audio_play_stop(void)
      * `audio close` cannot delete the channel out from under it. */
     if (player.finished &&
         xSemaphoreTake(player.finished, pdMS_TO_TICKS(2000)) != pdTRUE) {
-        diag_error("Playback task did not stop within 2 s");
+        STRRES_ERROR(STR_AUDIO_TASK_STOP_TIMEOUT);
         return -1;
     }
 

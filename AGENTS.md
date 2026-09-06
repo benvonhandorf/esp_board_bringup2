@@ -132,6 +132,17 @@ anything that exposes credentials or changes the device.
   that a missing string prints. Short layout fragments (a column separator, a
   lone `"\n"`) stay literals: a two-byte id plus a lookup costs more than they
   do. So does anything printed before `strres_init()` succeeds.
+- **A sentence that has to be a *value* is the one hard case.** Almost all prose
+  is printed and never held, which `STRRES_PRINTF()` covers. The exceptions are
+  text that goes to two sinks (`sd.c`'s benchmark tables, which the console
+  shows and the results file keeps) and text that sits inside a wider sentence
+  as a `%s` (why a pin cannot be driven, a codec's input name, the description
+  column of `i2c identify`). Do not solve that by leaving the fragment a literal
+  and moving the frame — that keeps the words in the image and moves the part
+  that costs nothing. Either split it into whole sentences behind a branch,
+  which is usually right, or resolve the id with `app_str()` into a caller-owned
+  buffer. Prose that travels between functions travels as a `strres_id_t`, never
+  as a `const char *`.
 - **Report failures with `diag_error()`** — it prefixes `ERR:` so a host script
   can detect failure without parsing prose — and return `-1`; return `0` on
   success. Usage complaints are printed as `Usage: ...`.
@@ -208,12 +219,15 @@ anything that exposes credentials or changes the device.
   `sdkconfig.defaults.<target>`, then `idf.py reconfigure`.
 - **`.vscode/settings.json` sets `IDF_TARGET` as an environment variable**, which
   outranks everything else. Build from a plain shell to avoid a cache mismatch.
-- **Flash is getting tight.** The image is ~1.5 MB against a 1.69 MB OTA slot on
-  4 MB parts. Adding another large subsystem may need the 512 kB `res` partition
-  shrunk, or an 8 MB layout. The lever being pulled first is `strings/`: `main/`
-  still holds ~70 kB of literals, and each group moved to the `res` partition
-  leaves the slot and stops being duplicated across both of them. `res` is
-  511 kB empty, so the space is there.
+- **Flash is getting tight, but less so.** The image is 1.50 MB against a
+  1.69 MB OTA slot on 4 MB parts, with ~264 kB spare. That is 58 kB better than
+  it was: every command group's prose now lives on the `res` partition rather
+  than in the slot, where it was duplicated across both. `strings/en-US/` is
+  31 files and 65 kB of `.sr` blobs in a partition that is still 446 kB empty.
+  What is left in `main/` is short labels a lookup would cost more than -- reset
+  reasons, "pull-up", "driven low" -- plus the boot-time `ESP_LOG` lines and the
+  HTTP responses in `app_http.c`, which are not console prose. Adding another
+  large subsystem is now a question for `.text`, not for the words.
 
 ## Verifying a change
 

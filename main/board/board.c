@@ -26,13 +26,15 @@
 typedef struct {
     const char *role;
     int pin;
-    const char *note;  /* NULL when the pin is confirmed against hardware */
+    /* The note is prose, so it is an id; STRRES_ID_NONE when the pin is
+     * confirmed against hardware and there is nothing to say. */
+    strres_id_t note;
 } board_pin_t;
 
 typedef struct {
-    const char *name;
+    const char *name;          /* what the user types; an identifier */
     const char *chip;          /* CONFIG_IDF_TARGET this board is */
-    const char *description;
+    strres_id_t description;
     const board_pin_t *pins;
     size_t pin_count;
 } board_t;
@@ -59,22 +61,22 @@ static int apply(const board_t *board, const char *const *lines, size_t count);
  * the pad away from the first.
  */
 static const board_pin_t cardputer_pins[] = {
-    {"SD CLK", 40, NULL},
-    {"SD MOSI", 14, NULL},
-    {"SD MISO", 39, NULL},
-    {"SD CS", 12, NULL},
-    {"Speaker BCLK", 41, NULL},
-    {"Speaker WS/LRCK", 43, "also the microphone clock; only one at a time"},
-    {"Speaker DATA", 42, "amplifier plays the RIGHT slot; left is silent"},
-    {"Speaker SD/enable", -1, "not broken out; the amplifier is always on"},
-    {"Mic PDM CLK", 43, "also the speaker WS line; only one at a time"},
-    {"Mic PDM DATA", 46, "both slots carry the same mono signal"},
+    {"SD CLK", 40, STRRES_ID_NONE},
+    {"SD MOSI", 14, STRRES_ID_NONE},
+    {"SD MISO", 39, STRRES_ID_NONE},
+    {"SD CS", 12, STRRES_ID_NONE},
+    {"Speaker BCLK", 41, STRRES_ID_NONE},
+    {"Speaker WS/LRCK", 43, STR_BOARD_NOTE_ALSO_THE_MICROPHONE_CLOCK},
+    {"Speaker DATA", 42, STR_BOARD_NOTE_AMPLIFIER_PLAYS_THE_RIGHT},
+    {"Speaker SD/enable", -1, STR_BOARD_NOTE_NOT_BROKEN_OUT_THE},
+    {"Mic PDM CLK", 43, STR_BOARD_NOTE_ALSO_THE_SPEAKER_WS},
+    {"Mic PDM DATA", 46, STR_BOARD_NOTE_BOTH_SLOTS_CARRY_THE},
 };
 
 static const board_t cardputer = {
     .name = "cardputer",
     .chip = "esp32s3",
-    .description = "M5Stack Cardputer: NS4168 speaker amplifier, SPM1423 PDM mic, microSD",
+    .description = STR_BOARD_DESC_M5STACK_CARDPUTER_NS4168_SPEAKER,
     .pins = cardputer_pins,
     .pin_count = ARRAY_COUNT(cardputer_pins),
 };
@@ -85,65 +87,65 @@ static const board_t cardputer = {
  * capture here does not have to give anything up first.
  */
 static const board_pin_t xiao_pins[] = {
-    {"SD CLK", 7, NULL},
-    {"SD MOSI", 9, NULL},
-    {"SD MISO", 8, NULL},
-    {"SD CS", 21, NULL},
-    {"Mic PDM CLK", 42, "from the schematic, not yet confirmed here"},
-    {"Mic PDM DATA", 41, "from the schematic, not yet confirmed here"},
+    {"SD CLK", 7, STRRES_ID_NONE},
+    {"SD MOSI", 9, STRRES_ID_NONE},
+    {"SD MISO", 8, STRRES_ID_NONE},
+    {"SD CS", 21, STRRES_ID_NONE},
+    {"Mic PDM CLK", 42, STR_BOARD_NOTE_FROM_THE_SCHEMATIC_NOT},
+    {"Mic PDM DATA", 41, STR_BOARD_NOTE_FROM_THE_SCHEMATIC_NOT},
 };
 
 static const board_t xiao = {
     .name = "xiao",
     .chip = "esp32s3",
-    .description = "Seeed XIAO ESP32-S3 Sense: PDM microphone and microSD, no speaker",
+    .description = STR_BOARD_DESC_SEEED_XIAO_ESP32_S3,
     .pins = xiao_pins,
     .pin_count = ARRAY_COUNT(xiao_pins),
 };
 
 /** Sensor board */
 static const board_pin_t sensor_pins[] = {
-    {"SD SCK", 40, NULL},
-    {"SD CMD", 41, NULL},
-    {"SD D0", 39, NULL},
-    {"SD D1", 38, NULL},
-    {"SD D2", 44, NULL},
-    {"SD D3", 43, NULL},
-    {"SD DET", 42, NULL},
-    {"I2C SCL", 5, NULL},
-    {"I2C SDA", 4, NULL},
+    {"SD SCK", 40, STRRES_ID_NONE},
+    {"SD CMD", 41, STRRES_ID_NONE},
+    {"SD D0", 39, STRRES_ID_NONE},
+    {"SD D1", 38, STRRES_ID_NONE},
+    {"SD D2", 44, STRRES_ID_NONE},
+    {"SD D3", 43, STRRES_ID_NONE},
+    {"SD DET", 42, STRRES_ID_NONE},
+    {"I2C SCL", 5, STRRES_ID_NONE},
+    {"I2C SDA", 4, STRRES_ID_NONE},
 };
 
 static const board_t sensor = {
     .name = "sensor",
     .chip = "esp32c3",
-    .description = "ESP32-C3 based sensor board.  INA237x2, NAU7802, SHT4X, Relay, microSD",
+    .description = STR_BOARD_DESC_ESP32_C3_BASED_SENSOR,
     .pins = sensor_pins,
     .pin_count = ARRAY_COUNT(sensor_pins),
 };
 
 /** Minstro board */
 static const board_pin_t minstro_pins[] = {
-    {"SD Card SCK", 40, "SD SCK"},
-    {"SD Card CMD", 41, "SD CMD"},
+    {"SD Card SCK", 40, STR_BOARD_NOTE_SD_SCK},
+    {"SD Card CMD", 41, STR_BOARD_NOTE_SD_CMD},
 
-    {"SD Card D0", 39, "SD D0"},
-    {"SD Card D1", 38, "SD D1"},
-    {"SD Card D2", 44, "SD D2"},
-    {"SD Card D3", 43, "SD D3"},
-    {"I2C SCL", 7, "I2C SCL"},
-    {"I2C SDA", 6, "I2C SDA"},
-    {"I2S MCLK", 8, "I2S MCLK"},
-    {"I2S DOUT", 9, "I2S DOUT"},
-    {"I2S DIN", 10, "I2S DIN"},
-    {"I2S BCLK", 11, "I2S BCLK"},
-    {"I2S FS", 12, "I2S FS"},
+    {"SD Card D0", 39, STR_BOARD_NOTE_SD_D0},
+    {"SD Card D1", 38, STR_BOARD_NOTE_SD_D1},
+    {"SD Card D2", 44, STR_BOARD_NOTE_SD_D2},
+    {"SD Card D3", 43, STR_BOARD_NOTE_SD_D3},
+    {"I2C SCL", 7, STR_BOARD_NOTE_I2C_SCL},
+    {"I2C SDA", 6, STR_BOARD_NOTE_I2C_SDA},
+    {"I2S MCLK", 8, STR_BOARD_NOTE_I2S_MCLK},
+    {"I2S DOUT", 9, STR_BOARD_NOTE_I2S_DOUT},
+    {"I2S DIN", 10, STR_BOARD_NOTE_I2S_DIN},
+    {"I2S BCLK", 11, STR_BOARD_NOTE_I2S_BCLK},
+    {"I2S FS", 12, STR_BOARD_NOTE_I2S_FS},
 };
 
 static const board_t minstro = {
     .name = "minstro",
     .chip = "esp32s3",
-    .description = "Minstro ESP32-S3 board.  I2C, nau8822 codec, 4-bit SD card interface, Display support.",
+    .description = STR_BOARD_DESC_MINSTRO_ESP32_S3_BOARD,
     .pins = minstro_pins,
     .pin_count = ARRAY_COUNT(minstro_pins),
 };
@@ -170,25 +172,25 @@ static const board_t minstro = {
  * audio uses the full I2S interface.
  */
 static const board_pin_t core_basic_pins[] = {
-    {"SD CLK", 14, NULL},
-    {"SD MOSI", 15, NULL},
-    {"SD MISO", 2, NULL},
-    {"SD CS", 13, NULL},
-    {"SD CD", 34, "card detect, active low"},
-    {"Speaker BCLK", 2, NULL},
-    {"Speaker WS/LRCK", 15, NULL},
-    {"Speaker DATA", 13, "also SD MOSI; only one at a time"},
-    {"Mic BCLK", 2, "also speaker BCLK; only one at a time"},
-    {"Mic WS/LRCK", 15, "also speaker WS; only one at a time"},
-    {"Mic DATA", 4, "I2S DIN for microphone capture"},
-    {"I2C SCL", 22, NULL},
-    {"I2C SDA", 21, NULL},
+    {"SD CLK", 14, STRRES_ID_NONE},
+    {"SD MOSI", 15, STRRES_ID_NONE},
+    {"SD MISO", 2, STRRES_ID_NONE},
+    {"SD CS", 13, STRRES_ID_NONE},
+    {"SD CD", 34, STR_BOARD_NOTE_CARD_DETECT_ACTIVE_LOW},
+    {"Speaker BCLK", 2, STRRES_ID_NONE},
+    {"Speaker WS/LRCK", 15, STRRES_ID_NONE},
+    {"Speaker DATA", 13, STR_BOARD_NOTE_ALSO_SD_MOSI_ONLY},
+    {"Mic BCLK", 2, STR_BOARD_NOTE_ALSO_SPEAKER_BCLK_ONLY},
+    {"Mic WS/LRCK", 15, STR_BOARD_NOTE_ALSO_SPEAKER_WS_ONLY},
+    {"Mic DATA", 4, STR_BOARD_NOTE_I2S_DIN_FOR_MICROPHONE},
+    {"I2C SCL", 22, STRRES_ID_NONE},
+    {"I2C SDA", 21, STRRES_ID_NONE},
 };
 
 static const board_t core_basic = {
     .name = "core-basic",
     .chip = "esp32",
-    .description = "M5Stack Core Basic: I2S speaker + mic, microSD, I2C sensors",
+    .description = STR_BOARD_DESC_M5STACK_CORE_BASIC_I2S,
     .pins = core_basic_pins,
     .pin_count = ARRAY_COUNT(core_basic_pins),
 };
@@ -267,30 +269,36 @@ static bool chip_matches(const board_t *board)
     if (strcmp(board->chip, CONFIG_IDF_TARGET) == 0) {
         return true;
     }
-    diag_error("The %s is an %s board and this firmware is built for %s",
-             board->name, board->chip, CONFIG_IDF_TARGET);
-    diag_printf("Rebuild with 'idf.py set-target %s'.\n", board->chip);
+    STRRES_ERROR(STR_BOARD_WRONG_TARGET, board->name, board->chip, CONFIG_IDF_TARGET);
+    STRRES_PRINTF(STR_BOARD_REBUILD_HINT, board->chip);
     return false;
 }
 
 static int show_pins(const board_t *board)
 {
-    diag_printf("%s - %s\n", board->name, board->description);
-    diag_printf("Built for %s%s\n", board->chip,
-              strcmp(board->chip, CONFIG_IDF_TARGET) == 0
-                  ? "" : "  <- this firmware is built for a different chip");
+    char text[APP_STR_LEN * 2];
+    diag_printf("%s - %s\n", board->name,
+                app_str(board->description, text, sizeof(text)));
+    if (strcmp(board->chip, CONFIG_IDF_TARGET) == 0) {
+        STRRES_PRINTF(STR_BOARD_BUILT_FOR, board->chip);
+    } else {
+        STRRES_PRINTF(STR_BOARD_BUILT_FOR_OTHER, board->chip);
+    }
 
     diag_printf("\n%-18s %5s  %s\n", "role", "gpio", "note");
     for (size_t i = 0; i < board->pin_count; i++) {
         /* A negative pin means the signal exists on the board but is not
          * brought out to a GPIO, which is worth listing rather than omitting:
          * "there is no enable pin" is an answer, and a blank row is not. */
+        const char *note = "";
+        if (board->pins[i].note != STRRES_ID_NONE) {
+            note = app_str(board->pins[i].note, text, sizeof(text));
+        }
         if (board->pins[i].pin < 0) {
-            diag_printf("%-18s %5s  %s\n", board->pins[i].role, "-",
-                      board->pins[i].note ? board->pins[i].note : "");
+            diag_printf("%-18s %5s  %s\n", board->pins[i].role, "-", note);
         } else {
-            diag_printf("%-18s %5d  %s\n", board->pins[i].role, board->pins[i].pin,
-                      board->pins[i].note ? board->pins[i].note : "");
+            diag_printf("%-18s %5d  %s\n", board->pins[i].role,
+                        board->pins[i].pin, note);
         }
     }
     diag_printf("\n");
@@ -324,7 +332,7 @@ static int apply(const board_t *board, const char *const *lines, size_t count)
         char *argv[MAX_ARGS];
 
         if (strlen(lines[i]) >= sizeof(buffer)) {
-            diag_error("Preset line is too long: %s", lines[i]);
+            STRRES_ERROR(STR_BOARD_PRESET_LINE_TOO_LONG, lines[i]);
             return -1;
         }
         strcpy(buffer, lines[i]);
@@ -337,7 +345,7 @@ static int apply(const board_t *board, const char *const *lines, size_t count)
         }
 
         if (cli_execute((int)argc, argv) != 0) {
-            diag_error("Preset stopped at '%s'", lines[i]);
+            STRRES_ERROR(STR_BOARD_PRESET_STOPPED, lines[i]);
             return -1;
         }
     }
@@ -355,12 +363,12 @@ int cmd_board_list(int argc, char **argv)
     (void)argv;
 
     diag_printf("%-12s %-9s %s\n", "board", "chip", "description");
+    char text[APP_STR_LEN * 2];
     for (size_t i = 0; i < ARRAY_COUNT(boards); i++) {
         diag_printf("%-12s %-9s %s\n", boards[i]->name, boards[i]->chip,
-                  boards[i]->description);
+                    app_str(boards[i]->description, text, sizeof(text)));
     }
-    diag_printf("\nEach board has its own group: 'board-<name>' lists what it can "
-              "set up,\n'board-<name> pins' shows the pinout.\n");
+    STRRES_PRINTF(STR_BOARD_LIST_NOTE);
     return 0;
 }
 

@@ -64,7 +64,7 @@ static bool attach_device(ina237_handle_t handle, uint8_t address)
     i2c_master_dev_handle_t dev = NULL;
     esp_err_t err = i2c_device_handle(address, &dev);
     if (err != ESP_OK) {
-        diag_error("Addressing 0x%02X: %s", address, esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_INA237_ADDRESSING_FAILED, address, esp_err_to_name(err));
         return false;
     }
 
@@ -91,7 +91,7 @@ static int configure_device(uint8_t address, double shunt_ohms, bool quiet)
         const ina237_config_t config = {.dev = NULL, .shunt_ohms = shunt_ohms};
         esp_err_t err = ina237_create(&config, &handle);
         if (err != ESP_OK) {
-            diag_error("Addressing 0x%02X: %s", address, esp_err_to_name(err));
+            STRRES_ERROR(STR_I2C_INA237_ADDRESSING_FAILED, address, esp_err_to_name(err));
             return -1;
         }
         handle_is_new = true;
@@ -106,14 +106,14 @@ static int configure_device(uint8_t address, double shunt_ohms, bool quiet)
         case INA237_STAGE_NONE:
             break;
         case INA237_STAGE_PROBE:
-            diag_error("No response from 0x%02X: %s", address, esp_err_to_name(err));
+            STRRES_ERROR(STR_I2C_INA237_NO_RESPONSE, address, esp_err_to_name(err));
             break;
         case INA237_STAGE_IDENTIFY:
-            diag_error("0x%02X is not an INA237: MANUFACTURER_ID reads 0x%04X, expected 0x%04X",
-                     address, report.manufacturer_id, INA237_MANUFACTURER_ID_TI);
+            STRRES_ERROR(STR_I2C_INA237_NOT_AN_INA237,
+                         address, report.manufacturer_id, INA237_MANUFACTURER_ID_TI);
             break;
         case INA237_STAGE_SHUNT_CAL:
-            diag_error("Writing SHUNT_CAL to 0x%02X: %s", address, esp_err_to_name(err));
+            STRRES_ERROR(STR_I2C_INA237_SHUNT_CAL_WRITE_FAILED, address, esp_err_to_name(err));
             break;
         }
     }
@@ -133,7 +133,7 @@ static int configure_device(uint8_t address, double shunt_ohms, bool quiet)
             }
         }
         if (!entry) {
-            diag_error("Cannot track more than %d INA237s", MAX_DEVICES);
+            STRRES_ERROR(STR_I2C_INA237_TOO_MANY, MAX_DEVICES);
             if (handle_is_new) {
                 ina237_delete(handle);
             }
@@ -146,9 +146,8 @@ static int configure_device(uint8_t address, double shunt_ohms, bool quiet)
     entry->handle = handle;
 
     if (!quiet) {
-        diag_printf("0x%02X configured: shunt %.4f ohm, %.4f mA/LSB, range +/-%.2f A\n",
-                  address, shunt_ohms, report.current_lsb * 1000.0,
-                  report.full_scale_amps);
+        STRRES_PRINTF(STR_I2C_INA237_CONFIGURED,
+                      address, shunt_ohms, report.current_lsb * 1000.0, report.full_scale_amps);
     }
 
     return 0;
@@ -159,8 +158,7 @@ static int take_address(const char *token, int *out)
 {
     if (cli_parse_num_arg(token, out) < 0 ||
         *out < INA237_ADDR_FIRST || *out > INA237_ADDR_LAST) {
-        diag_error("Address must be 0x%02X-0x%02X (set by the A0/A1 pins)",
-                 INA237_ADDR_FIRST, INA237_ADDR_LAST);
+        STRRES_ERROR(STR_I2C_INA237_ADDRESS_RANGE, INA237_ADDR_FIRST, INA237_ADDR_LAST);
         return -1;
     }
     return 0;
@@ -173,9 +171,9 @@ int cmd_ina237_config(int argc, char **argv)
     }
 
     if (argc < 2) {
-        diag_printf("Usage: config <address> [shunt_ohms]\n");
-        diag_printf("Address is 0x%02X-0x%02X; shunt defaults to %.3f ohm.\n",
-                  INA237_ADDR_FIRST, INA237_ADDR_LAST, DEFAULT_SHUNT_OHMS);
+        STRRES_PRINTF(STR_I2C_INA237_USAGE_CONFIG);
+        STRRES_PRINTF(STR_I2C_INA237_USAGE_CONFIG_DEFAULTS,
+                      INA237_ADDR_FIRST, INA237_ADDR_LAST, DEFAULT_SHUNT_OHMS);
         return -1;
     }
 
@@ -187,7 +185,7 @@ int cmd_ina237_config(int argc, char **argv)
     double shunt_ohms = DEFAULT_SHUNT_OHMS;
     if (argc > 2) {
         if (cli_parse_double_arg(argv[2], &shunt_ohms) < 0 || shunt_ohms <= 0.0) {
-            diag_error("Shunt resistance must be a positive number of ohms, e.g. 0.004");
+            STRRES_ERROR(STR_I2C_INA237_SHUNT_INVALID);
             return -1;
         }
     }
@@ -198,17 +196,14 @@ int cmd_ina237_config(int argc, char **argv)
 static void report_health(const ina237_reading_t *reading)
 {
     if (!reading->trim_checksum_ok) {
-        diag_error("      Trim memory checksum error (DIAG_ALRT.MEMSTAT); "
-                 "readings cannot be trusted");
+        STRRES_ERROR(STR_I2C_INA237_TRIM_CHECKSUM_ERROR);
     }
     if (reading->math_overflow) {
-        diag_error("      Arithmetic overflow (DIAG_ALRT.MATHOF); current and "
-                 "power are invalid");
+        STRRES_ERROR(STR_I2C_INA237_MATH_OVERFLOW);
     }
     if (!reading->shunt_cal_matches) {
-        diag_error("      SHUNT_CAL reads %u, expected %d; the device has been "
-                 "reset since it was configured. Re-run 'i2c-ina237 config'.",
-                 reading->shunt_cal, INA237_SHUNT_CAL_VALUE);
+        STRRES_ERROR(STR_I2C_INA237_SHUNT_CAL_RESET,
+                     reading->shunt_cal, INA237_SHUNT_CAL_VALUE);
     }
 }
 
@@ -221,17 +216,16 @@ static int read_device(const ina237_entry_t *entry)
     ina237_reading_t reading = {0};
     esp_err_t err = ina237_read(entry->handle, &reading);
     if (err != ESP_OK) {
-        diag_error("Reading 0x%02X: %s", entry->address, esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_INA237_READ_FAILED, entry->address, esp_err_to_name(err));
         return -1;
     }
 
-    diag_printf("0x%02X  Bus %8.3f V  Current %8.4f A  Power %8.3f W\n",
-              entry->address, reading.bus_v, reading.current_a, reading.power_w);
-    diag_printf("      Shunt %8.3f mV  Temp %5.1f C\n",
-              reading.shunt_v * 1000.0, reading.temp_c);
-    diag_printf("      SHUNT_CAL %u  CURRENT_LSB %.4f mA  shunt %.4f ohm\n",
-              reading.shunt_cal, ina237_current_lsb(entry->handle) * 1000.0,
-              ina237_shunt_ohms(entry->handle));
+    STRRES_PRINTF(STR_I2C_INA237_READ_LINE,
+                  entry->address, reading.bus_v, reading.current_a, reading.power_w);
+    STRRES_PRINTF(STR_I2C_INA237_READ_DETAIL, reading.shunt_v * 1000.0, reading.temp_c);
+    STRRES_PRINTF(STR_I2C_INA237_READ_CALIBRATION,
+                  reading.shunt_cal, ina237_current_lsb(entry->handle) * 1000.0,
+                  ina237_shunt_ohms(entry->handle));
 
     report_health(&reading);
     return 0;
@@ -253,8 +247,7 @@ int cmd_ina237_read(int argc, char **argv)
         if (!entry) {
             /* Reading an address nobody configured is the common quick path;
              * register it at the default shunt rather than refusing. */
-            diag_printf("0x%02X is not configured; using the default %.3f ohm shunt.\n",
-                      address, DEFAULT_SHUNT_OHMS);
+            STRRES_PRINTF(STR_I2C_INA237_READ_UNCONFIGURED, address, DEFAULT_SHUNT_OHMS);
             if (configure_device((uint8_t)address, DEFAULT_SHUNT_OHMS, true) < 0) {
                 return -1;
             }
@@ -265,8 +258,7 @@ int cmd_ina237_read(int argc, char **argv)
     }
 
     if (configured_count() == 0) {
-        diag_error("No INA237s configured. Run 'i2c-ina237 config <address> [ohms]', "
-                 "or 'i2c-ina237 read <address>' to use the default shunt.");
+        STRRES_ERROR(STR_I2C_INA237_NONE_CONFIGURED);
         return -1;
     }
 
@@ -286,20 +278,20 @@ int cmd_ina237_list(int argc, char **argv)
     (void)argv;
 
     if (configured_count() == 0) {
-        diag_printf("No INA237s configured.\n");
+        STRRES_PRINTF(STR_I2C_INA237_LIST_EMPTY);
         return 0;
     }
 
-    diag_printf("%-8s %12s %14s %14s\n", "ADDRESS", "SHUNT (ohm)", "CURRENT_LSB", "FULL SCALE");
+    STRRES_PRINTF(STR_I2C_INA237_LIST_HEADER,
+                  "ADDRESS", "SHUNT (ohm)", "CURRENT_LSB", "FULL SCALE");
     for (size_t i = 0; i < MAX_DEVICES; i++) {
         if (!devices[i].used) {
             continue;
         }
-        diag_printf("0x%02X     %12.4f %11.4f mA %11.2f A\n",
-                  devices[i].address,
-                  ina237_shunt_ohms(devices[i].handle),
-                  ina237_current_lsb(devices[i].handle) * 1000.0,
-                  ina237_full_scale_amps(devices[i].handle));
+        STRRES_PRINTF(STR_I2C_INA237_LIST_ROW,
+                      devices[i].address, ina237_shunt_ohms(devices[i].handle),
+                      ina237_current_lsb(devices[i].handle) * 1000.0,
+                      ina237_full_scale_amps(devices[i].handle));
     }
 
     return 0;

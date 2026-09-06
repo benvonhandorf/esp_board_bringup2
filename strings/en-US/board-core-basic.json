@@ -1,0 +1,16 @@
+{
+  "section": "board-core-basic",
+  "strings": {
+    "audio.help": "Set up I2S for the speaker amplifier",
+    "audio.usage": "",
+    "group.help": "M5Stack Core Basic (esp32)",
+    "i2c.help": "Initialize the I2C bus",
+    "i2c.usage": "",
+    "mic.help": "Set up I2S for microphone capture",
+    "mic.usage": "",
+    "pins.help": "Show the known pinout",
+    "pins.usage": "",
+    "sd.help": "Bring the microSD slot up over SPI",
+    "sd.usage": ""
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "section": "board-cardputer",
+  "strings": {
+    "audio.help": "Set up I2S and the NS4168 speaker amplifier",
+    "audio.usage": "",
+    "group.help": "M5Stack Cardputer (esp32s3)",
+    "mic.help": "Open the SPM1423 PDM microphone (releases the speaker)",
+    "mic.usage": "",
+    "pins.help": "Show the known pinout",
+    "pins.usage": "",
+    "sd.help": "Bring the microSD slot up over SPI",
+    "sd.usage": ""
+  }
+}

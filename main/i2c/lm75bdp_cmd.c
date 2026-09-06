@@ -26,8 +26,7 @@ static int take_address(int argc, char **argv, int index, int *out)
     }
     if (cli_parse_num_arg(argv[index], out) < 0 ||
         *out < LM75BDP_ADDR_FIRST || *out > LM75BDP_ADDR_LAST) {
-        diag_error("Address must be 0x%02X-0x%02X (set by the A0-A2 pins)",
-                   LM75BDP_ADDR_FIRST, LM75BDP_ADDR_LAST);
+        STRRES_ERROR(STR_I2C_LM75BDP_ADDRESS_RANGE, LM75BDP_ADDR_FIRST, LM75BDP_ADDR_LAST);
         return -1;
     }
     return 0;
@@ -44,7 +43,7 @@ static lm75bdp_handle_t require_device(uint8_t address)
 {
     i2c_master_dev_handle_t dev = NULL;
     if (i2c_device_handle(address, &dev) != ESP_OK) {
-        diag_error("Addressing 0x%02X failed", address);
+        STRRES_ERROR(STR_I2C_LM75BDP_ADDRESSING_FAILED, address);
         return NULL;
     }
 
@@ -66,20 +65,18 @@ static lm75bdp_handle_t require_device(uint8_t address)
          * instead of at the board.
          */
         if (report.failed_stage == LM75BDP_STAGE_IDENTIFY) {
-            diag_error("Nothing answering as an LM75B at 0x%02X: the "
-                       "configuration register did not read back what was "
-                       "written (%s)", address, esp_err_to_name(err));
+            STRRES_ERROR(STR_I2C_LM75BDP_NOT_AN_LM75B, address, esp_err_to_name(err));
         } else {
-            diag_error("0x%02X: %s failed: %s", address,
-                       lm75bdp_stage_name(report.failed_stage), esp_err_to_name(err));
+            STRRES_ERROR(STR_I2C_LM75BDP_STAGE_FAILED,
+                         address, lm75bdp_stage_name(report.failed_stage),
+                         esp_err_to_name(err));
         }
         if (err == ESP_ERR_INVALID_RESPONSE || err == ESP_ERR_NOT_FOUND ||
             err == ESP_ERR_TIMEOUT) {
             /* The overwhelmingly common case on a bench: nothing is at
              * this address at all. The stage name alone reads as though
              * a present part misbehaved. */
-            diag_error("Nothing acknowledged at 0x%02X. 'i2c scan' lists "
-                       "what is actually on the bus.", address);
+            STRRES_ERROR(STR_I2C_LM75BDP_NO_ACKNOWLEDGE, address);
         }
         if (!handle_address) {
             /* Never successfully attached; do not keep a handle that would make
@@ -113,13 +110,12 @@ int cmd_lm75bdp_read(int argc, char **argv)
     lm75bdp_reading_t reading = {0};
     esp_err_t err = lm75bdp_read(lm, &reading);
     if (err != ESP_OK) {
-        diag_error("Reading 0x%02X: %s", address, esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_LM75BDP_READ_FAILED, address, esp_err_to_name(err));
         return -1;
     }
 
-    diag_printf("0x%02X  Temp %7.3f C (%7.2f F)   0.125 C resolution\n",
-                address, reading.temperature_C,
-                reading.temperature_C * 9.0 / 5.0 + 32.0);
+    STRRES_PRINTF(STR_I2C_LM75BDP_READ_LINE,
+                  address, reading.temperature_C, reading.temperature_C * 9.0 / 5.0 + 32.0);
     return 0;
 }
 
@@ -132,9 +128,8 @@ int cmd_lm75bdp_limits(int argc, char **argv)
     /* "limits [address] <tos> <thyst>": the address is optional and leading,
      * so the two thresholds are the last two arguments either way. */
     if (argc < 3 || argc > 4) {
-        diag_printf("Usage: limits [address] <tos_C> <thyst_C>\n");
-        diag_printf("The OS output asserts above tos and releases below thyst. "
-                    "Equal values make it chatter around the threshold.\n");
+        STRRES_PRINTF(STR_I2C_LM75BDP_USAGE_LIMITS);
+        STRRES_PRINTF(STR_I2C_LM75BDP_USAGE_LIMITS_NOTE);
         return -1;
     }
 
@@ -150,12 +145,11 @@ int cmd_lm75bdp_limits(int argc, char **argv)
     double tos = 0.0, thyst = 0.0;
     if (cli_parse_double_arg(argv[first], &tos) < 0 ||
         cli_parse_double_arg(argv[first + 1], &thyst) < 0) {
-        diag_error("Both thresholds must be numbers in degrees Celsius");
+        STRRES_ERROR(STR_I2C_LM75BDP_THRESHOLDS_NUMERIC);
         return -1;
     }
     if (thyst > tos) {
-        diag_error("thyst (%.2f C) is above tos (%.2f C); the output would "
-                   "never release", thyst, tos);
+        STRRES_ERROR(STR_I2C_LM75BDP_THYST_ABOVE_TOS, thyst, tos);
         return -1;
     }
 
@@ -167,8 +161,8 @@ int cmd_lm75bdp_limits(int argc, char **argv)
     lm75bdp_report_t report = {0};
     esp_err_t err = lm75bdp_set_thresholds(lm, (float)tos, (float)thyst, &report);
     if (err != ESP_OK) {
-        diag_error("Writing thresholds to 0x%02X: %s (%s)", address,
-                   esp_err_to_name(err), lm75bdp_stage_name(report.failed_stage));
+        STRRES_ERROR(STR_I2C_LM75BDP_THRESHOLD_WRITE_FAILED,
+                     address, esp_err_to_name(err), lm75bdp_stage_name(report.failed_stage));
         return -1;
     }
 
@@ -177,11 +171,9 @@ int cmd_lm75bdp_limits(int argc, char **argv)
      * to 0.5 C and clamp to -128..+127.5 C, so the two differ often enough that
      * echoing the request back would be a lie about the part's behaviour.
      */
-    diag_printf("0x%02X  OS asserts above %.1f C, releases below %.1f C\n",
-                address, report.tos_C, report.thyst_C);
+    STRRES_PRINTF(STR_I2C_LM75BDP_LIMITS_SET, address, report.tos_C, report.thyst_C);
     if (report.tos_C != (float)tos || report.thyst_C != (float)thyst) {
-        diag_printf("      Asked for %.2f / %.2f C; thresholds quantise to 0.5 C "
-                    "and clamp to -128..+127.5 C.\n", tos, thyst);
+        STRRES_PRINTF(STR_I2C_LM75BDP_LIMITS_QUANTISED, tos, thyst);
     }
     return 0;
 }

@@ -10,10 +10,10 @@ compiler checks a translation against.
 ## Why not just write the string in the C file
 
 A literal in the firmware occupies the OTA slot, which is the tight resource here — the
-image is ~1.5 MB against 1.69 MB — and it is duplicated across both slots. The same
-string here costs one copy of a partition that is 511 kB empty and that OTA does not
-touch. `main/` still holds ~70 kB of literals; each group moved is that much slot
-headroom back.
+image is 1.50 MB against 1.69 MB — and it is duplicated across both slots. The same
+string here costs one copy of a partition that OTA does not touch. Moving all thirty
+command groups took 58 kB out of the slot; the blobs that replaced them are 65 kB on a
+`res` partition that is still 446 kB empty.
 
 ## Adding a string
 
@@ -45,9 +45,13 @@ evicted. Worth it for error paths and anything printed often; not worth it other
 ## What does not belong here
 
 - Short layout fragments — a column separator, a lone `"\n"`, `" %02X"`. A two-byte id
-  plus a lookup costs more than they do.
+  plus a lookup costs more than they do. The same goes for one- and two-word labels
+  printed inside a wider sentence: reset reasons, `"pull-up"`, `"driven low"`.
 - Anything printed before `strres_init()` succeeds, including whatever reports that the
-  strings could not be loaded.
+  strings could not be loaded. That covers the `ESP_LOG` lines in `main.c` and
+  `config_reader.c`, which run before the filesystem is mounted.
+- HTTP status text in `app_http.c`. It is protocol, and it is read by a browser rather
+  than by someone at the console.
 - Command names, group names, config keys, JSON templates, and the command lines
   `board.c` feeds to `cli_execute()`. Those are identifiers, not prose.
 

@@ -25,7 +25,7 @@ static uint8_t outputs_mask;
 static bool require_init(void)
 {
     if (!handle) {
-        diag_error("PI4IOE5V6408 not initialized. Run 'i2c-pi4ioe init [address]' first.");
+        STRRES_ERROR(STR_I2C_PI4IOE_NOT_INITIALIZED);
         return false;
     }
     return true;
@@ -37,7 +37,7 @@ static bool reattach(void)
 {
     i2c_master_dev_handle_t dev = NULL;
     if (i2c_device_handle(handle_address, &dev) != ESP_OK) {
-        diag_error("Addressing 0x%02X failed", handle_address);
+        STRRES_ERROR(STR_I2C_PI4IOE_ADDRESSING_FAILED, handle_address);
         return false;
     }
     pi4ioe5v6408_set_device(handle, dev, NULL);
@@ -47,7 +47,7 @@ static bool reattach(void)
 static int take_byte(const char *token, int *out)
 {
     if (cli_parse_num_arg(token, out) < 0 || *out < 0 || *out > 0xff) {
-        diag_error("Expected a byte, 0-255 or 0x00-0xff");
+        STRRES_ERROR(STR_I2C_PI4IOE_BYTE_INVALID);
         return -1;
     }
     return 0;
@@ -55,11 +55,11 @@ static int take_byte(const char *token, int *out)
 
 static void print_bits(const char *label, uint8_t value)
 {
-    diag_printf("%-11s 0x%02X  ", label, value);
+    STRRES_PRINTF(STR_I2C_PI4IOE_PORT_VALUE, label, value);
     for (int bit = 7; bit >= 0; bit--) {
         diag_printf("%d", (value >> bit) & 1);
     }
-    diag_printf("   (P7 first)\n");
+    STRRES_PRINTF(STR_I2C_PI4IOE_BIT_ORDER);
 }
 
 int cmd_pi4ioe_init(int argc, char **argv)
@@ -86,8 +86,7 @@ int cmd_pi4ioe_init(int argc, char **argv)
     if (index < argc && !first_is_option) {
         if (cli_parse_num_arg(argv[index], &address) < 0 ||
             address < PI4IOE_ADDR_FIRST || address > PI4IOE_ADDR_LAST) {
-            diag_error("Address must be 0x%02X or 0x%02X (set by the ADDR pin)",
-                       PI4IOE_ADDR_FIRST, PI4IOE_ADDR_LAST);
+            STRRES_ERROR(STR_I2C_PI4IOE_ADDRESS_RANGE, PI4IOE_ADDR_FIRST, PI4IOE_ADDR_LAST);
             return -1;
         }
         index++;
@@ -96,7 +95,7 @@ int cmd_pi4ioe_init(int argc, char **argv)
     while (index < argc) {
         const char *token = argv[index];
         if (index + 1 >= argc) {
-            diag_error("'%s' needs a mask", token);
+            STRRES_ERROR(STR_I2C_PI4IOE_OPTION_NEEDS_MASK, token);
             return -1;
         }
         int value = 0;
@@ -109,8 +108,7 @@ int cmd_pi4ioe_init(int argc, char **argv)
         else if (strcasecmp(token, "pullup") == 0) pull_up = (uint8_t)value;
         else if (strcasecmp(token, "int") == 0)    interrupt_on = (uint8_t)value;
         else {
-            diag_error("Unknown option '%s'. Expected out, init, pull, pullup or int.",
-                       token);
+            STRRES_ERROR(STR_I2C_PI4IOE_UNKNOWN_OPTION, token);
             return -1;
         }
         index += 2;
@@ -118,7 +116,7 @@ int cmd_pi4ioe_init(int argc, char **argv)
 
     i2c_master_dev_handle_t dev = NULL;
     if (i2c_device_handle((uint8_t)address, &dev) != ESP_OK) {
-        diag_error("Addressing 0x%02X failed", address);
+        STRRES_ERROR(STR_I2C_PI4IOE_ADDRESSING_FAILED, address);
         return -1;
     }
 
@@ -139,16 +137,15 @@ int cmd_pi4ioe_init(int argc, char **argv)
     pi4ioe5v6408_report_t report = {0};
     esp_err_t err = pi4ioe5v6408_create(&config, &handle, &report);
     if (err != ESP_OK) {
-        diag_error("0x%02X: %s failed: %s (control register 0x%02X)", address,
-                   pi4ioe5v6408_stage_name(report.failed_stage),
-                   esp_err_to_name(err), report.control_register);
+        STRRES_ERROR(STR_I2C_PI4IOE_STAGE_FAILED,
+                     address, pi4ioe5v6408_stage_name(report.failed_stage),
+                     esp_err_to_name(err), report.control_register);
         if (err == ESP_ERR_INVALID_RESPONSE || err == ESP_ERR_NOT_FOUND ||
             err == ESP_ERR_TIMEOUT) {
             /* The overwhelmingly common case on a bench: nothing is at this
              * address at all. The stage name alone reads as though a present
              * part misbehaved. */
-            diag_error("Nothing acknowledged at 0x%02X. 'i2c scan' lists what "
-                       "is actually on the bus.", address);
+            STRRES_ERROR(STR_I2C_PI4IOE_NO_ACKNOWLEDGE, address);
         }
         handle = NULL;
         return -1;
@@ -157,16 +154,13 @@ int cmd_pi4ioe_init(int argc, char **argv)
     handle_address = (uint8_t)address;
     outputs_mask = outputs;
 
-    diag_printf("PI4IOE5V6408 ready at 0x%02X (control register 0x%02X)\n",
-                address, report.control_register);
+    STRRES_PRINTF(STR_I2C_PI4IOE_READY, address, report.control_register);
     print_bits("outputs:", outputs);
     print_bits("preset:", initial);
     print_bits("pulls on:", pull_enable);
     print_bits("pull up:", pull_up);
     print_bits("interrupt:", interrupt_on);
-    diag_printf("Levels were established before any pin became an output. A "
-                "switch to ground with no external pull-up needs its bit in "
-                "both 'pull' and 'pullup'.\n");
+    STRRES_PRINTF(STR_I2C_PI4IOE_LEVELS_NOTE);
     return 0;
 }
 
@@ -182,13 +176,12 @@ int cmd_pi4ioe_read(int argc, char **argv)
     uint8_t value = 0;
     esp_err_t err = pi4ioe5v6408_read_port(handle, &value);
     if (err != ESP_OK) {
-        diag_error("Reading the port: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_PI4IOE_PORT_READ_FAILED, esp_err_to_name(err));
         return -1;
     }
 
     print_bits("pins:", value);
-    diag_printf("These are pin levels, not the output register, so an output "
-                "being held elsewhere reads as it is.\n");
+    STRRES_PRINTF(STR_I2C_PI4IOE_LEVELS_NOT_REGISTER);
     return 0;
 }
 
@@ -199,7 +192,7 @@ int cmd_pi4ioe_write(int argc, char **argv)
     }
 
     if (argc != 2) {
-        diag_printf("Usage: write <value>\n");
+        STRRES_PRINTF(STR_I2C_PI4IOE_USAGE_WRITE);
         return -1;
     }
 
@@ -210,12 +203,11 @@ int cmd_pi4ioe_write(int argc, char **argv)
 
     esp_err_t err = pi4ioe5v6408_write_port(handle, (uint8_t)value);
     if (err != ESP_OK) {
-        diag_error("Writing the port: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_PI4IOE_PORT_WRITE_FAILED, esp_err_to_name(err));
         return -1;
     }
 
-    diag_printf("Port driven to 0x%02X; pins outside the output mask 0x%02X "
-                "ignore it\n", value, outputs_mask);
+    STRRES_PRINTF(STR_I2C_PI4IOE_PORT_WRITTEN, value, outputs_mask);
     return 0;
 }
 
@@ -226,13 +218,13 @@ int cmd_pi4ioe_set(int argc, char **argv)
     }
 
     if (argc != 3) {
-        diag_printf("Usage: set <pin> <0|1>\n");
+        STRRES_PRINTF(STR_I2C_PI4IOE_USAGE_SET);
         return -1;
     }
 
     int pin = 0;
     if (cli_parse_int_arg(argv[1], &pin) < 0 || pin < 0 || pin > 7) {
-        diag_error("Pin must be 0-7");
+        STRRES_ERROR(STR_I2C_PI4IOE_PIN_RANGE);
         return -1;
     }
 
@@ -244,24 +236,22 @@ int cmd_pi4ioe_set(int argc, char **argv)
                strcasecmp(argv[2], "low") == 0 || strcasecmp(argv[2], "off") == 0) {
         high = false;
     } else {
-        diag_error("State must be 0/1, low/high, off/on or false/true");
+        STRRES_ERROR(STR_I2C_PI4IOE_STATE_INVALID);
         return -1;
     }
 
     esp_err_t err = pi4ioe5v6408_set_pin(handle, (uint8_t)pin, high);
     if (err != ESP_OK) {
-        diag_error("Setting P%d: %s", pin, esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_PI4IOE_SET_FAILED, pin, esp_err_to_name(err));
         return -1;
     }
 
     if (!(outputs_mask & (1u << pin))) {
-        diag_printf("P%d set %s, but it is an input and will not drive. Re-run "
-                    "'i2c-pi4ioe init' with an 'out' mask that sets bit %d.\n",
-                    pin, high ? "high" : "low", pin);
+        STRRES_PRINTF(STR_I2C_PI4IOE_SET_BUT_INPUT, pin, high ? "high" : "low", pin);
         return 0;
     }
 
-    diag_printf("P%d driven %s\n", pin, high ? "high" : "low");
+    STRRES_PRINTF(STR_I2C_PI4IOE_DRIVEN, pin, high ? "high" : "low");
     return 0;
 }
 
@@ -277,16 +267,15 @@ int cmd_pi4ioe_interrupt(int argc, char **argv)
     uint8_t status = 0;
     esp_err_t err = pi4ioe5v6408_read_interrupt_status(handle, &status);
     if (err != ESP_OK) {
-        diag_error("Reading the interrupt status: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_PI4IOE_INTERRUPT_READ_FAILED, esp_err_to_name(err));
         return -1;
     }
 
     print_bits("changed:", status);
     if (status == 0) {
-        diag_printf("Nothing has changed since this was last read.\n");
+        STRRES_PRINTF(STR_I2C_PI4IOE_INTERRUPT_NONE);
     } else {
-        diag_printf("Reading this register clears it, so the next call reports "
-                    "only what changes from here.\n");
+        STRRES_PRINTF(STR_I2C_PI4IOE_INTERRUPT_NOTE);
     }
     return 0;
 }

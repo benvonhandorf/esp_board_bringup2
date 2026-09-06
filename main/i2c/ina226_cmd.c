@@ -51,7 +51,7 @@ static int take_averaging(const char *token, ina226_averaging_t *out)
             }
         }
     }
-    diag_error("Averaging must be 1, 4, 16, 64, 128, 256, 512 or 1024 samples");
+    STRRES_ERROR(STR_I2C_INA226_AVERAGING_INVALID);
     return -1;
 }
 
@@ -83,8 +83,7 @@ static int take_address(const char *token, int *out)
 {
     if (cli_parse_num_arg(token, out) < 0 ||
         *out < INA226_ADDR_FIRST || *out > INA226_ADDR_LAST) {
-        diag_error("Address must be 0x%02X-0x%02X (set by the A0/A1 pins)",
-                   INA226_ADDR_FIRST, INA226_ADDR_LAST);
+        STRRES_ERROR(STR_I2C_INA226_ADDRESS_RANGE, INA226_ADDR_FIRST, INA226_ADDR_LAST);
         return -1;
     }
     return 0;
@@ -97,18 +96,15 @@ static void report_stage(uint8_t address, const ina226_report_t *report,
     case INA226_STAGE_NONE:
         return;
     case INA226_STAGE_RANGE:
-        diag_error("0x%02X: that shunt and range need a full-scale drop "
-                   "outside 5.12-81.92 mV, and this part has no PGA.",
-                   address);
+        STRRES_ERROR(STR_I2C_INA226_RANGE_UNREACHABLE, address);
         return;
     case INA226_STAGE_IDENTIFY:
-        diag_error("0x%02X is not an INA226: manufacturer 0x%04X, die 0x%04X; "
-                   "expected 0x5449 and 0x2260.", address,
-                   report->manufacturer_id, report->die_id);
+        STRRES_ERROR(STR_I2C_INA226_NOT_AN_INA226,
+                     address, report->manufacturer_id, report->die_id);
         return;
     default:
-        diag_error("0x%02X: %s failed: %s", address,
-                   ina226_stage_name(report->failed_stage), esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_INA226_STAGE_FAILED,
+                     address, ina226_stage_name(report->failed_stage), esp_err_to_name(err));
         return;
     }
 }
@@ -128,7 +124,7 @@ static bool attach_device(entry_t *entry)
     i2c_master_dev_handle_t dev = NULL;
     esp_err_t err = i2c_device_handle(entry->address, &dev);
     if (err != ESP_OK) {
-        diag_error("Addressing 0x%02X: %s", entry->address, esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_INA226_ADDRESSING_FAILED, entry->address, esp_err_to_name(err));
         return false;
     }
 
@@ -174,7 +170,7 @@ static int configure_device(uint8_t address, double shunt_ohms,
             }
         }
         if (!entry) {
-            diag_error("Cannot track more than %d INA226s", MAX_DEVICES);
+            STRRES_ERROR(STR_I2C_INA226_TOO_MANY, MAX_DEVICES);
             if (handle_is_new) {
                 ina226_delete(handle);
             }
@@ -199,13 +195,12 @@ static int configure_device(uint8_t address, double shunt_ohms,
     entry->used = true;
 
     if (!quiet) {
-        diag_printf("0x%02X configured: shunt %.4f ohm, %.4f mA/LSB, range +/-%.3f A\n",
-                    address, shunt_ohms, entry->report.current_lsb_a * 1000.0,
-                    entry->report.full_scale_a);
-        diag_printf("      Averaging %u samples, CALIBRATION 0x%04X, "
-                    "manufacturer 0x%04X die 0x%04X\n",
-                    averaging_samples[entry->averaging], entry->report.calibration,
-                    entry->report.manufacturer_id, entry->report.die_id);
+        STRRES_PRINTF(STR_I2C_INA226_CONFIGURED,
+                      address, shunt_ohms, entry->report.current_lsb_a * 1000.0,
+                      entry->report.full_scale_a);
+        STRRES_PRINTF(STR_I2C_INA226_CONFIGURED_CALIBRATION,
+                      averaging_samples[entry->averaging], entry->report.calibration,
+                      entry->report.manufacturer_id, entry->report.die_id);
     }
 
     return 0;
@@ -218,12 +213,10 @@ int cmd_ina226_config(int argc, char **argv)
     }
 
     if (argc < 2) {
-        diag_printf("Usage: config <address> [shunt_ohms] [max_amps] [avg_samples]\n");
-        diag_printf("Address is 0x%02X-0x%02X; defaults are %.3f ohm, %.3f A and "
-                    "%u samples.\n",
-                    INA226_ADDR_FIRST, INA226_ADDR_LAST,
-                    DEFAULT_SHUNT_OHMS, DEFAULT_MAX_CURRENT,
-                    averaging_samples[DEFAULT_AVERAGING]);
+        STRRES_PRINTF(STR_I2C_INA226_USAGE_CONFIG);
+        STRRES_PRINTF(STR_I2C_INA226_USAGE_CONFIG_DEFAULTS,
+                      INA226_ADDR_FIRST, INA226_ADDR_LAST, DEFAULT_SHUNT_OHMS,
+                      DEFAULT_MAX_CURRENT, averaging_samples[DEFAULT_AVERAGING]);
         return -1;
     }
 
@@ -235,7 +228,7 @@ int cmd_ina226_config(int argc, char **argv)
     double shunt_ohms = DEFAULT_SHUNT_OHMS;
     if (argc > 2) {
         if (cli_parse_double_arg(argv[2], &shunt_ohms) < 0 || shunt_ohms <= 0.0) {
-            diag_error("Shunt resistance must be a positive number of ohms, e.g. 0.01");
+            STRRES_ERROR(STR_I2C_INA226_SHUNT_INVALID);
             return -1;
         }
     }
@@ -243,7 +236,7 @@ int cmd_ina226_config(int argc, char **argv)
     double max_current = DEFAULT_MAX_CURRENT;
     if (argc > 3) {
         if (cli_parse_double_arg(argv[3], &max_current) < 0 || max_current <= 0.0) {
-            diag_error("Full-scale current must be a positive number of amps, e.g. 8.192");
+            STRRES_ERROR(STR_I2C_INA226_CURRENT_INVALID);
             return -1;
         }
     }
@@ -265,16 +258,15 @@ static int read_device(entry_t *entry)
     ina226_reading_t reading = {0};
     esp_err_t err = ina226_read(entry->handle, &reading);
     if (err != ESP_OK) {
-        diag_error("Reading 0x%02X: %s", entry->address, esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_INA226_READ_FAILED, entry->address, esp_err_to_name(err));
         return -1;
     }
 
-    diag_printf("0x%02X  Bus %8.3f V  Current %8.4f A  Power %8.3f W\n",
-                entry->address, reading.bus_voltage, reading.current, reading.power);
-    diag_printf("      Shunt %8.3f mV  %.4f mA/LSB over +/-%.3f A, %u-sample average\n",
-                reading.shunt_voltage * 1000.0,
-                entry->report.current_lsb_a * 1000.0, entry->report.full_scale_a,
-                averaging_samples[entry->averaging]);
+    STRRES_PRINTF(STR_I2C_INA226_READ_LINE,
+                  entry->address, reading.bus_voltage, reading.current, reading.power);
+    STRRES_PRINTF(STR_I2C_INA226_READ_DETAIL,
+                  reading.shunt_voltage * 1000.0, entry->report.current_lsb_a * 1000.0,
+                  entry->report.full_scale_a, averaging_samples[entry->averaging]);
     return 0;
 }
 
@@ -294,8 +286,8 @@ int cmd_ina226_read(int argc, char **argv)
         if (!entry) {
             /* Reading an address nobody configured is the common quick path;
              * register it at the defaults rather than refusing. */
-            diag_printf("0x%02X is not configured; using %.3f ohm over %.3f A.\n",
-                        address, DEFAULT_SHUNT_OHMS, DEFAULT_MAX_CURRENT);
+            STRRES_PRINTF(STR_I2C_INA226_READ_UNCONFIGURED,
+                          address, DEFAULT_SHUNT_OHMS, DEFAULT_MAX_CURRENT);
             if (configure_device((uint8_t)address, DEFAULT_SHUNT_OHMS,
                                  DEFAULT_MAX_CURRENT, DEFAULT_AVERAGING, true) < 0) {
                 return -1;
@@ -307,9 +299,7 @@ int cmd_ina226_read(int argc, char **argv)
     }
 
     if (configured_count() == 0) {
-        diag_error("No INA226s configured. Run 'i2c-ina226 config <address> "
-                   "[shunt_ohms] [max_amps] [avg]', or 'i2c-ina226 read <address>' "
-                   "to use the defaults.");
+        STRRES_ERROR(STR_I2C_INA226_NONE_CONFIGURED);
         return -1;
     }
 
@@ -329,22 +319,20 @@ int cmd_ina226_list(int argc, char **argv)
     (void)argv;
 
     if (configured_count() == 0) {
-        diag_printf("No INA226s configured.\n");
+        STRRES_PRINTF(STR_I2C_INA226_LIST_EMPTY);
         return 0;
     }
 
-    diag_printf("%-8s %12s %14s %14s %6s %8s\n",
-                "ADDRESS", "SHUNT (ohm)", "CURRENT_LSB", "FULL SCALE", "AVG", "CAL");
+    STRRES_PRINTF(STR_I2C_INA226_LIST_HEADER,
+                  "ADDRESS", "SHUNT (ohm)", "CURRENT_LSB", "FULL SCALE", "AVG", "CAL");
     for (size_t i = 0; i < MAX_DEVICES; i++) {
         if (!devices[i].used) {
             continue;
         }
-        diag_printf("0x%02X     %12.4f %11.4f mA %11.3f A %6u   0x%04X\n",
-                    devices[i].address, devices[i].shunt_ohms,
-                    devices[i].report.current_lsb_a * 1000.0,
-                    devices[i].report.full_scale_a,
-                    averaging_samples[devices[i].averaging],
-                    devices[i].report.calibration);
+        STRRES_PRINTF(STR_I2C_INA226_LIST_ROW,
+                      devices[i].address, devices[i].shunt_ohms,
+                      devices[i].report.current_lsb_a * 1000.0, devices[i].report.full_scale_a,
+                      averaging_samples[devices[i].averaging], devices[i].report.calibration);
     }
 
     return 0;

@@ -1,51 +1,55 @@
 {
   "section": "i2c",
   "strings": {
-    "group.help": "I2C master",
-
-    "bus.usage": "<scl> <sda>",
-    "bus.help": "Initialize the I2C bus on the given pins",
-    "scan.usage": "",
-    "scan.help": "Probe the bus and tabulate responding devices",
-    "read.usage": "<address> [bytes]",
-    "read.help": "Read bytes from a device",
-    "identify.usage": "[address]",
-    "identify.help": "Name the parts this firmware drives at an address",
-
-    "no_bus": {
-      "text": "I2C not initialized. Run 'i2c bus <scl> <sda>' first.",
-      "pin": true
-    },
-    "usage_bus": "Usage: bus <scl> <sda>\n",
-    "usage_read": "Usage: read <address> [bytes]\n",
-
-    "pins_numeric": "SCL and SDA must be pin numbers",
-    "pins_output_capable": "SCL and SDA must both be output-capable GPIOs",
-    "pins_distinct": "SCL and SDA cannot be the same pin",
-    "create_failed": "Creating I2C bus: %s",
-    "initialized": "I2C bus initialized on SCL=%d, SDA=%d\n",
-
-    "not_idle": "I2C bus is not idle: SCL=%d SDA=%d (both should read 1)",
-    "both_low": "Both lines are held low: no pull-ups fitted, the bus is not powered, or SCL/SDA are shorted to ground.\n",
-    "sda_low": "SDA is held low, so a device is probably stuck mid-transfer; power-cycle it or clock SCL to free it.\n",
-    "scl_low": "SCL is held low: a device is holding the clock, or SCL is shorted to ground.\n",
-    "weak_pullups": "Internal pull-ups are weak; most buses need external 2.2k-10k resistors to 3V3.\n",
-    "restore_failed": "Restoring the I2C bus after the line check: %s",
-
-    "scanning": "Scanning 0x%02X-0x%02X on SCL=%d, SDA=%d\n",
-    "scan_header": "     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f\n",
-    "scan_found": "%d device%s found\n",
-
     "address_range": {
       "text": "Address must be 0x00-0x7F",
       "pin": true
     },
-    "byte_count_range": "Byte count must be 1-255",
     "addressing_failed": "Addressing device 0x%02X: %s",
-    "read_failed": "Reading from 0x%02X: %s",
+    "both_low": "Both lines are held low: no pull-ups fitted, the bus is not powered, or SCL/SDA are shorted to ground.\n",
+    "bus.help": "Initialize the I2C bus on the given pins",
+    "bus.usage": "<scl> <sda>",
+    "byte_count_range": "Byte count must be 1-255",
+    "create_failed": "Creating I2C bus: %s",
+    "group.help": "I2C master",
+    "identify.help": "Name the parts this firmware drives at an address",
+    "identify.usage": "[address]",
+    "initialized": "I2C bus initialized on SCL=%d, SDA=%d\n",
+    "no_bus": {
+      "text": "I2C not initialized. Run 'i2c bus <scl> <sda>' first.",
+      "pin": true
+    },
+    "not_idle": "I2C bus is not idle: SCL=%d SDA=%d (both should read 1)",
     "out_of_memory": {
       "text": "Out of memory",
       "pin": true
-    }
+    },
+    "part_aw9523b": "16-bit I/O expander",
+    "part_ina219": "current/voltage/power monitor",
+    "part_ina226": "current/voltage/power monitor",
+    "part_ina237": "current/voltage/power monitor",
+    "part_lm75bdp": "temperature sensor, thermal watchdog",
+    "part_nau7802": "24-bit bridge ADC, load cell front end",
+    "part_nau8822": "stereo codec, speaker driver, I2S audio",
+    "part_pi4ioe5v6408": "8-bit I/O expander, 5 V tolerant",
+    "part_rx8130ce": "real-time clock with battery backup",
+    "part_sht4x": "humidity/temperature; A/B/C = 0x44/45/46",
+    "pins_distinct": "SCL and SDA cannot be the same pin",
+    "pins_numeric": "SCL and SDA must be pin numbers",
+    "pins_output_capable": "SCL and SDA must both be output-capable GPIOs",
+    "read.help": "Read bytes from a device",
+    "read.usage": "<address> [bytes]",
+    "read_failed": "Reading from 0x%02X: %s",
+    "restore_failed": "Restoring the I2C bus after the line check: %s",
+    "scan.help": "Probe the bus and tabulate responding devices",
+    "scan.usage": "",
+    "scan_found": "%d device%s found\n",
+    "scan_header": "     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f\n",
+    "scanning": "Scanning 0x%02X-0x%02X on SCL=%d, SDA=%d\n",
+    "scl_low": "SCL is held low: a device is holding the clock, or SCL is shorted to ground.\n",
+    "sda_low": "SDA is held low, so a device is probably stuck mid-transfer; power-cycle it or clock SCL to free it.\n",
+    "usage_bus": "Usage: bus <scl> <sda>\n",
+    "usage_read": "Usage: read <address> [bytes]\n",
+    "weak_pullups": "Internal pull-ups are weak; most buses need external 2.2k-10k resistors to 3V3.\n"
   }
 }

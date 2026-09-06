@@ -1,0 +1,21 @@
+{
+  "section": "i2c-rx8130ce",
+  "strings": {
+    "addressing_failed": "Addressing 0x%02X failed",
+    "drift": "Drift:    %+ld s\n",
+    "group.help": "Epson RX8130CE real-time clock with battery backup, at 0x32",
+    "no_response": "No RX8130CE answering at 0x%02X",
+    "no_valid_date": "The clock is answering but its registers do not decode to a date -- a drained backup cell, or never set. Run 'i2c-rx8130ce set'.",
+    "power_flag_cleared": "The power-lost flag is cleared\n",
+    "power_lost": "Power:    lost since the clock was last set, so the time above may be wrong. 'i2c-rx8130ce set' clears the flag.\n",
+    "read_failed": "Reading the clock: %s",
+    "set.help": "Copy the system time into the clock",
+    "set.usage": "",
+    "set_failed": "Setting the clock: %s",
+    "system_clock_unset": "The system clock is not set, so there is nothing to copy into the RTC. Check 'net status' and let NTP set it.",
+    "system_unset": "System:   not set; nothing to compare against. NTP sets it once there is a network.\n",
+    "time.help": "Read the clock, and compare it with the system time",
+    "time.usage": "",
+    "time_line": "%-9s %s UTC\n"
+  }
+}

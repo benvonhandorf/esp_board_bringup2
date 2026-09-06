@@ -1,0 +1,12 @@
+{
+  "section": "net",
+  "strings": {
+    "ap.help": "Serve the configuration access point",
+    "ap.usage": "",
+    "group.help": "Configured networking: the link this device joins on its own",
+    "scan.help": "Scan and join the best known network",
+    "scan.usage": "",
+    "status.help": "WiFi and MQTT connection state",
+    "status.usage": ""
+  }
+}

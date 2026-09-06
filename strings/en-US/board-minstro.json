@@ -1,0 +1,14 @@
+{
+  "section": "board-minstro",
+  "strings": {
+    "audio.help": "Initialize I2S with the NAU8822 codec",
+    "audio.usage": "",
+    "group.help": "Minstro ESP32-S3 board (esp32s3)",
+    "i2c.help": "Initialize the I2C bus",
+    "i2c.usage": "",
+    "pins.help": "Show the known pinout",
+    "pins.usage": "",
+    "sd.help": "Initialize the 4-bit SD interface",
+    "sd.usage": ""
+  }
+}
