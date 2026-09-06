@@ -94,8 +94,8 @@ static int acquire_timer(uint32_t freq_hz, ledc_timer_bit_t resolution)
 
         esp_err_t err = ledc_timer_config(&config);
         if (err != ESP_OK) {
-            diag_error("Configuring LEDC timer %d for %lu Hz: %s",
-                     i, (unsigned long)freq_hz, esp_err_to_name(err));
+            STRRES_ERROR(STR_GPIO_PWM_TIMER_CONFIG_FAILED,
+                         i, (unsigned long)freq_hz, esp_err_to_name(err));
             return -1;
         }
 
@@ -105,34 +105,33 @@ static int acquire_timer(uint32_t freq_hz, ledc_timer_bit_t resolution)
         return i;
     }
 
-    diag_error("All %d LEDC timers are in use; stop a PWM output first",
-             PWM_MAX_TIMERS);
+    STRRES_ERROR(STR_GPIO_PWM_NO_FREE_TIMER, PWM_MAX_TIMERS);
     return -1;
 }
 
 int cmd_pwm_set(int argc, char **argv)
 {
     if (argc < 4) {
-        diag_printf("Usage: set <pin> <freq> <duty>\n");
+        STRRES_PRINTF(STR_GPIO_PWM_USAGE_SET);
         return -1;
     }
 
     int pin, freq, duty;
     if (cli_parse_int_arg(argv[1], &pin) < 0) {
-        diag_error("Invalid pin: %s", argv[1]);
+        STRRES_ERROR(STR_GPIO_PWM_PIN_INVALID, argv[1]);
         return -1;
     }
     if (cli_parse_int_arg(argv[2], &freq) < 0 || freq < 1 || freq > 10000000) {
-        diag_error("Frequency must be 1-10000000 Hz");
+        STRRES_ERROR(STR_GPIO_PWM_FREQUENCY_RANGE);
         return -1;
     }
     if (cli_parse_int_arg(argv[3], &duty) < 0 || duty < 0 || duty > 100) {
-        diag_error("Duty cycle must be 0-100 percent");
+        STRRES_ERROR(STR_GPIO_PWM_DUTY_RANGE);
         return -1;
     }
 
     if (!GPIO_IS_VALID_OUTPUT_GPIO(pin)) {
-        diag_error("GPIO %d cannot drive an output on this chip", pin);
+        STRRES_ERROR(STR_GPIO_PWM_PIN_NOT_OUTPUT_CAPABLE, pin);
         return -1;
     }
 
@@ -152,8 +151,7 @@ int cmd_pwm_set(int argc, char **argv)
             }
         }
         if (!channel) {
-            diag_error("All %d LEDC channels are in use; stop one first",
-                     PWM_MAX_CHANNELS);
+            STRRES_ERROR(STR_GPIO_PWM_NO_FREE_CHANNEL, PWM_MAX_CHANNELS);
             return -1;
         }
     }
@@ -194,8 +192,7 @@ int cmd_pwm_set(int argc, char **argv)
     }
 
     if (err != ESP_OK) {
-        diag_error("Configuring LEDC channel for GPIO %d: %s",
-                 pin, esp_err_to_name(err));
+        STRRES_ERROR(STR_GPIO_PWM_CHANNEL_CONFIG_FAILED, pin, esp_err_to_name(err));
         release_timer((ledc_timer_t)timer);
         if (!retune) {
             channel->in_use = false;
@@ -213,13 +210,12 @@ int cmd_pwm_set(int argc, char **argv)
      * hardware actually produces rather than what was asked for. */
     uint32_t actual = ledc_get_freq(PWM_SPEED_MODE, (ledc_timer_t)timer);
 
-    diag_printf("%d: PWM at %lu Hz, %d%% duty (%d-bit resolution, %lu steps)\n",
-              pin, (unsigned long)actual, duty, (int)resolution,
-              (unsigned long)max_duty + 1);
+    STRRES_PRINTF(STR_GPIO_PWM_RUNNING,
+                  pin, (unsigned long)actual, duty, (int)resolution,
+                  (unsigned long)max_duty + 1);
 
     if (actual != (uint32_t)freq) {
-        diag_printf("Note: %d Hz was requested; the timer divider rounds to %lu Hz\n",
-                  freq, (unsigned long)actual);
+        STRRES_PRINTF(STR_GPIO_PWM_FREQUENCY_ROUNDED, freq, (unsigned long)actual);
     }
 
     return 0;
@@ -228,19 +224,19 @@ int cmd_pwm_set(int argc, char **argv)
 int cmd_pwm_stop(int argc, char **argv)
 {
     if (argc < 2) {
-        diag_printf("Usage: stop <pin>\n");
+        STRRES_PRINTF(STR_GPIO_PWM_USAGE_STOP);
         return -1;
     }
 
     int pin;
     if (cli_parse_int_arg(argv[1], &pin) < 0) {
-        diag_error("Invalid pin: %s", argv[1]);
+        STRRES_ERROR(STR_GPIO_PWM_PIN_INVALID, argv[1]);
         return -1;
     }
 
     pwm_channel_t *channel = find_channel_for_pin(pin);
     if (!channel) {
-        diag_error("No PWM output is running on GPIO %d", pin);
+        STRRES_ERROR(STR_GPIO_PWM_NOT_RUNNING, pin);
         return -1;
     }
 
@@ -250,13 +246,13 @@ int cmd_pwm_stop(int argc, char **argv)
      * indeterminate level. */
     esp_err_t err = ledc_stop(PWM_SPEED_MODE, index, 0);
     if (err != ESP_OK) {
-        diag_error("Stopping PWM on GPIO %d: %s", pin, esp_err_to_name(err));
+        STRRES_ERROR(STR_GPIO_PWM_STOP_FAILED, pin, esp_err_to_name(err));
         return -1;
     }
 
     release_timer(channel->timer);
     channel->in_use = false;
 
-    diag_printf("%d: PWM stopped\n", pin);
+    STRRES_PRINTF(STR_GPIO_PWM_STOPPED, pin);
     return 0;
 }

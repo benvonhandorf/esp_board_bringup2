@@ -447,9 +447,11 @@ int cmd_hx711_init(int argc, char **argv)
         return -1;
     }
 
-    const char *why = NULL;
+    strres_id_t why = STRRES_ID_NONE;
     if (!app_pin_is_drivable(sck, &why)) {
-        STRRES_ERROR(STR_LOADCELL_SCK_UNUSABLE, sck, why);
+        char reason[APP_STR_LEN];
+        STRRES_ERROR(STR_LOADCELL_SCK_UNUSABLE, sck,
+                     app_str(why, reason, sizeof(reason)));
         return -1;
     }
 

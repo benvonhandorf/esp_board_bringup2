@@ -1,0 +1,25 @@
+{
+  "section": "gpio-pwm",
+  "strings": {
+    "channel_config_failed": "Configuring LEDC channel for GPIO %d: %s",
+    "duty_range": "Duty cycle must be 0-100 percent",
+    "frequency_range": "Frequency must be 1-10000000 Hz",
+    "frequency_rounded": "Note: %d Hz was requested; the timer divider rounds to %lu Hz\n",
+    "group.help": "Hardware PWM via LEDC",
+    "no_free_channel": "All %d LEDC channels are in use; stop one first",
+    "no_free_timer": "All %d LEDC timers are in use; stop a PWM output first",
+    "not_running": "No PWM output is running on GPIO %d",
+    "pin_invalid": "Invalid pin: %s",
+    "pin_not_output_capable": "GPIO %d cannot drive an output on this chip",
+    "running": "%d: PWM at %lu Hz, %d%% duty (%d-bit resolution, %lu steps)\n",
+    "set.help": "Drive a pin with PWM (duty 0-100%)",
+    "set.usage": "<pin> <freq> <duty>",
+    "stop.help": "Stop PWM and release the channel",
+    "stop.usage": "<pin>",
+    "stop_failed": "Stopping PWM on GPIO %d: %s",
+    "stopped": "%d: PWM stopped\n",
+    "timer_config_failed": "Configuring LEDC timer %d for %lu Hz: %s",
+    "usage_set": "Usage: set <pin> <freq> <duty>\n",
+    "usage_stop": "Usage: stop <pin>\n"
+  }
+}

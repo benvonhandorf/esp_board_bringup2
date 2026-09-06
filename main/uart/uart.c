@@ -26,7 +26,7 @@ static int uart_baud;
 static bool require_uart(void)
 {
     if (!uart_ready) {
-        diag_error("UART not initialized. Run 'uart init <tx> <rx> <baud>' first.");
+        STRRES_ERROR(STR_UART_NOT_INITIALIZED);
         return false;
     }
     return true;
@@ -35,37 +35,37 @@ static bool require_uart(void)
 int cmd_uart_init(int argc, char **argv)
 {
     if (argc < 4) {
-        diag_printf("Usage: init <tx> <rx> <baud>\n");
+        STRRES_PRINTF(STR_UART_USAGE_INIT);
         return -1;
     }
 
     int tx, rx, baud;
     if (cli_parse_int_arg(argv[1], &tx) < 0 || cli_parse_int_arg(argv[2], &rx) < 0) {
-        diag_error("TX and RX must be pin numbers");
+        STRRES_ERROR(STR_UART_PINS_NUMERIC);
         return -1;
     }
     if (cli_parse_int_arg(argv[3], &baud) < 0 || baud < 300 || baud > 5000000) {
-        diag_error("Baud rate must be 300-5000000");
+        STRRES_ERROR(STR_UART_BAUD_RANGE);
         return -1;
     }
 
     if (!GPIO_IS_VALID_OUTPUT_GPIO(tx)) {
-        diag_error("GPIO %d cannot drive TX on this chip", tx);
+        STRRES_ERROR(STR_UART_TX_NOT_OUTPUT_CAPABLE, tx);
         return -1;
     }
     if (!GPIO_IS_VALID_GPIO(rx)) {
-        diag_error("GPIO %d does not exist on this chip", rx);
+        STRRES_ERROR(STR_UART_PIN_ABSENT, rx);
         return -1;
     }
     if (tx == rx) {
-        diag_error("TX and RX cannot be the same pin");
+        STRRES_ERROR(STR_UART_PINS_DISTINCT);
         return -1;
     }
 
 #if CONFIG_ESP_CONSOLE_UART
     /* Guard the console's own pins when the console is a UART. */
     if (AUX_UART_PORT == CONFIG_ESP_CONSOLE_UART_NUM) {
-        diag_error("UART%d is the console port", AUX_UART_PORT);
+        STRRES_ERROR(STR_UART_IS_CONSOLE, AUX_UART_PORT);
         return -1;
     }
 #endif
@@ -87,20 +87,20 @@ int cmd_uart_init(int argc, char **argv)
 
     esp_err_t err = uart_driver_install(AUX_UART_PORT, RX_BUFFER_SIZE, 0, 0, NULL, 0);
     if (err != ESP_OK) {
-        diag_error("Installing UART%d driver: %s", AUX_UART_PORT, esp_err_to_name(err));
+        STRRES_ERROR(STR_UART_DRIVER_INSTALL_FAILED, AUX_UART_PORT, esp_err_to_name(err));
         return -1;
     }
 
     err = uart_param_config(AUX_UART_PORT, &config);
     if (err != ESP_OK) {
-        diag_error("Configuring UART%d: %s", AUX_UART_PORT, esp_err_to_name(err));
+        STRRES_ERROR(STR_UART_CONFIG_FAILED, AUX_UART_PORT, esp_err_to_name(err));
         uart_driver_delete(AUX_UART_PORT);
         return -1;
     }
 
     err = uart_set_pin(AUX_UART_PORT, tx, rx, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     if (err != ESP_OK) {
-        diag_error("Assigning UART%d pins: %s", AUX_UART_PORT, esp_err_to_name(err));
+        STRRES_ERROR(STR_UART_PIN_ASSIGN_FAILED, AUX_UART_PORT, esp_err_to_name(err));
         uart_driver_delete(AUX_UART_PORT);
         return -1;
     }
@@ -110,8 +110,7 @@ int cmd_uart_init(int argc, char **argv)
     uart_baud = baud;
     uart_ready = true;
 
-    diag_printf("UART%d ready: TX=%d, RX=%d, %d baud 8N1\n",
-              AUX_UART_PORT, tx, rx, baud);
+    STRRES_PRINTF(STR_UART_READY, AUX_UART_PORT, tx, rx, baud);
     return 0;
 }
 
@@ -167,7 +166,7 @@ int cmd_uart_send(int argc, char **argv)
         return -1;
     }
     if (argc < 2) {
-        diag_printf("Usage: send <data>\n");
+        STRRES_PRINTF(STR_UART_USAGE_SEND);
         return -1;
     }
 
@@ -180,7 +179,7 @@ int cmd_uart_send(int argc, char **argv)
 
     char *payload = malloc(len + 1);
     if (!payload) {
-        diag_error("Out of memory");
+        STRRES_ERROR(STR_UART_OUT_OF_MEMORY);
         return -1;
     }
 
@@ -196,13 +195,12 @@ int cmd_uart_send(int argc, char **argv)
 
     int written = uart_write_bytes(AUX_UART_PORT, payload, payload_len);
     if (written < 0) {
-        diag_error("Writing to UART%d failed", AUX_UART_PORT);
+        STRRES_ERROR(STR_UART_WRITE_FAILED, AUX_UART_PORT);
         free(payload);
         return -1;
     }
 
-    diag_printf("Sent %d byte%s on UART%d (TX=%d)\n",
-              written, written == 1 ? "" : "s", AUX_UART_PORT, uart_tx_pin);
+    STRRES_PRINTF(STR_UART_SENT, written, written == 1 ? "" : "s", AUX_UART_PORT, uart_tx_pin);
     free(payload);
     return 0;
 }
@@ -221,13 +219,11 @@ int cmd_uart_receive(int argc, char **argv)
                               pdMS_TO_TICKS(RECEIVE_TIMEOUT_MS));
 
     if (len <= 0) {
-        diag_printf("No data received on UART%d (RX=%d, %d baud)\n",
-                  AUX_UART_PORT, uart_rx_pin, uart_baud);
+        STRRES_PRINTF(STR_UART_NO_DATA, AUX_UART_PORT, uart_rx_pin, uart_baud);
         return 0;
     }
 
-    diag_printf("Received %d byte%s on UART%d (RX=%d):\n",
-              len, len == 1 ? "" : "s", AUX_UART_PORT, uart_rx_pin);
+    STRRES_PRINTF(STR_UART_RECEIVED, len, len == 1 ? "" : "s", AUX_UART_PORT, uart_rx_pin);
 
     /* Hex plus ASCII, because bringup traffic is rarely printable. */
     for (int offset = 0; offset < len; offset += 16) {

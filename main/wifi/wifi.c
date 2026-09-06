@@ -134,7 +134,7 @@ static const char *state_name(wifi_manager_state_t state)
 static bool require_radio_on(void)
 {
     if (wifi_manager_get_state() == WIFI_MANAGER_POWERED_OFF) {
-        diag_error("The radio is off. Run 'wifi on' first.");
+        STRRES_ERROR(STR_WIFI_RADIO_OFF);
         return false;
     }
     return true;
@@ -157,17 +157,17 @@ int cmd_wifi_scan(int argc, char **argv)
      * radio cannot sit on two channels. Say so rather than surfacing a bare
      * ESP_ERR_WIFI_MODE. */
     if (wifi_manager_get_state() == WIFI_MANAGER_AP_MODE) {
-        diag_error("Scanning requires station mode. Run 'wifi ap stop' first.");
+        STRRES_ERROR(STR_WIFI_SCAN_NEEDS_STATION);
         return -1;
     }
 
     wifi_ap_record_t *records = calloc(MAX_SCAN_RESULTS, sizeof(wifi_ap_record_t));
     if (!records) {
-        diag_error("Out of memory");
+        STRRES_ERROR(STR_WIFI_OUT_OF_MEMORY);
         return -1;
     }
 
-    diag_printf("Scanning...\n");
+    STRRES_PRINTF(STR_WIFI_SCANNING);
 
     /*
      * wifi_manager_scan(), not esp_wifi_scan_start(). wifi_manager's SCAN_DONE
@@ -179,27 +179,26 @@ int cmd_wifi_scan(int argc, char **argv)
     uint16_t count = 0;
     esp_err_t err = wifi_manager_scan(records, MAX_SCAN_RESULTS, &count);
     if (err != ESP_OK) {
-        diag_error("Scan failed: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_WIFI_SCAN_FAILED, esp_err_to_name(err));
         free(records);
         return -1;
     }
 
     if (count == 0) {
-        diag_printf("No access points found\n");
+        STRRES_PRINTF(STR_WIFI_NO_APS);
         free(records);
         return 0;
     }
 
-    diag_printf("%-32s %5s %4s  %-10s %s\n", "SSID", "RSSI", "CH", "SECURITY", "BSSID");
+    STRRES_PRINTF(STR_WIFI_SCAN_HEADER, "SSID", "RSSI", "CH", "SECURITY", "BSSID");
     for (uint16_t i = 0; i < count; i++) {
         const wifi_ap_record_t *ap = &records[i];
-        diag_printf("%-32s %4d %4d  %-10s %02x:%02x:%02x:%02x:%02x:%02x\n",
-                    (const char *)ap->ssid, ap->rssi, ap->primary,
-                    auth_mode_name(ap->authmode),
-                    ap->bssid[0], ap->bssid[1], ap->bssid[2],
-                    ap->bssid[3], ap->bssid[4], ap->bssid[5]);
+        STRRES_PRINTF(STR_WIFI_SCAN_ROW,
+                      (const char *)ap->ssid, ap->rssi, ap->primary,
+                      auth_mode_name(ap->authmode), ap->bssid[0], ap->bssid[1], ap->bssid[2],
+                      ap->bssid[3], ap->bssid[4], ap->bssid[5]);
     }
-    diag_printf("%u access point%s found\n", count, count == 1 ? "" : "s");
+    STRRES_PRINTF(STR_WIFI_SCAN_COUNT, count, count == 1 ? "" : "s");
 
     free(records);
     return 0;
@@ -212,7 +211,7 @@ int cmd_wifi_scan(int argc, char **argv)
 int cmd_wifi_connect(int argc, char **argv)
 {
     if (argc < 2 || argc > 3) {
-        diag_printf("Usage: wifi connect <SSID> [password]\n");
+        STRRES_PRINTF(STR_WIFI_USAGE_CONNECT);
         return -1;
     }
 
@@ -236,25 +235,25 @@ int cmd_wifi_connect(int argc, char **argv)
      */
     esp_err_t err = wifi_manager_add_known_network(ssid, password);
     if (err != ESP_OK) {
-        diag_error("Adding '%s': %s", ssid, esp_err_to_name(err));
+        STRRES_ERROR(STR_WIFI_ADD_FAILED, ssid, esp_err_to_name(err));
         return -1;
     }
 
     /* Station mode first: joining from AP mode has to drop the AP, since one
      * radio cannot serve two channels. */
     if (wifi_manager_get_state() == WIFI_MANAGER_AP_MODE) {
-        diag_printf("Stopping the access point to join as a station\n");
+        STRRES_PRINTF(STR_WIFI_STOPPING_AP);
         err = wifi_manager_start_station_mode();
         if (err != ESP_OK) {
-            diag_error("Switching to station mode: %s", esp_err_to_name(err));
+            STRRES_ERROR(STR_WIFI_STATION_MODE_FAILED, esp_err_to_name(err));
             return -1;
         }
     }
 
-    diag_printf("Joining '%s'...\n", ssid);
+    STRRES_PRINTF(STR_WIFI_JOINING, ssid);
     err = wifi_manager_scan_and_connect();
     if (err != ESP_OK) {
-        diag_error("Starting the connection: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_WIFI_CONNECT_START_FAILED, esp_err_to_name(err));
         return -1;
     }
 
@@ -266,15 +265,13 @@ int cmd_wifi_connect(int argc, char **argv)
         if (wifi_manager_get_state() == WIFI_MANAGER_STA_CONNECTED) {
             char ip[16] = "";
             wifi_manager_get_address(ip, sizeof(ip));
-            diag_printf("Joined '%s', address %s\n", ssid, ip[0] ? ip : "(pending)");
+            STRRES_PRINTF(STR_WIFI_JOINED, ssid, ip[0] ? ip : "(pending)");
             return 0;
         }
     }
 
-    diag_error("'%s' did not come up within %d s; state is %s. The manager is "
-               "still retrying -- see 'wifi status'.",
-               ssid, CONNECT_TIMEOUT_MS / 1000,
-               state_name(wifi_manager_get_state()));
+    STRRES_ERROR(STR_WIFI_JOIN_TIMEOUT,
+                 ssid, CONNECT_TIMEOUT_MS / 1000, state_name(wifi_manager_get_state()));
     return -1;
 }
 
@@ -285,9 +282,8 @@ int cmd_wifi_connect(int argc, char **argv)
 int cmd_wifi_ap(int argc, char **argv)
 {
     if (argc > 2) {
-        diag_printf("Usage: wifi ap [stop]\n");
-        diag_printf("The SSID and passphrase come from config.json; change them "
-                    "there or with POST /api/config.\n");
+        STRRES_PRINTF(STR_WIFI_USAGE_AP);
+        STRRES_PRINTF(STR_WIFI_AP_CONFIG_NOTE);
         return -1;
     }
 
@@ -297,26 +293,26 @@ int cmd_wifi_ap(int argc, char **argv)
 
     if (argc == 2) {
         if (strcasecmp(argv[1], "stop") != 0) {
-            diag_error("Unknown argument '%s'. Expected 'stop'.", argv[1]);
+            STRRES_ERROR(STR_WIFI_UNKNOWN_ARGUMENT_AP, argv[1]);
             return -1;
         }
         if (wifi_manager_get_state() != WIFI_MANAGER_AP_MODE) {
-            diag_printf("No access point is running\n");
+            STRRES_PRINTF(STR_WIFI_NO_AP);
             return 0;
         }
         esp_err_t err = wifi_manager_start_station_mode();
         if (err != ESP_OK) {
-            diag_error("Returning to station mode: %s", esp_err_to_name(err));
+            STRRES_ERROR(STR_WIFI_STATION_MODE_RETURN_FAILED, esp_err_to_name(err));
             return -1;
         }
-        diag_printf("Access point stopped; back in station mode\n");
+        STRRES_PRINTF(STR_WIFI_AP_STOPPED);
         wifi_manager_scan_and_connect();
         return 0;
     }
 
     esp_err_t err = wifi_manager_start_ap_mode();
     if (err != ESP_OK) {
-        diag_error("Starting the access point: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_WIFI_AP_START_FAILED, esp_err_to_name(err));
         return -1;
     }
     return cmd_wifi_status(0, NULL);
@@ -332,7 +328,7 @@ int cmd_wifi_off(int argc, char **argv)
     (void)argv;
 
     if (wifi_manager_get_state() == WIFI_MANAGER_POWERED_OFF) {
-        diag_printf("The radio is already off\n");
+        STRRES_PRINTF(STR_WIFI_RADIO_ALREADY_OFF);
         return 0;
     }
 
@@ -343,7 +339,7 @@ int cmd_wifi_off(int argc, char **argv)
 
     esp_err_t err = wifi_manager_stop();
     if (err != ESP_OK) {
-        diag_error("Stopping the radio: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_WIFI_RADIO_STOP_FAILED, esp_err_to_name(err));
         return -1;
     }
 
@@ -353,7 +349,7 @@ int cmd_wifi_off(int argc, char **argv)
      * that shows up in the readings. Being able to take the radio away and put
      * it back is what turns "the noise might be WiFi" into an answer.
      */
-    diag_printf("Radio off. The web console is unreachable until 'wifi on'.\n");
+    STRRES_PRINTF(STR_WIFI_RADIO_OFF_NOTE);
     return 0;
 }
 
@@ -363,18 +359,17 @@ int cmd_wifi_on(int argc, char **argv)
     (void)argv;
 
     if (wifi_manager_get_state() != WIFI_MANAGER_POWERED_OFF) {
-        diag_printf("The radio is already on (%s)\n",
-                    state_name(wifi_manager_get_state()));
+        STRRES_PRINTF(STR_WIFI_RADIO_ALREADY_ON, state_name(wifi_manager_get_state()));
         return 0;
     }
 
     esp_err_t err = wifi_manager_start_station_mode();
     if (err != ESP_OK) {
-        diag_error("Starting the radio: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_WIFI_RADIO_START_FAILED, esp_err_to_name(err));
         return -1;
     }
 
-    diag_printf("Radio on; rejoining\n");
+    STRRES_PRINTF(STR_WIFI_RADIO_ON);
     wifi_manager_scan_and_connect();
     return 0;
 }
@@ -388,14 +383,14 @@ static int report_ap_status(void)
     wifi_config_t config = {0};
     esp_err_t err = esp_wifi_get_config(WIFI_IF_AP, &config);
     if (err != ESP_OK) {
-        diag_error("Reading the AP config: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_WIFI_AP_CONFIG_READ_FAILED, esp_err_to_name(err));
         return -1;
     }
 
-    diag_printf("Mode:     access point\n");
-    diag_printf("SSID:     %.*s\n", config.ap.ssid_len, (const char *)config.ap.ssid);
-    diag_printf("Channel:  %u\n", config.ap.channel);
-    diag_printf("Security: %s\n", auth_mode_name(config.ap.authmode));
+    STRRES_PRINTF(STR_WIFI_INFO_MODE_AP);
+    STRRES_PRINTF(STR_WIFI_INFO_SSID_AP, config.ap.ssid_len, (const char *)config.ap.ssid);
+    STRRES_PRINTF(STR_WIFI_INFO_CHANNEL_AP, config.ap.channel);
+    STRRES_PRINTF(STR_WIFI_INFO_SECURITY_AP, auth_mode_name(config.ap.authmode));
 
     esp_netif_t *ap_netif = esp_netif_get_handle_from_ifkey("WIFI_AP_DEF");
     esp_netif_ip_info_t ip;
@@ -409,7 +404,7 @@ static int report_ap_status(void)
         return 0;
     }
 
-    diag_printf("Clients:  %d of %u\n", stations.num, config.ap.max_connection);
+    STRRES_PRINTF(STR_WIFI_INFO_CLIENTS, stations.num, config.ap.max_connection);
     if (stations.num == 0) {
         return 0;
     }
@@ -439,11 +434,10 @@ int cmd_wifi_status(int argc, char **argv)
     (void)argv;
 
     wifi_manager_state_t state = wifi_manager_get_state();
-    diag_printf("Manager:  %s\n", state_name(state));
+    STRRES_PRINTF(STR_WIFI_INFO_MANAGER, state_name(state));
 
     if (state == WIFI_MANAGER_POWERED_OFF) {
-        diag_printf("Switched off with 'wifi off'. Run 'wifi on' to power it "
-                    "back up.\n");
+        STRRES_PRINTF(STR_WIFI_INFO_SWITCHED_OFF);
         return 0;
     }
 
@@ -453,23 +447,22 @@ int cmd_wifi_status(int argc, char **argv)
 
     wifi_ap_record_t ap;
     if (esp_wifi_sta_get_ap_info(&ap) != ESP_OK) {
-        diag_printf("Not associated with an access point\n");
+        STRRES_PRINTF(STR_WIFI_INFO_NOT_ASSOCIATED);
         return 0;
     }
 
-    diag_printf("SSID:     %s\n", (const char *)ap.ssid);
-    diag_printf("BSSID:    %02x:%02x:%02x:%02x:%02x:%02x\n",
-                ap.bssid[0], ap.bssid[1], ap.bssid[2],
-                ap.bssid[3], ap.bssid[4], ap.bssid[5]);
-    diag_printf("RSSI:     %d dBm\n", ap.rssi);
-    diag_printf("Channel:  %d\n", ap.primary);
-    diag_printf("Security: %s\n", auth_mode_name(ap.authmode));
-    diag_printf("PHY:      %s\n", phy_mode_name(&ap));
-    diag_printf("Bandwidth: %s\n", bandwidth_name(ap.bandwidth));
+    STRRES_PRINTF(STR_WIFI_INFO_SSID, (const char *)ap.ssid);
+    STRRES_PRINTF(STR_WIFI_INFO_BSSID,
+                  ap.bssid[0], ap.bssid[1], ap.bssid[2], ap.bssid[3], ap.bssid[4], ap.bssid[5]);
+    STRRES_PRINTF(STR_WIFI_INFO_RSSI, ap.rssi);
+    STRRES_PRINTF(STR_WIFI_INFO_CHANNEL, ap.primary);
+    STRRES_PRINTF(STR_WIFI_INFO_SECURITY, auth_mode_name(ap.authmode));
+    STRRES_PRINTF(STR_WIFI_INFO_PHY, phy_mode_name(&ap));
+    STRRES_PRINTF(STR_WIFI_INFO_BANDWIDTH, bandwidth_name(ap.bandwidth));
 
     int8_t tx_power = 0;
     if (esp_wifi_get_max_tx_power(&tx_power) == ESP_OK) {
-        diag_printf("TX power: %d dBm (configured ceiling)\n", tx_power / 4);
+        STRRES_PRINTF(STR_WIFI_INFO_TX_POWER, tx_power / 4);
     }
 
     esp_netif_t *sta_netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
@@ -499,18 +492,18 @@ int cmd_wifi_netstats(int argc, char **argv)
     (void)argc;
     (void)argv;
 
-    diag_printf("Link:     rx %-8u drop %-6u err %lu\n",
-                lwip_stats.link.recv, lwip_stats.link.drop,
-                (unsigned long)proto_errors(&lwip_stats.link));
-    diag_printf("IP:       rx %-8u drop %-6u err %lu\n",
-                lwip_stats.ip.recv, lwip_stats.ip.drop,
-                (unsigned long)proto_errors(&lwip_stats.ip));
-    diag_printf("TCP:      rx %-8u drop %-6u err %lu\n",
-                lwip_stats.tcp.recv, lwip_stats.tcp.drop,
-                (unsigned long)proto_errors(&lwip_stats.tcp));
-    diag_printf("UDP:      rx %-8u drop %-6u err %lu\n",
-                lwip_stats.udp.recv, lwip_stats.udp.drop,
-                (unsigned long)proto_errors(&lwip_stats.udp));
+    STRRES_PRINTF(STR_WIFI_STATS_LINK,
+                  lwip_stats.link.recv, lwip_stats.link.drop,
+                  (unsigned long)proto_errors(&lwip_stats.link));
+    STRRES_PRINTF(STR_WIFI_STATS_IP,
+                  lwip_stats.ip.recv, lwip_stats.ip.drop,
+                  (unsigned long)proto_errors(&lwip_stats.ip));
+    STRRES_PRINTF(STR_WIFI_STATS_TCP,
+                  lwip_stats.tcp.recv, lwip_stats.tcp.drop,
+                  (unsigned long)proto_errors(&lwip_stats.tcp));
+    STRRES_PRINTF(STR_WIFI_STATS_UDP,
+                  lwip_stats.udp.recv, lwip_stats.udp.drop,
+                  (unsigned long)proto_errors(&lwip_stats.udp));
 
     return 0;
 }
@@ -527,8 +520,8 @@ int cmd_wifi_netstats(int argc, char **argv)
 void iperf_report_output(const iperf_report_t *report)
 {
     if (report->report_type == IPERF_REPORT_CONNECT_INFO) {
-        diag_printf("iperf: connected (socket %d)\n", report->connect_info.socket);
-        diag_printf("%8s %16s %16s\n", "Interval", "Transfer", "Bandwidth");
+        STRRES_PRINTF(STR_WIFI_IPERF_CONNECTED, report->connect_info.socket);
+        STRRES_PRINTF(STR_WIFI_IPERF_HEADER, "Interval", "Transfer", "Bandwidth");
         return;
     }
 
@@ -538,12 +531,9 @@ void iperf_report_output(const iperf_report_t *report)
     double bytes = (report->report_type == IPERF_REPORT_SUMMARY) ? traffic->total_transfer_bytes : traffic->period_bytes;
     double mbits_per_sec = seconds ? (bytes * 8.0) / ((double)seconds * 1000000.0) : 0.0;
 
-    diag_printf("%3lu-%3lu sec %12.2f KB %12.2f Mbit/s%s\n",
-                start_sec,
-                (unsigned long)traffic->end_sec,
-                bytes / 1024.0,
-                mbits_per_sec,
-                report->report_type == IPERF_REPORT_SUMMARY ? "  (total)" : "");
+    STRRES_PRINTF(STR_WIFI_IPERF_ROW,
+                  start_sec, (unsigned long)traffic->end_sec, bytes / 1024.0, mbits_per_sec,
+                  report->report_type == IPERF_REPORT_SUMMARY ? "  (total)" : "");
 }
 
 /* Parse "<host>:<port>", where the port is optional. */
@@ -594,19 +584,19 @@ static int parse_target(const char *text, esp_ip4_addr_t *addr, uint16_t *port)
 int cmd_wifi_iperf(int argc, char **argv)
 {
     if (argc < 2) {
-        diag_printf("Usage: wifi iperf <server>[:<port>] [continuous]\n");
-        diag_printf("       wifi iperf stop\n");
+        STRRES_PRINTF(STR_WIFI_USAGE_IPERF);
+        STRRES_PRINTF(STR_WIFI_USAGE_IPERF_STOP);
         return -1;
     }
 
     if (strcasecmp(argv[1], "stop") == 0) {
         if (running_iperf < 0) {
-            diag_error("No iperf test is running");
+            STRRES_ERROR(STR_WIFI_IPERF_NOT_RUNNING);
             return -1;
         }
         iperf_stop_instance(running_iperf);
         running_iperf = -1;
-        diag_printf("iperf stopped\n");
+        STRRES_PRINTF(STR_WIFI_IPERF_STOPPED);
         return 0;
     }
 
@@ -616,20 +606,19 @@ int cmd_wifi_iperf(int argc, char **argv)
 
     wifi_ap_record_t ap;
     if (esp_wifi_sta_get_ap_info(&ap) != ESP_OK) {
-        diag_error("Not associated with an access point. Run 'wifi connect "
-                   "<SSID> [password]' first.");
+        STRRES_ERROR(STR_WIFI_IPERF_NOT_ASSOCIATED);
         return -1;
     }
 
-    diag_printf("Link:     RSSI %d dBm, %s, %s\n",
-                ap.rssi, phy_mode_name(&ap), bandwidth_name(ap.bandwidth));
+    STRRES_PRINTF(STR_WIFI_IPERF_LINK,
+                  ap.rssi, phy_mode_name(&ap), bandwidth_name(ap.bandwidth));
 
     bool continuous = (argc > 2 && strcasecmp(argv[2], "continuous") == 0);
 
     esp_ip4_addr_t server = {0};
     uint16_t port = IPERF_DEFAULT_PORT;
     if (parse_target(argv[1], &server, &port) < 0) {
-        diag_error("Could not resolve '%s'. Expected <server>[:<port>]", argv[1]);
+        STRRES_ERROR(STR_WIFI_COULD_NOT_RESOLVE, argv[1]);
         return -1;
     }
 
@@ -652,12 +641,12 @@ int cmd_wifi_iperf(int argc, char **argv)
 
     running_iperf = iperf_start_instance(&config);
     if (running_iperf < 0) {
-        diag_error("Could not start iperf");
+        STRRES_ERROR(STR_WIFI_IPERF_START_FAILED);
         return -1;
     }
 
     if (continuous) {
-        diag_printf("Running continuously. Enter 'wifi iperf stop' to end the test.\n");
+        STRRES_PRINTF(STR_WIFI_IPERF_CONTINUOUS);
         return 0;
     }
 

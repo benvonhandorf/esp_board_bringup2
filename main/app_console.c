@@ -215,21 +215,37 @@ static const cli_group_t net_group = {
 /* ------------------------------------------------------------------ */
 
 static const cli_command_t wifi_commands[] = {
-    {"scan",     "",                              "List nearby access points",       cmd_wifi_scan},
-    {"connect",  "<SSID> [password]",             "Join an access point not in the configuration", cmd_wifi_connect},
-    {"ap",       "[stop]",                        "Host the configured access point, or stop it", cmd_wifi_ap},
-    {"status",   "",                              "Association, PHY, signal and addresses", cmd_wifi_status},
-    {"off",      "",                              "Power the radio down completely, for quiet measurements", cmd_wifi_off},
-    {"on",       "",                              "Power the radio back up and rejoin", cmd_wifi_on},
-    {"iperf",    "<server>[:<port>] [continuous]", "Measure throughput (iperf2 TCP)", cmd_wifi_iperf},
-    {"netstats", "",                              "Show lwIP protocol drop/error counters", cmd_wifi_netstats},
+    {"scan",     NULL, NULL, cmd_wifi_scan},
+    {"connect",  NULL, NULL, cmd_wifi_connect},
+    {"ap",       NULL, NULL, cmd_wifi_ap},
+    {"status",   NULL, NULL, cmd_wifi_status},
+    {"off",      NULL, NULL, cmd_wifi_off},
+    {"on",       NULL, NULL, cmd_wifi_on},
+    {"iperf",    NULL, NULL, cmd_wifi_iperf},
+    {"netstats", NULL, NULL, cmd_wifi_netstats},
 };
+
+/* Parallel to wifi_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t wifi_text[] = {
+    {STR_WIFI_SCAN_USAGE,      STR_WIFI_SCAN_HELP},
+    {STR_WIFI_CONNECT_USAGE,   STR_WIFI_CONNECT_HELP},
+    {STR_WIFI_AP_USAGE,        STR_WIFI_AP_HELP},
+    {STR_WIFI_STATUS_USAGE,    STR_WIFI_STATUS_HELP},
+    {STR_WIFI_OFF_USAGE,       STR_WIFI_OFF_HELP},
+    {STR_WIFI_ON_USAGE,        STR_WIFI_ON_HELP},
+    {STR_WIFI_IPERF_USAGE,     STR_WIFI_IPERF_HELP},
+    {STR_WIFI_NETSTATS_USAGE,  STR_WIFI_NETSTATS_HELP},
+};
+_Static_assert(ARRAY_COUNT(wifi_text) == ARRAY_COUNT(wifi_commands),
+               "wifi help ids and commands must be the same length");
 
 static const cli_group_t wifi_group = {
     .name = "wifi",
-    .help = "The radio itself: scanning, ad-hoc joins, throughput and turning it off",
     .commands = wifi_commands,
     .command_count = ARRAY_COUNT(wifi_commands),
+    .command_text = wifi_text,
+    .help_id = STR_WIFI_GROUP_HELP,
 };
 
 /* ------------------------------------------------------------------ */
@@ -237,32 +253,57 @@ static const cli_group_t wifi_group = {
 /* ------------------------------------------------------------------ */
 
 static const cli_command_t gpio_commands[] = {
-    {"set",    "<pin> <state>",             "Drive pin(s) high or low",                 cmd_gpio_set},
-    {"read",   "<pin> [up|down|none]",      "Read the logic level of pin(s)",           cmd_gpio_read},
-    {"aread",  "<pin>",                     "Read pin(s) with the ADC",                 cmd_gpio_aread},
-    {"blink",  "<pin> <count> [ms]",        "Blink pin(s) for visual identification",   cmd_gpio_blink},
-    {"short",  "<pin>",                     "Find pins shorted together, adjacent pairs first", cmd_gpio_short},
-    {"rc",     "<pin> [ref <pin> <kohms>]", "Measure each net's pull-up strength and capacitance", cmd_gpio_rc},
-    {"survey", "[pin]",                     "Census every pin: pull-ups, driven lines, and what they suggest", cmd_gpio_survey},
+    {"set",    NULL, NULL, cmd_gpio_set},
+    {"read",   NULL, NULL, cmd_gpio_read},
+    {"aread",  NULL, NULL, cmd_gpio_aread},
+    {"blink",  NULL, NULL, cmd_gpio_blink},
+    {"short",  NULL, NULL, cmd_gpio_short},
+    {"rc",     NULL, NULL, cmd_gpio_rc},
+    {"survey", NULL, NULL, cmd_gpio_survey},
 };
+
+/* Parallel to gpio_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t gpio_text[] = {
+    {STR_GPIO_SET_USAGE,     STR_GPIO_SET_HELP},
+    {STR_GPIO_READ_USAGE,    STR_GPIO_READ_HELP},
+    {STR_GPIO_AREAD_USAGE,   STR_GPIO_AREAD_HELP},
+    {STR_GPIO_BLINK_USAGE,   STR_GPIO_BLINK_HELP},
+    {STR_GPIO_SHORT_USAGE,   STR_GPIO_SHORT_HELP},
+    {STR_GPIO_RC_USAGE,      STR_GPIO_RC_HELP},
+    {STR_GPIO_SURVEY_USAGE,  STR_GPIO_SURVEY_HELP},
+};
+_Static_assert(ARRAY_COUNT(gpio_text) == ARRAY_COUNT(gpio_commands),
+               "gpio help ids and commands must be the same length");
 
 static const cli_group_t gpio_group = {
     .name = "gpio",
-    .help = "Digital and analog pin access. <pin> accepts 4, 0-5 or 1,4,8-10",
     .commands = gpio_commands,
     .command_count = ARRAY_COUNT(gpio_commands),
+    .command_text = gpio_text,
+    .help_id = STR_GPIO_GROUP_HELP,
 };
 
 static const cli_command_t pwm_commands[] = {
-    {"set",  "<pin> <freq> <duty>", "Drive a pin with PWM (duty 0-100%)", cmd_pwm_set},
-    {"stop", "<pin>",               "Stop PWM and release the channel",   cmd_pwm_stop},
+    {"set",  NULL, NULL, cmd_pwm_set},
+    {"stop", NULL, NULL, cmd_pwm_stop},
 };
+
+/* Parallel to pwm_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t pwm_text[] = {
+    {STR_GPIO_PWM_SET_USAGE,   STR_GPIO_PWM_SET_HELP},
+    {STR_GPIO_PWM_STOP_USAGE,  STR_GPIO_PWM_STOP_HELP},
+};
+_Static_assert(ARRAY_COUNT(pwm_text) == ARRAY_COUNT(pwm_commands),
+               "gpio-pwm help ids and commands must be the same length");
 
 static const cli_group_t pwm_group = {
     .name = "gpio-pwm",
-    .help = "Hardware PWM via LEDC",
     .commands = pwm_commands,
     .command_count = ARRAY_COUNT(pwm_commands),
+    .command_text = pwm_text,
+    .help_id = STR_GPIO_PWM_GROUP_HELP,
 };
 
 /* ------------------------------------------------------------------ */
@@ -513,16 +554,27 @@ static const cli_group_t loadcell_group = {
 /* ------------------------------------------------------------------ */
 
 static const cli_command_t uart_commands[] = {
-    {"init",    "<tx> <rx> <baud>", "Initialize the auxiliary UART",        cmd_uart_init},
-    {"send",    "<data>",           "Transmit a string",                    cmd_uart_send},
-    {"receive", "",                 "Show data received since the last call", cmd_uart_receive},
+    {"init",    NULL, NULL, cmd_uart_init},
+    {"send",    NULL, NULL, cmd_uart_send},
+    {"receive", NULL, NULL, cmd_uart_receive},
 };
+
+/* Parallel to uart_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t uart_text[] = {
+    {STR_UART_INIT_USAGE,     STR_UART_INIT_HELP},
+    {STR_UART_SEND_USAGE,     STR_UART_SEND_HELP},
+    {STR_UART_RECEIVE_USAGE,  STR_UART_RECEIVE_HELP},
+};
+_Static_assert(ARRAY_COUNT(uart_text) == ARRAY_COUNT(uart_commands),
+               "uart help ids and commands must be the same length");
 
 static const cli_group_t uart_group = {
     .name = "uart",
-    .help = "Auxiliary UART (separate from this console)",
     .commands = uart_commands,
     .command_count = ARRAY_COUNT(uart_commands),
+    .command_text = uart_text,
+    .help_id = STR_UART_GROUP_HELP,
 };
 
 /* ------------------------------------------------------------------ */
@@ -530,17 +582,29 @@ static const cli_group_t uart_group = {
 /* ------------------------------------------------------------------ */
 
 static const cli_command_t spi_commands[] = {
-    {"bus",   "<clk> <mosi> <miso> [cs]", "Initialize the SPI bus",        cmd_spi_bus},
-    {"read",  "<addr> <len>",             "Read bytes from an address",    cmd_spi_read},
-    {"write", "<addr> <data>...",         "Write bytes to an address",     cmd_spi_write},
-    {"free",  "",                         "Release the SPI host so another module can use it", cmd_spi_free},
+    {"bus",   NULL, NULL, cmd_spi_bus},
+    {"read",  NULL, NULL, cmd_spi_read},
+    {"write", NULL, NULL, cmd_spi_write},
+    {"free",  NULL, NULL, cmd_spi_free},
 };
+
+/* Parallel to spi_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t spi_text[] = {
+    {STR_SPI_BUS_USAGE,    STR_SPI_BUS_HELP},
+    {STR_SPI_READ_USAGE,   STR_SPI_READ_HELP},
+    {STR_SPI_WRITE_USAGE,  STR_SPI_WRITE_HELP},
+    {STR_SPI_FREE_USAGE,   STR_SPI_FREE_HELP},
+};
+_Static_assert(ARRAY_COUNT(spi_text) == ARRAY_COUNT(spi_commands),
+               "spi help ids and commands must be the same length");
 
 static const cli_group_t spi_group = {
     .name = "spi",
-    .help = "SPI master",
     .commands = spi_commands,
     .command_count = ARRAY_COUNT(spi_commands),
+    .command_text = spi_text,
+    .help_id = STR_SPI_GROUP_HELP,
 };
 
 /* ------------------------------------------------------------------ */
@@ -714,14 +778,23 @@ static const cli_group_t sd_group = {
 /* ------------------------------------------------------------------ */
 
 static const cli_command_t touch_commands[] = {
-    {"watch", "<pads> [seconds]", "Calibrate touch pads and report all of them, live", cmd_touch_watch},
+    {"watch", NULL, NULL, cmd_touch_watch},
 };
+
+/* Parallel to touch_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t touch_text[] = {
+    {STR_TOUCH_WATCH_USAGE,  STR_TOUCH_WATCH_HELP},
+};
+_Static_assert(ARRAY_COUNT(touch_text) == ARRAY_COUNT(touch_commands),
+               "touch help ids and commands must be the same length");
 
 static const cli_group_t touch_group = {
     .name = "touch",
-    .help = "Capacitive touch pads: calibrate a set and watch them live",
     .commands = touch_commands,
     .command_count = ARRAY_COUNT(touch_commands),
+    .command_text = touch_text,
+    .help_id = STR_TOUCH_GROUP_HELP,
 };
 
 /* ------------------------------------------------------------------ */

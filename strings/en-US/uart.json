@@ -1,0 +1,33 @@
+{
+  "section": "uart",
+  "strings": {
+    "baud_range": "Baud rate must be 300-5000000",
+    "config_failed": "Configuring UART%d: %s",
+    "driver_install_failed": "Installing UART%d driver: %s",
+    "group.help": "Auxiliary UART (separate from this console)",
+    "init.help": "Initialize the auxiliary UART",
+    "init.usage": "<tx> <rx> <baud>",
+    "is_console": "UART%d is the console port",
+    "no_data": "No data received on UART%d (RX=%d, %d baud)\n",
+    "not_initialized": {
+      "text": "UART not initialized. Run 'uart init <tx> <rx> <baud>' first.",
+      "pin": true
+    },
+    "out_of_memory": "Out of memory",
+    "pin_absent": "GPIO %d does not exist on this chip",
+    "pin_assign_failed": "Assigning UART%d pins: %s",
+    "pins_distinct": "TX and RX cannot be the same pin",
+    "pins_numeric": "TX and RX must be pin numbers",
+    "ready": "UART%d ready: TX=%d, RX=%d, %d baud 8N1\n",
+    "receive.help": "Show data received since the last call",
+    "receive.usage": "",
+    "received": "Received %d byte%s on UART%d (RX=%d):\n",
+    "send.help": "Transmit a string",
+    "send.usage": "<data>",
+    "sent": "Sent %d byte%s on UART%d (TX=%d)\n",
+    "tx_not_output_capable": "GPIO %d cannot drive TX on this chip",
+    "usage_init": "Usage: init <tx> <rx> <baud>\n",
+    "usage_send": "Usage: send <data>\n",
+    "write_failed": "Writing to UART%d failed"
+  }
+}

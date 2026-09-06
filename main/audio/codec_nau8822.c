@@ -774,21 +774,7 @@ static strres_id_t input_name_id(void)
     }
 }
 
-/*
- * The input name appears inside larger sentences as a %s, so unlike almost
- * everything else here it has to exist as a value rather than only reach a
- * printf. strres_copy() is the API for exactly that: it writes into a buffer
- * the caller already owns and hands back nothing to free.
- */
-#define INPUT_NAME_LEN 48
 
-static const char *input_name(char *buf, size_t len)
-{
-    if (strres_copy(input_name_id(), buf, len) < 0) {
-        snprintf(buf, len, "[str:%04X]", (unsigned)input_name_id());
-    }
-    return buf;
-}
 
 /* The gain actually programmed, which is not what was asked for: both paths
  * quantise, one to 0.75 dB and the other to 3. */
@@ -811,9 +797,9 @@ static void nau8822_status(void)
     if (input_path == INPUT_OFF) {
         STRRES_PRINTF(STR_AUDIO_NAU8822_STATUS_INPUT_OFF);
     } else {
-        char name[INPUT_NAME_LEN];
+        char name[APP_STR_LEN];
         STRRES_PRINTF(STR_AUDIO_NAU8822_STATUS_INPUT,
-                      input_name(name, sizeof(name)), input_gain_db());
+                      app_str(input_name_id(), name, sizeof(name)), input_gain_db());
     }
 
     if (readback_works) {
@@ -935,8 +921,8 @@ int cmd_nau8822_input(int argc, char **argv)
     }
 
     if (argc < 2) {
-        char name[INPUT_NAME_LEN];
-        STRRES_PRINTF(STR_AUDIO_NAU8822_INPUT_IS, input_name(name, sizeof(name)));
+        char name[APP_STR_LEN];
+        STRRES_PRINTF(STR_AUDIO_NAU8822_INPUT_IS, app_str(input_name_id(), name, sizeof(name)));
         if (input_path != INPUT_OFF) {
             STRRES_PRINTF(STR_AUDIO_NAU8822_GAIN_IS, input_gain_db());
         }
@@ -989,8 +975,8 @@ int cmd_nau8822_input(int argc, char **argv)
         return -1;
     }
 
-    char name[INPUT_NAME_LEN];
-    STRRES_PRINTF(STR_AUDIO_NAU8822_INPUT_SET, input_name(name, sizeof(name)));
+    char name[APP_STR_LEN];
+    STRRES_PRINTF(STR_AUDIO_NAU8822_INPUT_SET, app_str(input_name_id(), name, sizeof(name)));
     if (input_path != INPUT_OFF) {
         STRRES_PRINTF(STR_AUDIO_NAU8822_GAIN_SET, input_gain_db());
 

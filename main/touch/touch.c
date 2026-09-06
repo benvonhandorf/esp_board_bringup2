@@ -60,10 +60,10 @@ static int validate_pads(const int *requested, int requested_count, pad_t *pads)
         }
 
         if (duplicate) {
-            diag_printf("Skipping GPIO %d: listed more than once\n", requested[i]);
+            STRRES_PRINTF(STR_TOUCH_SKIP_DUPLICATE, requested[i]);
         } else if (requested[i] < SOC_TOUCH_MIN_CHAN_ID || requested[i] > SOC_TOUCH_MAX_CHAN_ID) {
-            diag_printf("Skipping GPIO %d: not a touch-capable pin (GPIO%d-%d only)\n",
-                      requested[i], SOC_TOUCH_MIN_CHAN_ID, SOC_TOUCH_MAX_CHAN_ID);
+            STRRES_PRINTF(STR_TOUCH_SKIP_NOT_TOUCH,
+                          requested[i], SOC_TOUCH_MIN_CHAN_ID, SOC_TOUCH_MAX_CHAN_ID);
         } else {
             pads[count].pin = requested[i];
             pads[count].handle = NULL;
@@ -106,17 +106,15 @@ static void sample_all(pad_t *pads, int count, int ticks, bool track_noise)
 int cmd_touch_watch(int argc, char **argv)
 {
     if (argc < 2) {
-        diag_printf("Usage: watch <pads> [seconds]\n");
-        diag_printf("<pads> is a single GPIO, a range, or a comma separated list, "
-                   "e.g. '1,3,5-7'. Touch-capable pins on this chip are "
-                   "GPIO%d-%d.\n", SOC_TOUCH_MIN_CHAN_ID, SOC_TOUCH_MAX_CHAN_ID);
+        STRRES_PRINTF(STR_TOUCH_USAGE_WATCH);
+        STRRES_PRINTF(STR_TOUCH_USAGE_WATCH_PADS, SOC_TOUCH_MIN_CHAN_ID, SOC_TOUCH_MAX_CHAN_ID);
         return -1;
     }
 
     int *requested = NULL;
     int requested_count = 0;
     if (cli_parse_pin_list(argv[1], &requested, &requested_count) < 0) {
-        diag_error("Invalid pin specification: %s", argv[1]);
+        STRRES_ERROR(STR_TOUCH_PIN_SPEC_INVALID, argv[1]);
         return -1;
     }
 
@@ -125,20 +123,19 @@ int cmd_touch_watch(int argc, char **argv)
     free(requested);
 
     if (count == 0) {
-        diag_error("No valid touch pins given");
+        STRRES_ERROR(STR_TOUCH_NO_VALID_PINS);
         return -1;
     }
 
     double seconds = DEFAULT_WATCH_SECONDS;
     if (argc > 2) {
         if (argc > 3) {
-            diag_error("Unexpected argument '%s'", argv[3]);
+            STRRES_ERROR(STR_TOUCH_UNEXPECTED_ARGUMENT, argv[3]);
             return -1;
         }
         if (cli_parse_double_arg(argv[2], &seconds) < 0 || seconds <= 0.0 ||
             seconds > MAX_WATCH_SECONDS) {
-            diag_error("Duration must be greater than 0 and at most %.0f seconds",
-                     MAX_WATCH_SECONDS);
+            STRRES_ERROR(STR_TOUCH_DURATION_RANGE, MAX_WATCH_SECONDS);
             return -1;
         }
     }
@@ -154,7 +151,7 @@ int cmd_touch_watch(int argc, char **argv)
     touch_sensor_handle_t sens = NULL;
     esp_err_t err = touch_sensor_new_controller(&sens_cfg, &sens);
     if (err != ESP_OK) {
-        diag_error("Creating the touch controller: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_TOUCH_CONTROLLER_CREATE_FAILED, esp_err_to_name(err));
         return -1;
     }
 
@@ -180,31 +177,31 @@ int cmd_touch_watch(int argc, char **argv)
     for (int i = 0; i < count; i++) {
         err = touch_sensor_new_channel(sens, pads[i].pin, &chan_cfg, &pads[i].handle);
         if (err != ESP_OK) {
-            diag_error("Allocating channel for GPIO %d: %s", pads[i].pin,
-                     esp_err_to_name(err));
+            STRRES_ERROR(STR_TOUCH_CHANNEL_ALLOC_FAILED,
+                         pads[i].pin, esp_err_to_name(err));
             goto cleanup;
         }
     }
 
     touch_sensor_filter_config_t filter_cfg = TOUCH_SENSOR_DEFAULT_FILTER_CONFIG();
     if (touch_sensor_config_filter(sens, &filter_cfg) != ESP_OK) {
-        diag_error("Configuring the touch filter failed");
+        STRRES_ERROR(STR_TOUCH_FILTER_CONFIG_FAILED);
         goto cleanup;
     }
 
     if (touch_sensor_enable(sens) != ESP_OK) {
-        diag_error("Enabling the touch sensor failed");
+        STRRES_ERROR(STR_TOUCH_ENABLE_FAILED);
         goto cleanup;
     }
     if (touch_sensor_start_continuous_scanning(sens) != ESP_OK) {
-        diag_error("Starting continuous scanning failed");
+        STRRES_ERROR(STR_TOUCH_SCAN_START_FAILED);
         touch_sensor_disable(sens);
         goto cleanup;
     }
     scanning = true;
 
-    diag_printf("Calibrating %d pad%s -- do not touch any of them...\n", count,
-              count == 1 ? "" : "s");
+    STRRES_PRINTF(STR_TOUCH_CALIBRATING,
+                  count, count == 1 ? "" : "s");
     /* Let the hardware's own benchmark filter settle before trusting it. */
     vTaskDelay(pdMS_TO_TICKS(300));
 
@@ -215,14 +212,12 @@ int cmd_touch_watch(int argc, char **argv)
     }
     sample_all(pads, count, cal_ticks, true);
 
-    diag_printf("Baseline:");
+    STRRES_PRINTF(STR_TOUCH_BASELINE_HEADER);
     for (int i = 0; i < count; i++) {
         diag_printf("  GPIO%-2d %6.0f (+/-%.0f)", pads[i].pin, pads[i].baseline,
                   pads[i].noise);
     }
-    diag_printf("\n\nWatching for %.0f s. Every pad is reported each tick, so "
-              "a reacting neighbour is as visible as the one you touch.\n",
-              seconds);
+    STRRES_PRINTF(STR_TOUCH_WATCHING, seconds);
 
     int ticks = (int)(seconds / TICK_SECONDS);
     for (int t = 0; t < ticks; t++) {
@@ -246,11 +241,11 @@ int cmd_touch_watch(int argc, char **argv)
         vTaskDelay(pdMS_TO_TICKS((int)(TICK_SECONDS * 1000)));
     }
 
-    diag_printf("\nPeak deflection from baseline over the run:\n");
+    STRRES_PRINTF(STR_TOUCH_PEAK_HEADER);
     for (int i = 0; i < count; i++) {
-        diag_printf("  GPIO%-2d  peak %5.0f  (%.1fx calibration noise)\n", pads[i].pin,
-                  pads[i].peak_delta,
-                  pads[i].noise > 0.0 ? pads[i].peak_delta / pads[i].noise : 0.0);
+        STRRES_PRINTF(STR_TOUCH_PEAK_ROW,
+                      pads[i].pin, pads[i].peak_delta,
+                      pads[i].noise > 0.0 ? pads[i].peak_delta / pads[i].noise : 0.0);
     }
 
     ret = 0;
@@ -275,9 +270,7 @@ int cmd_touch_watch(int argc, char **argv)
 {
     (void)argc;
     (void)argv;
-    diag_error("%s has no capacitive touch sensor peripheral supported by this "
-             "driver. Rebuild for a chip with touch hardware version 2 or "
-             "later, e.g. 'idf.py set-target esp32s3'.", CONFIG_IDF_TARGET);
+    STRRES_ERROR(STR_TOUCH_NO_TOUCH_PERIPHERAL, CONFIG_IDF_TARGET);
     return -1;
 }
 

@@ -33,6 +33,7 @@ endif()
 #
 idf_component_register(
     SRCS         "main.c"
+                 "app_bringup.c"
                  "config_reader.c"
                  "app_console.c"
                  "app_http.c"

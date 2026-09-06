@@ -28,11 +28,11 @@ static uint32_t adc_configured_channels[SOC_ADC_PERIPH_NUM];
 static bool check_pin(int pin, bool need_output)
 {
     if (!GPIO_IS_VALID_GPIO(pin)) {
-        diag_error("GPIO %d does not exist on this chip", pin);
+        STRRES_ERROR(STR_GPIO_PIN_ABSENT, pin);
         return false;
     }
     if (need_output && !GPIO_IS_VALID_OUTPUT_GPIO(pin)) {
-        diag_error("GPIO %d is input-only on this chip", pin);
+        STRRES_ERROR(STR_GPIO_PIN_INPUT_ONLY, pin);
         return false;
     }
     return true;
@@ -72,7 +72,7 @@ static esp_err_t configure_pin(int pin, gpio_mode_t mode)
 int cmd_gpio_set(int argc, char **argv)
 {
     if (argc < 3) {
-        diag_printf("Usage: set <pin> <state>\n");
+        STRRES_PRINTF(STR_GPIO_USAGE_SET);
         return -1;
     }
 
@@ -84,14 +84,14 @@ int cmd_gpio_set(int argc, char **argv)
                strcasecmp(argv[2], "low") == 0) {
         state = 0;
     } else {
-        diag_error("Invalid state '%s'. Use true/false, 1/0 or high/low", argv[2]);
+        STRRES_ERROR(STR_GPIO_STATE_INVALID, argv[2]);
         return -1;
     }
 
     int *pins = NULL;
     int count = 0;
     if (cli_parse_pin_list(argv[1], &pins, &count) < 0) {
-        diag_error("Invalid pin specification: %s", argv[1]);
+        STRRES_ERROR(STR_GPIO_PIN_SPEC_INVALID, argv[1]);
         return -1;
     }
 
@@ -106,7 +106,7 @@ int cmd_gpio_set(int argc, char **argv)
 
         esp_err_t err = configure_pin(pin, GPIO_MODE_OUTPUT);
         if (err != ESP_OK) {
-            diag_error("Configuring GPIO %d: %s", pin, esp_err_to_name(err));
+            STRRES_ERROR(STR_GPIO_CONFIGURE_FAILED, pin, esp_err_to_name(err));
             failures++;
             continue;
         }
@@ -122,7 +122,7 @@ int cmd_gpio_set(int argc, char **argv)
 int cmd_gpio_read(int argc, char **argv)
 {
     if (argc < 2) {
-        diag_printf("Usage: read <pin> [up|down|none]\n");
+        STRRES_PRINTF(STR_GPIO_USAGE_READ);
         return -1;
     }
 
@@ -141,7 +141,7 @@ int cmd_gpio_read(int argc, char **argv)
         } else if (strcasecmp(argv[2], "none") == 0) {
             pull = PULL_NONE;
         } else {
-            diag_error("Pull must be 'up', 'down' or 'none', not '%s'", argv[2]);
+            STRRES_ERROR(STR_GPIO_PULL_INVALID, argv[2]);
             return -1;
         }
     }
@@ -149,7 +149,7 @@ int cmd_gpio_read(int argc, char **argv)
     int *pins = NULL;
     int count = 0;
     if (cli_parse_pin_list(argv[1], &pins, &count) < 0) {
-        diag_error("Invalid pin specification: %s", argv[1]);
+        STRRES_ERROR(STR_GPIO_PIN_SPEC_INVALID, argv[1]);
         return -1;
     }
 
@@ -164,7 +164,7 @@ int cmd_gpio_read(int argc, char **argv)
 
         esp_err_t err = configure_pin_pull(pin, GPIO_MODE_INPUT, pull);
         if (err != ESP_OK) {
-            diag_error("Configuring GPIO %d: %s", pin, esp_err_to_name(err));
+            STRRES_ERROR(STR_GPIO_CONFIGURE_FAILED, pin, esp_err_to_name(err));
             failures++;
             continue;
         }
@@ -231,14 +231,14 @@ static esp_err_t prepare_adc(adc_unit_t unit, adc_channel_t channel)
 int cmd_gpio_aread(int argc, char **argv)
 {
     if (argc < 2) {
-        diag_printf("Usage: aread <pin>\n");
+        STRRES_PRINTF(STR_GPIO_USAGE_AREAD);
         return -1;
     }
 
     int *pins = NULL;
     int count = 0;
     if (cli_parse_pin_list(argv[1], &pins, &count) < 0) {
-        diag_error("Invalid pin specification: %s", argv[1]);
+        STRRES_ERROR(STR_GPIO_PIN_SPEC_INVALID, argv[1]);
         return -1;
     }
 
@@ -249,15 +249,15 @@ int cmd_gpio_aread(int argc, char **argv)
         adc_unit_t unit;
         adc_channel_t channel;
         if (adc_oneshot_io_to_channel(pin, &unit, &channel) != ESP_OK) {
-            diag_error("GPIO %d is not an ADC-capable pin", pin);
+            STRRES_ERROR(STR_GPIO_PIN_NOT_ADC, pin);
             failures++;
             continue;
         }
 
         esp_err_t err = prepare_adc(unit, channel);
         if (err != ESP_OK) {
-            diag_error("Preparing ADC%d channel %d for GPIO %d: %s",
-                     unit + 1, channel, pin, esp_err_to_name(err));
+            STRRES_ERROR(STR_GPIO_ADC_PREPARE_FAILED,
+                         unit + 1, channel, pin, esp_err_to_name(err));
             failures++;
             continue;
         }
@@ -265,7 +265,7 @@ int cmd_gpio_aread(int argc, char **argv)
         int raw = 0;
         err = adc_oneshot_read(adc_units[unit], channel, &raw);
         if (err != ESP_OK) {
-            diag_error("Reading GPIO %d: %s", pin, esp_err_to_name(err));
+            STRRES_ERROR(STR_GPIO_ADC_READ_FAILED, pin, esp_err_to_name(err));
             failures++;
             continue;
         }
@@ -273,11 +273,9 @@ int cmd_gpio_aread(int argc, char **argv)
         int millivolts = 0;
         if (adc_cali[unit] &&
             adc_cali_raw_to_voltage(adc_cali[unit], raw, &millivolts) == ESP_OK) {
-            diag_printf("%d: %d raw, %d mV (ADC%d channel %d)\n",
-                      pin, raw, millivolts, unit + 1, channel);
+            STRRES_PRINTF(STR_GPIO_AREAD_CALIBRATED, pin, raw, millivolts, unit + 1, channel);
         } else {
-            diag_printf("%d: %d raw (ADC%d channel %d, uncalibrated)\n",
-                      pin, raw, unit + 1, channel);
+            STRRES_PRINTF(STR_GPIO_AREAD_UNCALIBRATED, pin, raw, unit + 1, channel);
         }
     }
 
@@ -288,26 +286,26 @@ int cmd_gpio_aread(int argc, char **argv)
 int cmd_gpio_blink(int argc, char **argv)
 {
     if (argc < 3) {
-        diag_printf("Usage: blink <pin> <count> [period_ms]\n");
+        STRRES_PRINTF(STR_GPIO_USAGE_BLINK);
         return -1;
     }
 
     int count;
     if (cli_parse_int_arg(argv[2], &count) < 0 || count < 1 || count > MAX_BLINK_COUNT) {
-        diag_error("Count must be 1-%d", MAX_BLINK_COUNT);
+        STRRES_ERROR(STR_GPIO_COUNT_RANGE, MAX_BLINK_COUNT);
         return -1;
     }
 
     int period = DEFAULT_BLINK_PERIOD_MS;
     if (argc > 3 && (cli_parse_int_arg(argv[3], &period) < 0 || period < 10 || period > 10000)) {
-        diag_error("Period must be 10-10000 ms");
+        STRRES_ERROR(STR_GPIO_PERIOD_RANGE);
         return -1;
     }
 
     int *pins = NULL;
     int pin_count = 0;
     if (cli_parse_pin_list(argv[1], &pins, &pin_count) < 0) {
-        diag_error("Invalid pin specification: %s", argv[1]);
+        STRRES_ERROR(STR_GPIO_PIN_SPEC_INVALID, argv[1]);
         return -1;
     }
 
@@ -319,13 +317,13 @@ int cmd_gpio_blink(int argc, char **argv)
         }
         esp_err_t err = configure_pin(pins[i], GPIO_MODE_OUTPUT);
         if (err != ESP_OK) {
-            diag_error("Configuring GPIO %d: %s", pins[i], esp_err_to_name(err));
+            STRRES_ERROR(STR_GPIO_CONFIGURE_FAILED, pins[i], esp_err_to_name(err));
             free(pins);
             return -1;
         }
     }
 
-    diag_printf("Blinking %d pin(s) %d times at %d ms...\n", pin_count, count, period);
+    STRRES_PRINTF(STR_GPIO_BLINKING, pin_count, count, period);
 
     for (int i = 0; i < count; i++) {
         for (int level = 1; level >= 0; level--) {
@@ -337,7 +335,7 @@ int cmd_gpio_blink(int argc, char **argv)
         }
     }
 
-    diag_printf("Blink complete\n");
+    STRRES_PRINTF(STR_GPIO_BLINK_COMPLETE);
     free(pins);
     return 0;
 }
@@ -364,25 +362,25 @@ int cmd_gpio_blink(int argc, char **argv)
  * so esp_gpio_is_reserved() catches them along with any peripheral currently
  * holding a pin. The console pins it does not track, so they are named here.
  */
-bool app_pin_is_drivable(int pin, const char **why)
+bool app_pin_is_drivable(int pin, strres_id_t *why)
 {
     if (!GPIO_IS_VALID_OUTPUT_GPIO(pin)) {
-        *why = "input-only";
+        *why = STR_GPIO_WHY_INPUT_ONLY;
         return false;
     }
     if (esp_gpio_is_reserved(BIT64(pin))) {
-        *why = "reserved for flash, PSRAM or a peripheral in use";
+        *why = STR_GPIO_WHY_RESERVED;
         return false;
     }
 #if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG && defined(USB_INT_PHY0_DM_GPIO_NUM)
     if (pin == USB_INT_PHY0_DM_GPIO_NUM || pin == USB_INT_PHY0_DP_GPIO_NUM) {
-        *why = "USB console";
+        *why = STR_GPIO_WHY_USB_CONSOLE;
         return false;
     }
 #endif
 #ifdef CONFIG_ESP_CONSOLE_UART_TX_GPIO
     if (pin == CONFIG_ESP_CONSOLE_UART_TX_GPIO || pin == CONFIG_ESP_CONSOLE_UART_RX_GPIO) {
-        *why = "console UART";
+        *why = STR_GPIO_WHY_CONSOLE_UART;
         return false;
     }
 #endif
@@ -421,14 +419,14 @@ static void probe_from(const int *pins, int count, int driven, uint64_t *mask)
 int cmd_gpio_short(int argc, char **argv)
 {
     if (argc < 2) {
-        diag_printf("Usage: short <pin>\n");
+        STRRES_PRINTF(STR_GPIO_USAGE_SHORT);
         return -1;
     }
 
     int *requested = NULL;
     int requested_count = 0;
     if (cli_parse_pin_list(argv[1], &requested, &requested_count) < 0) {
-        diag_error("Invalid pin specification: %s", argv[1]);
+        STRRES_ERROR(STR_GPIO_PIN_SPEC_INVALID, argv[1]);
         return -1;
     }
 
@@ -436,13 +434,13 @@ int cmd_gpio_short(int argc, char **argv)
      * silently testing a smaller set than was asked for. */
     int *pins = calloc((size_t)requested_count, sizeof(int));
     if (!pins) {
-        diag_error("Out of memory");
+        STRRES_ERROR(STR_GPIO_OUT_OF_MEMORY);
         free(requested);
         return -1;
     }
     int count = 0;
     for (int i = 0; i < requested_count; i++) {
-        const char *why = NULL;
+        strres_id_t why = STRRES_ID_NONE;
         bool duplicate = false;
         for (int j = 0; j < count; j++) {
             duplicate = duplicate || (pins[j] == requested[i]);
@@ -451,11 +449,13 @@ int cmd_gpio_short(int argc, char **argv)
         if (duplicate) {
             /* Without this a repeated pin is compared against itself, follows
              * itself down, and gets reported as shorted to itself. */
-            diag_printf("Skipping GPIO %d: listed more than once\n", requested[i]);
+            STRRES_PRINTF(STR_GPIO_SKIP_DUPLICATE, requested[i]);
         } else if (!GPIO_IS_VALID_GPIO(requested[i])) {
-            diag_printf("Skipping GPIO %d: does not exist on this chip\n", requested[i]);
+            STRRES_PRINTF(STR_GPIO_SKIP_ABSENT, requested[i]);
         } else if (!app_pin_is_drivable(requested[i], &why)) {
-            diag_printf("Skipping GPIO %d: %s\n", requested[i], why);
+            char reason[APP_STR_LEN];
+            STRRES_PRINTF(STR_GPIO_SKIP_REASON, requested[i],
+                          app_str(why, reason, sizeof(reason)));
         } else {
             pins[count++] = requested[i];
         }
@@ -463,20 +463,19 @@ int cmd_gpio_short(int argc, char **argv)
     free(requested);
 
     if (count < 2) {
-        diag_error("Need at least two testable pins; got %d", count);
+        STRRES_ERROR(STR_GPIO_NEED_TWO_PINS, count);
         free(pins);
         return -1;
     }
 
     uint64_t *observed = calloc((size_t)count, sizeof(uint64_t));
     if (!observed) {
-        diag_error("Out of memory");
+        STRRES_ERROR(STR_GPIO_OUT_OF_MEMORY);
         free(pins);
         return -1;
     }
 
-    diag_printf("Short scan across %d pins. Each is driven low in turn, so do "
-              "not run this\non a bus another device may be driving.\n\n", count);
+    STRRES_PRINTF(STR_GPIO_SHORT_SCAN_INTRO, count);
 
     park_as_observers(pins, count);
 
@@ -509,7 +508,7 @@ int cmd_gpio_short(int argc, char **argv)
      * usually neighbouring pads -- so this is the answer worth seeing first.
      */
     int adjacent_pairs = 0, adjacent_shorts = 0;
-    diag_printf("Adjacent pins (where a solder bridge usually lands):\n");
+    STRRES_PRINTF(STR_GPIO_SHORT_ADJACENT_HEADER);
     for (int a = 0; a < count; a++) {
         for (int b = a + 1; b < count; b++) {
             if (pins[b] - pins[a] != 1) {
@@ -517,20 +516,20 @@ int cmd_gpio_short(int argc, char **argv)
             }
             adjacent_pairs++;
             if (SHORTED(a, b)) {
-                diag_printf("  GPIO %d <-> GPIO %d   SHORTED\n", pins[a], pins[b]);
+                STRRES_PRINTF(STR_GPIO_SHORT_PAIR, pins[a], pins[b]);
                 adjacent_shorts++;
             }
         }
     }
     if (adjacent_pairs == 0) {
-        diag_printf("  no consecutively numbered pins in the set\n");
+        STRRES_PRINTF(STR_GPIO_SHORT_NO_ADJACENT);
     } else if (adjacent_shorts == 0) {
-        diag_printf("  %d pair%s tested, all clear\n",
-                  adjacent_pairs, adjacent_pairs == 1 ? "" : "s");
+        STRRES_PRINTF(STR_GPIO_SHORT_PAIRS_CLEAR,
+                      adjacent_pairs, adjacent_pairs == 1 ? "" : "s");
     }
 
     int other_pairs = 0, other_shorts = 0;
-    diag_printf("Remaining pairs:\n");
+    STRRES_PRINTF(STR_GPIO_SHORT_REMAINING_HEADER);
     for (int a = 0; a < count; a++) {
         for (int b = a + 1; b < count; b++) {
             if (pins[b] - pins[a] == 1) {
@@ -538,25 +537,25 @@ int cmd_gpio_short(int argc, char **argv)
             }
             other_pairs++;
             if (SHORTED(a, b)) {
-                diag_printf("  GPIO %d <-> GPIO %d   SHORTED\n", pins[a], pins[b]);
+                STRRES_PRINTF(STR_GPIO_SHORT_PAIR, pins[a], pins[b]);
                 other_shorts++;
             }
         }
     }
     if (other_pairs == 0) {
-        diag_printf("  none to test\n");
+        STRRES_PRINTF(STR_GPIO_SHORT_NONE_TO_TEST);
     } else if (other_shorts == 0) {
-        diag_printf("  %d pair%s tested, all clear\n", other_pairs, other_pairs == 1 ? "" : "s");
+        STRRES_PRINTF(STR_GPIO_SHORT_PAIRS_CLEAR, other_pairs, other_pairs == 1 ? "" : "s");
     }
 
     if (stuck_low) {
-        diag_printf("Held low whatever is driven, so not testable and not a short:\n ");
+        STRRES_PRINTF(STR_GPIO_SHORT_HELD_LOW_HEADER);
         for (int i = 0; i < count; i++) {
             if (stuck_low & BIT64(i)) {
                 diag_printf(" GPIO %d", pins[i]);
             }
         }
-        diag_printf("\n  A grounded net, a card-detect switch or an output driving low.\n");
+        STRRES_PRINTF(STR_GPIO_SHORT_HELD_LOW_NOTE);
     }
 
     #undef SHORTED
@@ -567,7 +566,7 @@ int cmd_gpio_short(int argc, char **argv)
     }
 
     const int total_shorts = adjacent_shorts + other_shorts;
-    diag_printf("\n%d short%s found.\n", total_shorts, total_shorts == 1 ? "" : "s");
+    STRRES_PRINTF(STR_GPIO_SHORT_FOUND, total_shorts, total_shorts == 1 ? "" : "s");
 
     free(observed);
     free(pins);
@@ -782,7 +781,7 @@ static bool calibrate_internal(int argc, char **argv, uint32_t limit, uint32_t c
     (void)cpu_hz;
     if (argc < 5 || strcasecmp(argv[2], "ref") != 0) {
         if (argc > 2) {
-            diag_error("Expected 'ref <pin> <kohms>' after the pin list");
+            STRRES_ERROR(STR_GPIO_RC_REF_EXPECTED);
             return false;
         }
         return true; /* no calibration requested */
@@ -790,27 +789,30 @@ static bool calibrate_internal(int argc, char **argv, uint32_t limit, uint32_t c
 
     const int ref_pin = atoi(argv[3]);
     const double ref_ohms = strtod(argv[4], NULL) * 1000.0;
-    const char *why = NULL;
-    if (!GPIO_IS_VALID_GPIO(ref_pin) || !app_pin_is_drivable(ref_pin, &why)) {
-        diag_error("Reference GPIO %d cannot be driven%s%s", ref_pin,
-                 why ? ": " : "", why ? why : "");
+    strres_id_t why = STRRES_ID_NONE;
+    if (!GPIO_IS_VALID_GPIO(ref_pin)) {
+        STRRES_ERROR(STR_GPIO_RC_REF_ABSENT, ref_pin);
+        return false;
+    }
+    if (!app_pin_is_drivable(ref_pin, &why)) {
+        char reason[APP_STR_LEN];
+        STRRES_ERROR(STR_GPIO_RC_REF_UNDRIVABLE, ref_pin,
+                     app_str(why, reason, sizeof(reason)));
         return false;
     }
     if (ref_ohms <= 0) {
-        diag_error("Reference resistance must be positive");
+        STRRES_ERROR(STR_GPIO_RC_REF_POSITIVE);
         return false;
     }
 
     const rc_result_t r = measure_pin(ref_pin, limit);
     if (r.ext == UINT32_MAX || r.par == UINT32_MAX || r.par == 0) {
-        diag_error("GPIO %d does not behave like a pulled-up net, so it cannot "
-                 "be the reference", ref_pin);
+        STRRES_ERROR(STR_GPIO_RC_REF_NOT_PULLED_UP, ref_pin);
         return false;
     }
     const double ratio = (double)r.ext / (double)r.par;
     if (ratio <= 1.05) {
-        diag_error("GPIO %d rises too fast to time, so it cannot be the reference. "
-                 "Use a weaker pull-up", ref_pin);
+        STRRES_ERROR(STR_GPIO_RC_REF_TOO_FAST, ref_pin);
         return false;
     }
 
@@ -856,7 +858,7 @@ typedef struct {
     net_kind_t kind;
     double ohms;        /* 0 when unresolvably strong */
     double farads;
-    const char *why;    /* NET_SKIPPED only */
+    strres_id_t why;    /* NET_SKIPPED only */
 } net_t;
 
 static const char *kind_word(const net_t *n)
@@ -937,7 +939,7 @@ int cmd_gpio_survey(int argc, char **argv)
 
     if (argc > 1) {
         if (cli_parse_pin_list(argv[1], &pins, &count) < 0) {
-            diag_error("Invalid pin specification: %s", argv[1]);
+            STRRES_ERROR(STR_GPIO_PIN_SPEC_INVALID, argv[1]);
             return -1;
         }
     } else {
@@ -945,7 +947,7 @@ int cmd_gpio_survey(int argc, char **argv)
          * than here, so the report can say which were left out and why. */
         pins = calloc(SOC_GPIO_PIN_COUNT, sizeof(int));
         if (!pins) {
-            diag_error("Out of memory");
+            STRRES_ERROR(STR_GPIO_OUT_OF_MEMORY);
             return -1;
         }
         for (int pin = 0; pin < SOC_GPIO_PIN_COUNT; pin++) {
@@ -958,7 +960,7 @@ int cmd_gpio_survey(int argc, char **argv)
     net_t *nets = calloc((size_t)count, sizeof(net_t));
     if (!nets) {
         free(pins);
-        diag_error("Out of memory");
+        STRRES_ERROR(STR_GPIO_OUT_OF_MEMORY);
         return -1;
     }
 
@@ -966,14 +968,14 @@ int cmd_gpio_survey(int argc, char **argv)
     const uint32_t limit = (uint32_t)((uint64_t)RC_TIMEOUT_US * cpu_hz / 1000000);
     const double r_int = RC_R_INTERNAL;
 
-    diag_printf("Surveying %d pins. Nothing else may be driving them.\n\n", count);
+    STRRES_PRINTF(STR_GPIO_SURVEY_INTRO, count);
 
     for (int i = 0; i < count; i++) {
         nets[i].pin = pins[i];
 
         if (!GPIO_IS_VALID_GPIO(pins[i])) {
             nets[i].kind = NET_SKIPPED;
-            nets[i].why = "does not exist on this chip";
+            nets[i].why = STR_GPIO_WHY_ABSENT;
             continue;
         }
         if (!app_pin_is_drivable(pins[i], &nets[i].why)) {
@@ -988,22 +990,23 @@ int cmd_gpio_survey(int argc, char **argv)
 
     /* ---------------- the table ---------------- */
 
-    diag_printf(" pin  %-14s %10s %10s\n", "state", "pull-up", "net C");
+    STRRES_PRINTF(STR_GPIO_SURVEY_HEADER, "state", "pull-up", "net C");
     for (int i = 0; i < count; i++) {
         const net_t *n = &nets[i];
         diag_printf("%4d  %-14s ", n->pin, kind_word(n));
 
         switch (n->kind) {
         case NET_SKIPPED:
-            diag_printf("%s\n", n->why ? n->why : "");
+            strres_printf(n->why);
+            diag_printf("\n");
             continue;
         case NET_DRIVEN:
-            diag_printf("%10s %10s  something is holding this pin\n", "--", "--");
+            STRRES_PRINTF(STR_GPIO_SURVEY_HELD, "--", "--");
             continue;
         case NET_FLOATING:
             diag_printf("%10s ", "none");
             if (n->farads < 0.0) {
-                diag_printf("%10s  rises too fast to time\n", "--");
+                STRRES_PRINTF(STR_GPIO_SURVEY_TOO_FAST, "--");
             } else {
                 print_farads(n->farads);
                 diag_printf("\n");
@@ -1015,7 +1018,7 @@ int cmd_gpio_survey(int argc, char **argv)
 
         if (n->ohms == 0.0) {
             print_ohms(r_int / 20.0);
-            diag_printf("> %10s  too strong to measure\n", "--");
+            STRRES_PRINTF(STR_GPIO_SURVEY_TOO_STRONG, "--");
         } else {
             print_ohms(n->ohms);
             diag_printf("  ");
@@ -1050,45 +1053,35 @@ int cmd_gpio_survey(int argc, char **argv)
     if (bus_count == 2) {
         /* The strong case. Which pin is which is not observable from here, so
          * both orders are offered; only one will find anything. */
-        diag_printf("GPIO %d and %d are the only pins with a deliberate pull-up, "
-                  "which is what an I2C bus looks like. Try:\n",
-                  bus_pins[0], bus_pins[1]);
-        diag_printf("    i2c bus %d %d   (then 'i2c scan')\n",
-                  bus_pins[0], bus_pins[1]);
-        diag_printf("    i2c bus %d %d   (SCL and SDA the other way round)\n",
-                  bus_pins[1], bus_pins[0]);
+        STRRES_PRINTF(STR_GPIO_SURVEY_I2C_PAIR, bus_pins[0], bus_pins[1]);
+        STRRES_PRINTF(STR_GPIO_SURVEY_I2C_TRY, bus_pins[0], bus_pins[1]);
+        STRRES_PRINTF(STR_GPIO_SURVEY_I2C_TRY_SWAPPED, bus_pins[1], bus_pins[0]);
     } else if (bus_count > 2) {
-        diag_printf("Pins with a deliberate pull-up:");
+        STRRES_PRINTF(STR_GPIO_SURVEY_PULLUPS_HEADER);
         for (int i = 0; i < bus_count; i++) {
             diag_printf(" %d", bus_pins[i]);
         }
-        diag_printf("\nMore than a pair, so this may be several buses, or a "
-                  "reset or interrupt line. 'i2c scan' each likely pair.\n");
+        STRRES_PRINTF(STR_GPIO_SURVEY_MANY_PULLUPS);
     } else if (bus_count == 1) {
-        diag_printf("GPIO %d alone has a pull-up, so more likely a reset, "
-                  "interrupt or enable line than a bus.\n", bus_pins[0]);
+        STRRES_PRINTF(STR_GPIO_SURVEY_ONE_PULLUP, bus_pins[0]);
     } else {
-        diag_printf("No pin carries a bus-strength pull-up, so there is probably "
-                  "no I2C device wired to this board.\n");
+        STRRES_PRINTF(STR_GPIO_SURVEY_NO_PULLUPS);
     }
 
     if (driven_count) {
-        diag_printf("%d pin%s held low by something driving an output; worth "
-                  "identifying before assuming a pin is free.\n",
-                  driven_count, driven_count == 1 ? " is" : "s are");
+        STRRES_PRINTF(STR_GPIO_SURVEY_HELD_SUMMARY,
+                      driven_count, driven_count == 1 ? " is" : "s are");
     }
     if (skipped_count) {
-        diag_printf("%d pin%s skipped as unsafe to drive; the reason is on each "
-                  "row.\n", skipped_count, skipped_count == 1 ? " was" : "s were");
+        STRRES_PRINTF(STR_GPIO_SURVEY_SKIPPED_SUMMARY,
+                      skipped_count, skipped_count == 1 ? " was" : "s were");
     }
 
     /*
      * Said plainly because the temptation is real and the cost of yielding to
      * it was a wasted search on a board where the answer was in front of me.
      */
-    diag_printf("\nCapacitance separates a bare pad from a routed net and "
-              "nothing more; a clock or data line is driven, not pulled, and "
-              "looks like any other idle input from here.\n");
+    STRRES_PRINTF(STR_GPIO_SURVEY_CAPACITANCE_NOTE);
 
     free(nets);
     return 0;
@@ -1097,14 +1090,14 @@ int cmd_gpio_survey(int argc, char **argv)
 int cmd_gpio_rc(int argc, char **argv)
 {
     if (argc < 2) {
-        diag_printf("Usage: rc <pin> [ref <pin> <kohms>]\n");
+        STRRES_PRINTF(STR_GPIO_USAGE_RC);
         return -1;
     }
 
     int *pins = NULL;
     int count = 0;
     if (cli_parse_pin_list(argv[1], &pins, &count) < 0) {
-        diag_error("Invalid pin specification: %s", argv[1]);
+        STRRES_ERROR(STR_GPIO_PIN_SPEC_INVALID, argv[1]);
         return -1;
     }
 
@@ -1118,30 +1111,27 @@ int cmd_gpio_rc(int argc, char **argv)
     }
     const bool calibrated = (r_int != RC_R_INTERNAL);
 
-    diag_printf("Pull-up strength and net capacitance. Nothing else may be "
-              "driving these pins.\n");
+    STRRES_PRINTF(STR_GPIO_RC_INTRO);
 
     if (calibrated) {
-        diag_printf("Internal pull-up measured as %.1fk against the %s reference "
-                  "on GPIO %s\n\n", r_int / 1000.0, argv[4], argv[3]);
+        STRRES_PRINTF(STR_GPIO_RC_REFERENCE_MEASURED, r_int / 1000.0, argv[4], argv[3]);
     } else {
-        diag_printf("Internal pull-up assumed to be %.0fk, so absolute values are "
-                  "good to a factor\nof two and ratios between pins are exact. "
-                  "'ref <pin> <kohms>' measures it.\n\n",
-                  RC_R_INTERNAL / 1000.0);
+        STRRES_PRINTF(STR_GPIO_RC_REFERENCE_ASSUMED, RC_R_INTERNAL / 1000.0);
     }
 
-    diag_printf(" pin    external   with int    pull-up      net C\n");
+    STRRES_PRINTF(STR_GPIO_RC_HEADER);
 
     for (int i = 0; i < count; i++) {
         const int pin = pins[i];
-        const char *why = NULL;
+        strres_id_t why = STRRES_ID_NONE;
         if (!GPIO_IS_VALID_GPIO(pin)) {
-            diag_printf("%4d   does not exist on this chip\n", pin);
+            STRRES_PRINTF(STR_GPIO_RC_ABSENT, pin);
             continue;
         }
         if (!app_pin_is_drivable(pin, &why)) {
-            diag_printf("%4d   skipped: %s\n", pin, why);
+            char reason[APP_STR_LEN];
+            STRRES_PRINTF(STR_GPIO_RC_SKIPPED, pin,
+                          app_str(why, reason, sizeof(reason)));
             continue;
         }
 
@@ -1151,8 +1141,7 @@ int cmd_gpio_rc(int argc, char **argv)
 
         if (r.par == UINT32_MAX) {
             /* Not even the internal pull-up gets it there in the time allowed. */
-            diag_printf("        --         --         --         --"
-                      "  held low, or >80nF\n");
+            STRRES_PRINTF(STR_GPIO_RC_HELD_LOW);
             continue;
         }
 
@@ -1162,7 +1151,7 @@ int cmd_gpio_rc(int argc, char **argv)
             print_seconds(t_par);
             diag_printf("       none  ");
             print_farads(t_par / RC_THRESHOLD_TAUS / r_int);
-            diag_printf("  no external pull-up\n");
+            STRRES_PRINTF(STR_GPIO_RC_NO_EXTERNAL);
             continue;
         }
 
@@ -1181,7 +1170,7 @@ int cmd_gpio_rc(int argc, char **argv)
         if (ratio <= 1.05) {
             diag_printf("  ");
             print_ohms(r_int / 20.0);
-            diag_printf(">        --  too fast to resolve\n");
+            STRRES_PRINTF(STR_GPIO_RC_TOO_FAST);
             continue;
         }
 

@@ -1,6 +1,8 @@
 #ifndef GPIO_H
 #define GPIO_H
 
+#include "app_bringup.h"
+
 #include <stdbool.h>
 
 int cmd_gpio_set(int argc, char** argv);
@@ -18,7 +20,10 @@ int cmd_gpio_survey(int argc, char** argv);
  * and driving one of those ends the session that typed the command.
  *
  * On false, *why is set to a short reason suitable for "Skipping GPIO %d: %s".
+ * It is a string id rather than a pointer to words, because the reasons are
+ * prose and live on the res partition: resolve it with app_str() where it has
+ * to be a %s, or print it with strres_printf().
  */
-bool app_pin_is_drivable(int pin, const char **why);
+bool app_pin_is_drivable(int pin, strres_id_t *why);
 
 #endif

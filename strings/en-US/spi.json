@@ -1,0 +1,42 @@
+{
+  "section": "spi",
+  "strings": {
+    "address_range": "Address must be 0x00-0xFF",
+    "bus.help": "Initialize the SPI bus",
+    "bus.usage": "<clk> <mosi> <miso> [cs]",
+    "bus_init_failed": "Initializing SPI bus: %s",
+    "byte_count_range": "At most %d data bytes per write",
+    "byte_invalid": "Data byte '%s' is not 0x00-0xFF",
+    "cs_not_a_number": "CS must be a pin number",
+    "cs_not_output_capable": "CS must be an output-capable GPIO",
+    "device_add_failed": "Adding SPI device: %s",
+    "free.help": "Release the SPI host so another module can use it",
+    "free.usage": "",
+    "group.help": "SPI master",
+    "length_range": "Length must be 1-%d",
+    "not_initialized": {
+      "text": "SPI not initialized. Run 'spi bus <clk> <mosi> <miso> [cs]' first.",
+      "pin": true
+    },
+    "not_initialized_close": "SPI bus is not initialized.\n",
+    "out_of_dma_memory": "Out of DMA-capable memory",
+    "pin_absent": "GPIO %d does not exist on this chip",
+    "pins_numeric": "CLK, MOSI and MISO must be pin numbers",
+    "pins_output_capable": "CLK and MOSI must be output-capable GPIOs",
+    "read.help": "Read bytes from an address",
+    "read.usage": "<addr> <len>",
+    "read_failed": "SPI read: %s",
+    "ready": "SPI ready: CLK=%d, MOSI=%d, MISO=%d, CS=",
+    "ready_mode": ", mode 0 at %d Hz\n",
+    "ready_no_cs": "none (drive chip select yourself with 'gpio set')",
+    "released": "SPI bus released.\n",
+    "sd_holds_host": "The SD card holds the SPI host. Release it with 'sd close' first.",
+    "usage_bus": "Usage: bus <clk> <mosi> <miso> [cs]\n",
+    "usage_read": "Usage: read <addr> <len>\n",
+    "usage_write": "Usage: write <addr> <data> [data...]\n",
+    "write.help": "Write bytes to an address",
+    "write.usage": "<addr> <data>...",
+    "write_failed": "SPI write: %s",
+    "wrote": "Wrote %d byte%s to 0x%02X\n"
+  }
+}

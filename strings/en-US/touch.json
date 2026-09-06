@@ -1,0 +1,27 @@
+{
+  "section": "touch",
+  "strings": {
+    "baseline_header": "Baseline:",
+    "calibrating": "Calibrating %d pad%s -- do not touch any of them...\n",
+    "channel_alloc_failed": "Allocating channel for GPIO %d: %s",
+    "controller_create_failed": "Creating the touch controller: %s",
+    "duration_range": "Duration must be greater than 0 and at most %.0f seconds",
+    "enable_failed": "Enabling the touch sensor failed",
+    "filter_config_failed": "Configuring the touch filter failed",
+    "group.help": "Capacitive touch pads: calibrate a set and watch them live",
+    "no_touch_peripheral": "%s has no capacitive touch sensor peripheral supported by this driver. Rebuild for a chip with touch hardware version 2 or later, e.g. 'idf.py set-target esp32s3'.",
+    "no_valid_pins": "No valid touch pins given",
+    "peak_header": "\nPeak deflection from baseline over the run:\n",
+    "peak_row": "  GPIO%-2d  peak %5.0f  (%.1fx calibration noise)\n",
+    "pin_spec_invalid": "Invalid pin specification: %s",
+    "scan_start_failed": "Starting continuous scanning failed",
+    "skip_duplicate": "Skipping GPIO %d: listed more than once\n",
+    "skip_not_touch": "Skipping GPIO %d: not a touch-capable pin (GPIO%d-%d only)\n",
+    "unexpected_argument": "Unexpected argument '%s'",
+    "usage_watch": "Usage: watch <pads> [seconds]\n",
+    "usage_watch_pads": "<pads> is a single GPIO, a range, or a comma separated list, e.g. '1,3,5-7'. Touch-capable pins on this chip are GPIO%d-%d.\n",
+    "watch.help": "Calibrate touch pads and report all of them, live",
+    "watch.usage": "<pads> [seconds]",
+    "watching": "\n\nWatching for %.0f s. Every pad is reported each tick, so a reacting neighbour is as visible as the one you touch.\n"
+  }
+}

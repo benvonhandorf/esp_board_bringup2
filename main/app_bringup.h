@@ -39,4 +39,16 @@
 #include "strres.h"
 #include "strres_ids.h"
 
+/*
+ * Resolve a string into a caller-owned buffer, for the few places a sentence
+ * has to be a %s inside another one -- why a pin cannot be driven, which input
+ * a codec is on. Returns `buf`, which holds the id in [str:XXXX] form if the
+ * lookup missed, so the line is never silently blank. Prefer STRRES_PRINTF():
+ * this exists for text that must be a value, not merely printed.
+ */
+const char *app_str(strres_id_t id, char *buf, size_t len);
+
+/* Long enough for the reasons and names this is used for. */
+#define APP_STR_LEN 64
+
 #endif /* APP_BRINGUP_H */

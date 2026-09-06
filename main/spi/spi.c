@@ -20,7 +20,7 @@ bool spi_group_owns_host(void)
 static bool require_bus(void)
 {
     if (!device) {
-        diag_error("SPI not initialized. Run 'spi bus <clk> <mosi> <miso> [cs]' first.");
+        STRRES_ERROR(STR_SPI_NOT_INITIALIZED);
         return false;
     }
     return true;
@@ -41,14 +41,14 @@ static void teardown(void)
 int cmd_spi_bus(int argc, char **argv)
 {
     if (argc < 4) {
-        diag_printf("Usage: bus <clk> <mosi> <miso> [cs]\n");
+        STRRES_PRINTF(STR_SPI_USAGE_BUS);
         return -1;
     }
 
     int clk, mosi, miso;
     if (cli_parse_int_arg(argv[1], &clk) < 0 || cli_parse_int_arg(argv[2], &mosi) < 0 ||
         cli_parse_int_arg(argv[3], &miso) < 0) {
-        diag_error("CLK, MOSI and MISO must be pin numbers");
+        STRRES_ERROR(STR_SPI_PINS_NUMERIC);
         return -1;
     }
 
@@ -58,20 +58,20 @@ int cmd_spi_bus(int argc, char **argv)
      */
     int cs = -1;
     if (argc > 4 && cli_parse_int_arg(argv[4], &cs) < 0) {
-        diag_error("CS must be a pin number");
+        STRRES_ERROR(STR_SPI_CS_NOT_A_NUMBER);
         return -1;
     }
 
     if (!GPIO_IS_VALID_OUTPUT_GPIO(clk) || !GPIO_IS_VALID_OUTPUT_GPIO(mosi)) {
-        diag_error("CLK and MOSI must be output-capable GPIOs");
+        STRRES_ERROR(STR_SPI_PINS_OUTPUT_CAPABLE);
         return -1;
     }
     if (!GPIO_IS_VALID_GPIO(miso)) {
-        diag_error("GPIO %d does not exist on this chip", miso);
+        STRRES_ERROR(STR_SPI_PIN_ABSENT, miso);
         return -1;
     }
     if (cs >= 0 && !GPIO_IS_VALID_OUTPUT_GPIO(cs)) {
-        diag_error("CS must be an output-capable GPIO");
+        STRRES_ERROR(STR_SPI_CS_NOT_OUTPUT_CAPABLE);
         return -1;
     }
 
@@ -81,7 +81,7 @@ int cmd_spi_bus(int argc, char **argv)
      * longer exists, so say so instead.
      */
     if (sd_owns_spi_host()) {
-        diag_error("The SD card holds the SPI host. Release it with 'sd close' first.");
+        STRRES_ERROR(STR_SPI_SD_HOLDS_HOST);
         return -1;
     }
 
@@ -99,7 +99,7 @@ int cmd_spi_bus(int argc, char **argv)
 
     esp_err_t err = spi_bus_initialize(SPI_HOST_ID, &bus_config, SPI_DMA_CH_AUTO);
     if (err != ESP_OK) {
-        diag_error("Initializing SPI bus: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_SPI_BUS_INIT_FAILED, esp_err_to_name(err));
         return -1;
     }
     bus_ready = true;
@@ -113,19 +113,19 @@ int cmd_spi_bus(int argc, char **argv)
 
     err = spi_bus_add_device(SPI_HOST_ID, &dev_config, &device);
     if (err != ESP_OK) {
-        diag_error("Adding SPI device: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_SPI_DEVICE_ADD_FAILED, esp_err_to_name(err));
         device = NULL;
         teardown();
         return -1;
     }
 
-    diag_printf("SPI ready: CLK=%d, MOSI=%d, MISO=%d, CS=", clk, mosi, miso);
+    STRRES_PRINTF(STR_SPI_READY, clk, mosi, miso);
     if (cs >= 0) {
         diag_printf("%d", cs);
     } else {
-        diag_printf("none (drive chip select yourself with 'gpio set')");
+        STRRES_PRINTF(STR_SPI_READY_NO_CS);
     }
-    diag_printf(", mode 0 at %d Hz\n", SPI_CLOCK_HZ);
+    STRRES_PRINTF(STR_SPI_READY_MODE, SPI_CLOCK_HZ);
     return 0;
 }
 
@@ -140,11 +140,11 @@ int cmd_spi_free(int argc, char **argv)
     (void)argv;
 
     if (!bus_ready) {
-        diag_printf("SPI bus is not initialized.\n");
+        STRRES_PRINTF(STR_SPI_NOT_INITIALIZED_CLOSE);
         return 0;
     }
     teardown();
-    diag_printf("SPI bus released.\n");
+    STRRES_PRINTF(STR_SPI_RELEASED);
     return 0;
 }
 
@@ -154,17 +154,17 @@ int cmd_spi_read(int argc, char **argv)
         return -1;
     }
     if (argc < 3) {
-        diag_printf("Usage: read <addr> <len>\n");
+        STRRES_PRINTF(STR_SPI_USAGE_READ);
         return -1;
     }
 
     int address, length;
     if (cli_parse_num_arg(argv[1], &address) < 0 || address < 0 || address > 0xFF) {
-        diag_error("Address must be 0x00-0xFF");
+        STRRES_ERROR(STR_SPI_ADDRESS_RANGE);
         return -1;
     }
     if (cli_parse_int_arg(argv[2], &length) < 0 || length < 1 || length > MAX_TRANSFER_BYTES) {
-        diag_error("Length must be 1-%d", MAX_TRANSFER_BYTES);
+        STRRES_ERROR(STR_SPI_LENGTH_RANGE, MAX_TRANSFER_BYTES);
         return -1;
     }
 
@@ -180,7 +180,7 @@ int cmd_spi_read(int argc, char **argv)
     uint8_t *tx = heap_caps_calloc(1, total, MALLOC_CAP_DMA);
     uint8_t *rx = heap_caps_calloc(1, total, MALLOC_CAP_DMA);
     if (!tx || !rx) {
-        diag_error("Out of DMA-capable memory");
+        STRRES_ERROR(STR_SPI_OUT_OF_DMA_MEMORY);
         free(tx);
         free(rx);
         return -1;
@@ -196,7 +196,7 @@ int cmd_spi_read(int argc, char **argv)
 
     esp_err_t err = spi_device_transmit(device, &transaction);
     if (err != ESP_OK) {
-        diag_error("SPI read: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_SPI_READ_FAILED, esp_err_to_name(err));
         free(tx);
         free(rx);
         return -1;
@@ -219,26 +219,26 @@ int cmd_spi_write(int argc, char **argv)
         return -1;
     }
     if (argc < 3) {
-        diag_printf("Usage: write <addr> <data> [data...]\n");
+        STRRES_PRINTF(STR_SPI_USAGE_WRITE);
         return -1;
     }
 
     int address;
     if (cli_parse_num_arg(argv[1], &address) < 0 || address < 0 || address > 0xFF) {
-        diag_error("Address must be 0x00-0xFF");
+        STRRES_ERROR(STR_SPI_ADDRESS_RANGE);
         return -1;
     }
 
     int data_count = argc - 2;
     if (data_count > MAX_TRANSFER_BYTES) {
-        diag_error("At most %d data bytes per write", MAX_TRANSFER_BYTES);
+        STRRES_ERROR(STR_SPI_BYTE_COUNT_RANGE, MAX_TRANSFER_BYTES);
         return -1;
     }
 
     size_t total = (size_t)data_count + 1;
     uint8_t *tx = heap_caps_calloc(1, total, MALLOC_CAP_DMA);
     if (!tx) {
-        diag_error("Out of DMA-capable memory");
+        STRRES_ERROR(STR_SPI_OUT_OF_DMA_MEMORY);
         return -1;
     }
 
@@ -246,7 +246,7 @@ int cmd_spi_write(int argc, char **argv)
     for (int i = 0; i < data_count; i++) {
         int value;
         if (cli_parse_num_arg(argv[2 + i], &value) < 0 || value < 0 || value > 0xFF) {
-            diag_error("Data byte '%s' is not 0x00-0xFF", argv[2 + i]);
+            STRRES_ERROR(STR_SPI_BYTE_INVALID, argv[2 + i]);
             free(tx);
             return -1;
         }
@@ -260,13 +260,12 @@ int cmd_spi_write(int argc, char **argv)
 
     esp_err_t err = spi_device_transmit(device, &transaction);
     if (err != ESP_OK) {
-        diag_error("SPI write: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_SPI_WRITE_FAILED, esp_err_to_name(err));
         free(tx);
         return -1;
     }
 
-    diag_printf("Wrote %d byte%s to 0x%02X\n",
-              data_count, data_count == 1 ? "" : "s", address);
+    STRRES_PRINTF(STR_SPI_WROTE, data_count, data_count == 1 ? "" : "s", address);
 
     free(tx);
     return 0;
