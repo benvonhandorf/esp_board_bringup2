@@ -125,7 +125,7 @@ static int take_bus_options(int argc, char **argv, int index,
 {
     while (index < argc) {
         if (index + 1 >= argc) {
-            diag_error("'%s' needs a value", argv[index]);
+            STRRES_ERROR(STR_AUDIO_OPTION_NEEDS_VALUE, argv[index]);
             return -1;
         }
 
@@ -134,20 +134,20 @@ static int take_bus_options(int argc, char **argv, int index,
 
         if (strcasecmp(key, "din") == 0) {
             if (cli_parse_int_arg(value, din) < 0 || !GPIO_IS_VALID_GPIO(*din)) {
-                diag_error("DIN must be a valid pin number, not '%s'", value);
+                STRRES_ERROR(STR_AUDIO_DIN_INVALID, value);
                 return -1;
             }
         } else if (strcasecmp(key, "mclk") == 0) {
             if (cli_parse_int_arg(value, &fmt->mclk_pin) < 0 ||
                 !GPIO_IS_VALID_OUTPUT_GPIO(fmt->mclk_pin)) {
-                diag_error("MCLK must be an output-capable pin, not '%s'", value);
+                STRRES_ERROR(STR_AUDIO_MCLK_INVALID, value);
                 return -1;
             }
         } else if (strcasecmp(key, "rate") == 0) {
             int rate = 0;
             if (cli_parse_int_arg(value, &rate) < 0 ||
                 rate < MIN_RATE_HZ || rate > MAX_RATE_HZ) {
-                diag_error("Sample rate must be %d-%d Hz", MIN_RATE_HZ, MAX_RATE_HZ);
+                STRRES_ERROR(STR_AUDIO_RATE_RANGE, MIN_RATE_HZ, MAX_RATE_HZ);
                 return -1;
             }
             fmt->rate_hz = (uint32_t)rate;
@@ -155,7 +155,7 @@ static int take_bus_options(int argc, char **argv, int index,
             int bits = 0;
             if (cli_parse_int_arg(value, &bits) < 0 ||
                 (bits != 16 && bits != 24 && bits != 32)) {
-                diag_error("Bit width must be 16, 24 or 32");
+                STRRES_ERROR(STR_AUDIO_BITS_INVALID);
                 return -1;
             }
             fmt->bits = (uint8_t)bits;
@@ -164,14 +164,12 @@ static int take_bus_options(int argc, char **argv, int index,
             if (cli_parse_int_arg(value, &mult) < 0 ||
                 (mult != 128 && mult != 192 && mult != 256 && mult != 384 &&
                  mult != 512 && mult != 768)) {
-                diag_error("MCLK multiple must be 128, 192, 256, 384, 512 or 768");
+                STRRES_ERROR(STR_AUDIO_MCLK_MULTIPLE_INVALID);
                 return -1;
             }
             fmt->mclk_multiple = mult;
         } else {
-            diag_error("Unexpected argument '%s'; options are 'din <pin>', "
-                     "'mclk <pin>', 'rate <hz>', 'bits <16|24|32>' and "
-                     "'mclkmult <n>'", key);
+            STRRES_ERROR(STR_AUDIO_UNEXPECTED_ARGUMENT_BUS, key);
             return -1;
         }
         index += 2;
@@ -187,8 +185,8 @@ static bool pins_distinct(const int *pins, const char *const *names, int count)
         }
         for (int j = i + 1; j < count; j++) {
             if (pins[i] == pins[j]) {
-                diag_error("%s and %s cannot both be GPIO %d", names[i], names[j],
-                         pins[i]);
+                STRRES_ERROR(STR_AUDIO_PINS_COLLIDE,
+                             names[i], names[j], pins[i]);
                 return false;
             }
         }
@@ -204,11 +202,11 @@ static void print_format(void)
     }
 
     uint32_t configured = audio_bus_actual_rate();
-    diag_printf("Format:  %lu Hz requested", (unsigned long)fmt->rate_hz);
+    STRRES_PRINTF(STR_AUDIO_INFO_FORMAT, (unsigned long)fmt->rate_hz);
     if (configured) {
-        diag_printf(", %lu Hz configured", (unsigned long)configured);
+        STRRES_PRINTF(STR_AUDIO_INFO_FORMAT_CONFIGURED, (unsigned long)configured);
     }
-    diag_printf(", %u-bit, 2 slots\n", fmt->bits);
+    STRRES_PRINTF(STR_AUDIO_INFO_FORMAT_BITS, fmt->bits);
 
     /*
      * Report what the dividers actually produced, not what was asked for. The
@@ -218,12 +216,12 @@ static void print_format(void)
      */
     uint32_t bclk = audio_bus_bclk_hz();
     uint32_t mclk = audio_bus_mclk_hz();
-    diag_printf("Clocks:  BCLK %.3f MHz", bclk / 1e6);
+    STRRES_PRINTF(STR_AUDIO_INFO_CLOCKS, bclk / 1e6);
     if (fmt->mclk_pin >= 0) {
-        diag_printf(", MCLK %.3f MHz on GPIO %d (x%d)\n", mclk / 1e6,
-                  fmt->mclk_pin, fmt->mclk_multiple);
+        STRRES_PRINTF(STR_AUDIO_INFO_CLOCKS_MCLK,
+                      mclk / 1e6, fmt->mclk_pin, fmt->mclk_multiple);
     } else {
-        diag_printf(", MCLK not routed to a pin\n");
+        STRRES_PRINTF(STR_AUDIO_INFO_CLOCKS_NO_MCLK);
     }
 }
 
@@ -232,17 +230,19 @@ static void print_input(void)
 {
     switch (audio_bus_rx_mode()) {
     case AUDIO_RX_NONE:
-        diag_printf("Input:   none. Add 'din <pin>' to 'audio bus', or run "
-                  "'audio pdm <clk> <data>'.\n");
+        STRRES_PRINTF(STR_AUDIO_INPUT_NONE);
         return;
 
     case AUDIO_RX_STD: {
         int din = -1;
         audio_bus_rx_pins(NULL, &din);
-        diag_printf("Input:   I2S on DIN=%d at %lu Hz, %u-bit%s\n", din,
-                  (unsigned long)audio_bus_rx_rate(), audio_bus_rx_bits(),
-                  audio_bus_rx_internal()
-                      ? " -- looped back inside the chip, nothing external" : "");
+        if (audio_bus_rx_internal()) {
+            STRRES_PRINTF(STR_AUDIO_INPUT_I2S_INTERNAL, din,
+                          (unsigned long)audio_bus_rx_rate(), audio_bus_rx_bits());
+        } else {
+            STRRES_PRINTF(STR_AUDIO_INPUT_I2S, din,
+                          (unsigned long)audio_bus_rx_rate(), audio_bus_rx_bits());
+        }
         break;
     }
 
@@ -251,31 +251,31 @@ static void print_input(void)
         int din = -1;
         audio_bus_rx_pins(&clk, &din);
         uint32_t pdm_hz = audio_bus_pdm_clk_hz();
-        diag_printf("Input:   PDM on CLK=%d, DATA=%d, decimated to %lu Hz "
-                  "16-bit\n", clk, din, (unsigned long)audio_bus_rx_rate());
-        diag_printf("         Microphone clock %.3f MHz\n", pdm_hz / 1e6);
+        STRRES_PRINTF(STR_AUDIO_INPUT_PDM, clk, din, (unsigned long)audio_bus_rx_rate());
+        STRRES_PRINTF(STR_AUDIO_INPUT_PDM_CLOCK, pdm_hz / 1e6);
         /*
          * The usual MEMS PDM part wants roughly 1 to 3.25 MHz and drops into a
          * low-power mode below that, where it returns something that looks
          * like a dead microphone. Saying so here is cheaper than debugging it.
          */
         if (pdm_hz && (pdm_hz < 1000000 || pdm_hz > 3250000)) {
-            diag_printf("         Outside the 1-3.25 MHz most MEMS microphones "
-                      "specify; try another rate if it reads silent.\n");
+            STRRES_PRINTF(STR_AUDIO_INPUT_PDM_CLOCK_RANGE);
         }
         break;
     }
     }
 
-    diag_printf("         %s\n", audio_bus_rx_enabled() ? "Receiver running"
-                                                      : "Receiver stopped");
+    if (audio_bus_rx_enabled()) {
+        STRRES_PRINTF(STR_AUDIO_INPUT_RECEIVER_RUNNING);
+    } else {
+        STRRES_PRINTF(STR_AUDIO_INPUT_RECEIVER_STOPPED);
+    }
 }
 
 int cmd_audio_bus(int argc, char **argv)
 {
     if (argc < 4) {
-        diag_printf("Usage: bus <bclk> <ws> <dout> [din <pin>] [mclk <pin>] "
-                  "[rate <hz>] [bits <16|24|32>] [mclkmult <n>]\n");
+        STRRES_PRINTF(STR_AUDIO_USAGE_BUS);
         return -1;
     }
 
@@ -284,7 +284,7 @@ int cmd_audio_bus(int argc, char **argv)
     int dout = 0;
     if (cli_parse_int_arg(argv[1], &bclk) < 0 || cli_parse_int_arg(argv[2], &ws) < 0 ||
         cli_parse_int_arg(argv[3], &dout) < 0) {
-        diag_error("BCLK, WS and DOUT must be pin numbers");
+        STRRES_ERROR(STR_AUDIO_PINS_NUMERIC);
         return -1;
     }
 
@@ -315,13 +315,12 @@ int cmd_audio_bus(int argc, char **argv)
             continue; /* DIN is an input, checked separately below */
         }
         if (pins[i] >= 0 && !GPIO_IS_VALID_OUTPUT_GPIO(pins[i])) {
-            diag_error("%s: GPIO %d is not an output-capable pin on this chip",
-                     names[i], pins[i]);
+            STRRES_ERROR(STR_AUDIO_PIN_NOT_OUTPUT_CAPABLE, names[i], pins[i]);
             return -1;
         }
     }
     if (din >= 0 && !GPIO_IS_VALID_GPIO(din)) {
-        diag_error("DIN: GPIO %d is not a valid pin on this chip", din);
+        STRRES_ERROR(STR_AUDIO_DIN_INVALID_PIN, din);
         return -1;
     }
     if (!pins_distinct(pins, names, 5)) {
@@ -340,7 +339,7 @@ int cmd_audio_bus(int argc, char **argv)
 
     esp_err_t err = audio_bus_open(bclk, ws, dout, din, &fmt);
     if (err != ESP_OK) {
-        diag_error("Initializing I2S: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_AUDIO_I2S_INIT_FAILED, esp_err_to_name(err));
         return -1;
     }
 
@@ -356,24 +355,22 @@ int cmd_audio_bus(int argc, char **argv)
      */
     err = audio_bus_tx_enable(true);
     if (err != ESP_OK) {
-        diag_error("Starting the I2S transmitter: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_AUDIO_TX_START_FAILED, esp_err_to_name(err));
         return -1;
     }
 
-    diag_printf("I2S initialized on BCLK=%d, WS=%d, DOUT=%d", bclk, ws, dout);
+    STRRES_PRINTF(STR_AUDIO_BUS_INITIALIZED, bclk, ws, dout);
     if (din >= 0) {
-        diag_printf(", DIN=%d", din);
+        STRRES_PRINTF(STR_AUDIO_BUS_INITIALIZED_DIN, din);
     }
     diag_printf("\n");
     print_format();
-    diag_printf("Transmitting silence, so the clocks are live for the codec.\n");
+    STRRES_PRINTF(STR_AUDIO_SILENCE_NOTE);
     if (internal) {
-        diag_printf("DIN and DOUT are the same pin, so 'audio record' sees the "
-                  "transmitter through the pad and nothing external.\n");
+        STRRES_PRINTF(STR_AUDIO_LOOPBACK_NOTE);
     }
     if (had_pdm) {
-        diag_printf("The PDM microphone was released; re-run 'audio pdm' to "
-                  "bring it back at the new rate.\n");
+        STRRES_PRINTF(STR_AUDIO_PDM_RELEASED);
     }
 
     /* An attached part was configured for the old format; bring it in line. */
@@ -389,11 +386,11 @@ int cmd_audio_bus(int argc, char **argv)
             return -1;   /* the driver has already explained */
         }
         if (err != ESP_OK) {
-            diag_error("Reconfiguring %s for the new format: %s", codec->name,
-                     esp_err_to_name(err));
+            STRRES_ERROR(STR_AUDIO_RECONFIGURE_FAILED,
+                         codec->name, esp_err_to_name(err));
             return -1;
         }
-        diag_printf("Reconfigured %s for the new format.\n", codec->name);
+        STRRES_PRINTF(STR_AUDIO_RECONFIGURED, codec->name);
     }
 
     return 0;
@@ -405,7 +402,7 @@ int cmd_audio_info(int argc, char **argv)
     (void)argv;
 
     if (!audio_bus_ready()) {
-        diag_printf("I2S is not initialized. Run 'audio bus <bclk> <ws> <dout>'.\n");
+        STRRES_PRINTF(STR_AUDIO_NOT_INITIALIZED);
     } else {
         int bclk = 0;
         int ws = 0;
@@ -414,24 +411,28 @@ int cmd_audio_info(int argc, char **argv)
         int mclk = 0;
         audio_bus_pins(&bclk, &ws, &dout, &din, &mclk);
 
-        diag_printf("Pins:    BCLK=%d, WS=%d, DOUT=%d", bclk, ws, dout);
+        STRRES_PRINTF(STR_AUDIO_INFO_PINS, bclk, ws, dout);
         if (din >= 0) {
-            diag_printf(", DIN=%d", din);
+            STRRES_PRINTF(STR_AUDIO_INFO_PINS_DIN, din);
         }
         if (mclk >= 0) {
-            diag_printf(", MCLK=%d", mclk);
+            STRRES_PRINTF(STR_AUDIO_INFO_PINS_MCLK, mclk);
         }
         diag_printf("\n");
         print_format();
-        diag_printf("Output:  %s\n", audio_bus_tx_enabled()
-                  ? (audio_playing() ? "playing" : "running, silent") : "stopped");
+        if (!audio_bus_tx_enabled()) {
+            STRRES_PRINTF(STR_AUDIO_INFO_OUTPUT_STOPPED);
+        } else if (audio_playing()) {
+            STRRES_PRINTF(STR_AUDIO_INFO_OUTPUT_PLAYING);
+        } else {
+            STRRES_PRINTF(STR_AUDIO_INFO_OUTPUT_SILENT);
+        }
     }
 
     print_input();
 
     if (!tx_codec && !rx_codec) {
-        diag_printf("Codec:   none attached (a bare I2S DAC, amplifier or "
-                  "microphone needs none)\n");
+        STRRES_PRINTF(STR_AUDIO_INFO_NO_CODEC);
         return 0;
     }
 
@@ -448,9 +449,13 @@ int cmd_audio_info(int argc, char **argv)
 
         const char *label = (codec->directions == (AUDIO_DIR_TX | AUDIO_DIR_RX))
                             ? "Codec" : role[i];
-        diag_printf("%-8s %s - %s\n", label, codec->name, codec->description);
+        /* Three calls for one line: the description lives on the res
+         * partition, so it is printed rather than passed in as a %s. */
+        STRRES_PRINTF(STR_AUDIO_INFO_CODEC_ROW, label, codec->name);
+        strres_printf(codec->description);
+        diag_printf("\n");
         if (i == 0 && last_volume_pct >= 0) {
-            diag_printf("Volume:  %d%%\n", last_volume_pct);
+            STRRES_PRINTF(STR_AUDIO_INFO_VOLUME, last_volume_pct);
         }
         if (codec->status) {
             codec->status();
@@ -464,14 +469,19 @@ int cmd_audio_codecs(int argc, char **argv)
     (void)argc;
     (void)argv;
 
-    diag_printf("%-10s %-7s %-5s %s\n", "name", "dir", "mclk", "part");
+    STRRES_PRINTF(STR_AUDIO_CODECS_HEADER, "name", "dir", "mclk", "part");
     for (size_t i = 0; i < CODEC_COUNT; i++) {
         const audio_codec_t *c = codec_registry[i];
         const char *dir = (c->directions == (AUDIO_DIR_TX | AUDIO_DIR_RX)) ? "in/out"
                         : (c->directions & AUDIO_DIR_RX) ? "in" : "out";
-        diag_printf("%-10s %-7s %-5s %s%s\n", c->name, dir,
-                  c->needs_mclk ? "yes" : "no", c->description,
-                  (c == tx_codec || c == rx_codec) ? "  <- attached" : "");
+        STRRES_PRINTF(STR_AUDIO_CODECS_ROW, c->name, dir,
+                      c->needs_mclk ? "yes" : "no");
+        strres_printf(c->description);
+        if (c == tx_codec || c == rx_codec) {
+            STRRES_PRINTF(STR_AUDIO_CODECS_ATTACHED);
+        } else {
+            diag_printf("\n");
+        }
     }
     return 0;
 }
@@ -497,12 +507,12 @@ static int take_signal_options(int argc, char **argv, int index,
 
         if (strcasecmp(token, "level") == 0) {
             if (index + 1 >= argc) {
-                diag_error("'level' needs a percentage");
+                STRRES_ERROR(STR_AUDIO_LEVEL_NEEDS_VALUE);
                 return -1;
             }
             int pct = 0;
             if (cli_parse_int_arg(argv[index + 1], &pct) < 0 || pct < 1 || pct > 100) {
-                diag_error("Level must be 1-100 percent of full scale");
+                STRRES_ERROR(STR_AUDIO_LEVEL_RANGE);
                 return -1;
             }
             sig->level_pct = pct;
@@ -526,12 +536,11 @@ static int take_signal_options(int argc, char **argv, int index,
         } else {
             double seconds = 0.0;
             if (duration_set || cli_parse_double_arg(token, &seconds) < 0) {
-                diag_error("Unexpected argument '%s'", token);
+                STRRES_ERROR(STR_AUDIO_UNEXPECTED_ARGUMENT, token);
                 return -1;
             }
             if (seconds <= 0.0 || seconds > MAX_SECONDS) {
-                diag_error("Duration must be greater than 0 and at most %.0f seconds",
-                         MAX_SECONDS);
+                STRRES_ERROR(STR_AUDIO_DURATION_RANGE, MAX_SECONDS);
                 return -1;
             }
             sig->seconds = seconds;
@@ -552,8 +561,7 @@ static bool frequency_ok(double hz, const char *what)
     double nyquist = (fmt ? fmt->rate_hz : DEFAULT_RATE_HZ) / 2.0;
 
     if (hz < MIN_TONE_HZ || hz >= nyquist) {
-        diag_error("%s must be between %.0f Hz and %.0f Hz (half the sample rate)",
-                 what, MIN_TONE_HZ, nyquist);
+        STRRES_ERROR(STR_AUDIO_FREQUENCY_RANGE, what, MIN_TONE_HZ, nyquist);
         return false;
     }
     return true;
@@ -565,14 +573,13 @@ int cmd_audio_tone(int argc, char **argv)
         return -1;
     }
     if (argc < 2) {
-        diag_printf("Usage: tone <hz> [seconds|continuous] [level <pct>] "
-                  "[left|right|both]\n");
+        STRRES_PRINTF(STR_AUDIO_USAGE_TONE);
         return -1;
     }
 
     double hz = 0.0;
     if (cli_parse_double_arg(argv[1], &hz) < 0) {
-        diag_error("Frequency must be a number, not '%s'", argv[1]);
+        STRRES_ERROR(STR_AUDIO_FREQUENCY_NOT_A_NUMBER, argv[1]);
         return -1;
     }
     if (!frequency_ok(hz, "Frequency")) {
@@ -600,22 +607,21 @@ int cmd_audio_sweep(int argc, char **argv)
         return -1;
     }
     if (argc < 3) {
-        diag_printf("Usage: sweep <start_hz> <end_hz> [seconds] [level <pct>] "
-                  "[log|linear] [left|right|both]\n");
+        STRRES_PRINTF(STR_AUDIO_USAGE_SWEEP);
         return -1;
     }
 
     double start = 0.0;
     double end = 0.0;
     if (cli_parse_double_arg(argv[1], &start) < 0 || cli_parse_double_arg(argv[2], &end) < 0) {
-        diag_error("Start and end frequencies must be numbers");
+        STRRES_ERROR(STR_AUDIO_SWEEP_FREQS_NUMERIC);
         return -1;
     }
     if (!frequency_ok(start, "Start frequency") || !frequency_ok(end, "End frequency")) {
         return -1;
     }
     if (start == end) {
-        diag_error("Start and end frequencies are the same; use 'audio tone' for that");
+        STRRES_ERROR(STR_AUDIO_SWEEP_FREQS_SAME);
         return -1;
     }
 
@@ -687,11 +693,8 @@ static bool pdm_pins_free(int clk, int din)
             continue;
         }
 
-        diag_error("GPIO %d is already the I2S %s, so it cannot also be the "
-                 "microphone's %s", used[i], names[i], role);
-        diag_printf("They share a pin here, so the microphone and the speaker "
-                  "cannot both run. Run 'audio close', or 'audio pdm' on the "
-                  "microphone's own pins.\n");
+        STRRES_ERROR(STR_AUDIO_PDM_PIN_CONFLICT, used[i], names[i], role);
+        STRRES_PRINTF(STR_AUDIO_PDM_PIN_CONFLICT_NOTE);
         return false;
     }
 
@@ -701,26 +704,26 @@ static bool pdm_pins_free(int clk, int din)
 int cmd_audio_pdm(int argc, char **argv)
 {
     if (argc < 3) {
-        diag_printf("Usage: pdm <clk> <data> [rate <hz>]\n");
+        STRRES_PRINTF(STR_AUDIO_USAGE_PDM);
         return -1;
     }
 
     int clk = 0;
     int din = 0;
     if (cli_parse_int_arg(argv[1], &clk) < 0 || cli_parse_int_arg(argv[2], &din) < 0) {
-        diag_error("CLK and DATA must be pin numbers");
+        STRRES_ERROR(STR_AUDIO_PDM_PINS_NUMERIC);
         return -1;
     }
     if (!GPIO_IS_VALID_OUTPUT_GPIO(clk)) {
-        diag_error("CLK: GPIO %d is not an output-capable pin on this chip", clk);
+        STRRES_ERROR(STR_AUDIO_PDM_CLK_INVALID, clk);
         return -1;
     }
     if (!GPIO_IS_VALID_GPIO(din)) {
-        diag_error("DATA: GPIO %d is not a valid pin on this chip", din);
+        STRRES_ERROR(STR_AUDIO_PDM_DATA_INVALID, din);
         return -1;
     }
     if (clk == din) {
-        diag_error("CLK and DATA cannot both be GPIO %d", clk);
+        STRRES_ERROR(STR_AUDIO_PDM_PINS_DISTINCT, clk);
         return -1;
     }
 
@@ -743,25 +746,22 @@ int cmd_audio_pdm(int argc, char **argv)
     int index = 3;
     while (index < argc) {
         if (strcasecmp(argv[index], "rate") != 0) {
-            diag_error("Unexpected argument '%s'; the only option is 'rate <hz>'",
-                     argv[index]);
+            STRRES_ERROR(STR_AUDIO_UNEXPECTED_ARGUMENT_PDM, argv[index]);
             return -1;
         }
         if (index + 1 >= argc) {
-            diag_error("'rate' needs a value");
+            STRRES_ERROR(STR_AUDIO_RATE_NEEDS_VALUE);
             return -1;
         }
         int rate = 0;
         if (cli_parse_int_arg(argv[index + 1], &rate) < 0 ||
             rate < MIN_RATE_HZ || rate > MAX_RATE_HZ) {
-            diag_error("Sample rate must be %d-%d Hz", MIN_RATE_HZ, MAX_RATE_HZ);
+            STRRES_ERROR(STR_AUDIO_RATE_RANGE, MIN_RATE_HZ, MAX_RATE_HZ);
             return -1;
         }
         if (existing && (uint32_t)rate != existing->rate_hz) {
-            diag_error("The I2S bus is already running at %lu Hz",
-                     (unsigned long)existing->rate_hz);
-            diag_printf("Capture and playback share one rate; re-run "
-                      "'audio bus ... rate %d' to change both.\n", rate);
+            STRRES_ERROR(STR_AUDIO_BUS_RATE_FIXED, (unsigned long)existing->rate_hz);
+            STRRES_PRINTF(STR_AUDIO_BUS_RATE_FIXED_NOTE, rate);
             return -1;
         }
         fmt.rate_hz = (uint32_t)rate;
@@ -777,19 +777,19 @@ int cmd_audio_pdm(int argc, char **argv)
         return -1;   /* the transport has already explained */
     }
     if (err != ESP_OK) {
-        diag_error("Opening the PDM microphone: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_AUDIO_PDM_OPEN_FAILED, esp_err_to_name(err));
         return -1;
     }
 
     err = audio_bus_rx_enable(true);
     if (err != ESP_OK) {
-        diag_error("Starting the receiver: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_AUDIO_RX_START_FAILED, esp_err_to_name(err));
         audio_bus_rx_close();
         return -1;
     }
 
     print_input();
-    diag_printf("Run 'audio record' to see what it hears.\n");
+    STRRES_PRINTF(STR_AUDIO_PDM_NEXT_STEP);
     return 0;
 }
 
@@ -801,13 +801,12 @@ static int take_seconds(int argc, char **argv, int index, double *seconds,
         return 0;
     }
     if (index + 1 < argc) {
-        diag_error("Unexpected argument '%s'", argv[index + 1]);
+        STRRES_ERROR(STR_AUDIO_UNEXPECTED_ARGUMENT, argv[index + 1]);
         return -1;
     }
     if (cli_parse_double_arg(argv[index], seconds) < 0 || *seconds <= 0.0 ||
         *seconds > most) {
-        diag_error("Duration must be greater than 0 and at most %.0f seconds",
-                 most);
+        STRRES_ERROR(STR_AUDIO_DURATION_RANGE, most);
         return -1;
     }
     return 0;
@@ -826,7 +825,7 @@ int cmd_audio_record(int argc, char **argv)
 
     esp_err_t err = audio_bus_rx_enable(true);
     if (err != ESP_OK) {
-        diag_error("Starting the receiver: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_AUDIO_RX_START_FAILED, esp_err_to_name(err));
         return -1;
     }
 
@@ -863,7 +862,7 @@ int cmd_audio_capture_file(int argc, char **argv)
 
     FILE *test = fopen("/sd/.mount_test", "w");
     if (!test) {
-        diag_error("SD card not mounted at /sd. Run 'sd spi' or 'sd mmc' first.");
+        STRRES_ERROR(STR_AUDIO_SD_NOT_MOUNTED);
         return -1;
     }
     fclose(test);
@@ -871,7 +870,7 @@ int cmd_audio_capture_file(int argc, char **argv)
 
     esp_err_t err = audio_bus_rx_enable(true);
     if (err != ESP_OK) {
-        diag_error("Starting the receiver: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_AUDIO_RX_START_FAILED, esp_err_to_name(err));
         return -1;
     }
 
@@ -884,7 +883,7 @@ int cmd_audio_capture_file(int argc, char **argv)
     const size_t block_frames = audio_bus_block_frames();
     void *buffer = malloc(block_frames * frame_bytes);
     if (!buffer) {
-        diag_error("Out of memory for capture buffer");
+        STRRES_ERROR(STR_AUDIO_CAPTURE_OUT_OF_MEMORY);
         return -1;
     }
 
@@ -897,7 +896,7 @@ int cmd_audio_capture_file(int argc, char **argv)
 
         FILE *f = fopen(path, "wb");
         if (!f) {
-            diag_error("Opening %s: %s", path, strerror(errno));
+            STRRES_ERROR(STR_AUDIO_OPEN_FAILED, path, strerror(errno));
             free(buffer);
             return -1;
         }
@@ -914,7 +913,7 @@ int cmd_audio_capture_file(int argc, char **argv)
             size_t got = 0;
             esp_err_t read_err = audio_bus_read(buffer, want * frame_bytes, &got, 1000);
             if (read_err != ESP_OK) {
-                diag_error("Read error: %s", esp_err_to_name(read_err));
+                STRRES_ERROR(STR_AUDIO_READ_FAILED, esp_err_to_name(read_err));
                 fclose(f);
                 free(buffer);
                 return -1;
@@ -927,7 +926,7 @@ int cmd_audio_capture_file(int argc, char **argv)
             }
 
             if (fwrite(buffer, frame_bytes, frames, f) != frames) {
-                diag_error("Writing to %s: %s", path, strerror(errno));
+                STRRES_ERROR(STR_AUDIO_WRITE_FAILED, path, strerror(errno));
                 fclose(f);
                 free(buffer);
                 return -1;
@@ -938,7 +937,7 @@ int cmd_audio_capture_file(int argc, char **argv)
         }
 
         if (fflush(f) != 0 || fsync(fileno(f)) != 0) {
-            diag_error("Flushing %s: %s", path, strerror(errno));
+            STRRES_ERROR(STR_AUDIO_FLUSH_FAILED, path, strerror(errno));
             fclose(f);
             free(buffer);
             return -1;
@@ -946,16 +945,15 @@ int cmd_audio_capture_file(int argc, char **argv)
 
         fclose(f);
 
-        diag_printf("%s: %.1f s, %llu samples, %d overruns\n",
-                  path, 10.0, (unsigned long long)samples_written, overruns);
+        STRRES_PRINTF(STR_AUDIO_RECORD_SUMMARY,
+                      path, 10.0, (unsigned long long)samples_written, overruns);
 
         file_num++;
     }
 
     free(buffer);
 
-    diag_printf("%llu samples, %d files\n",
-            samples_captured, file_num);
+    STRRES_PRINTF(STR_AUDIO_RECORD_FILES, samples_captured, file_num);
 
 
     return 0;
@@ -974,7 +972,7 @@ int cmd_audio_level(int argc, char **argv)
 
     esp_err_t err = audio_bus_rx_enable(true);
     if (err != ESP_OK) {
-        diag_error("Starting the receiver: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_AUDIO_RX_START_FAILED, esp_err_to_name(err));
         return -1;
     }
     audio_capture_flush(0.1);
@@ -985,8 +983,7 @@ int cmd_audio_level(int argc, char **argv)
      * actually have while tapping a microphone, and it needs the answer to
      * arrive while your finger is still moving.
      */
-    diag_printf("RMS per slot, ten times a second for %.0f s. Bars run from "
-              "-80 dBFS to 0.\n", seconds);
+    STRRES_PRINTF(STR_AUDIO_MONITOR_HEADER, seconds);
 
     int ticks = (int)(seconds / LEVEL_TICK_SECONDS);
     for (int i = 0; i < ticks; i++) {
@@ -997,7 +994,7 @@ int cmd_audio_level(int argc, char **argv)
         };
         audio_capture_t cap;
         if (audio_capture_run(&req, &cap) != ESP_OK) {
-            diag_error("Capture failed: %s", esp_err_to_name(cap.error));
+            STRRES_ERROR(STR_AUDIO_CAPTURE_FAILED, esp_err_to_name(cap.error));
             return -1;
         }
 
@@ -1015,8 +1012,8 @@ int cmd_audio_level(int argc, char **argv)
             memset(bar[ch], '#', (size_t)cells);
             bar[ch][cells] = '\0';
         }
-        diag_printf("L %-32s %6.1f   R %-32s %6.1f\n", bar[0], db[0], bar[1],
-                  db[1]);
+        STRRES_PRINTF(STR_AUDIO_MONITOR_ROW,
+                      bar[0], db[0], bar[1], db[1]);
     }
 
     return 0;
@@ -1061,7 +1058,7 @@ int cmd_audio_loopback(int argc, char **argv)
     int dout = -1;
     audio_bus_pins(NULL, NULL, &dout, NULL, NULL);
     if (dout < 0) {
-        diag_error("The bus has no DOUT pin, so there is nothing to play");
+        STRRES_ERROR(STR_AUDIO_NO_DOUT);
         return -1;
     }
 
@@ -1085,12 +1082,12 @@ int cmd_audio_loopback(int argc, char **argv)
     while (index < argc) {
         if (strcasecmp(argv[index], "level") == 0) {
             if (index + 1 >= argc) {
-                diag_error("'level' needs a percentage");
+                STRRES_ERROR(STR_AUDIO_LEVEL_NEEDS_VALUE);
                 return -1;
             }
             int pct = 0;
             if (cli_parse_int_arg(argv[index + 1], &pct) < 0 || pct < 1 || pct > 100) {
-                diag_error("Level must be 1-100 percent of full scale");
+                STRRES_ERROR(STR_AUDIO_LEVEL_RANGE);
                 return -1;
             }
             signal.level_pct = pct;
@@ -1099,7 +1096,7 @@ int cmd_audio_loopback(int argc, char **argv)
         }
         if (cli_parse_double_arg(argv[index], &window) < 0 || window <= 0.0 ||
             window > 10.0) {
-            diag_error("Unexpected argument '%s'", argv[index]);
+            STRRES_ERROR(STR_AUDIO_UNEXPECTED_ARGUMENT, argv[index]);
             return -1;
         }
         index++;
@@ -1110,23 +1107,21 @@ int cmd_audio_loopback(int argc, char **argv)
     }
     uint32_t rx_rate = audio_bus_rx_rate();
     if (rx_rate && hz >= rx_rate / 2.0) {
-        diag_error("%.0f Hz is above the receiver's Nyquist limit of %.0f Hz",
-                 hz, rx_rate / 2.0);
+        STRRES_ERROR(STR_AUDIO_ABOVE_NYQUIST, hz, rx_rate / 2.0);
         return -1;
     }
     if (audio_playing()) {
-        diag_error("Something is already playing. Run 'audio stop' first.");
+        STRRES_ERROR(STR_AUDIO_ALREADY_PLAYING);
         return -1;
     }
 
     esp_err_t err = audio_bus_rx_enable(true);
     if (err != ESP_OK) {
-        diag_error("Starting the receiver: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_AUDIO_RX_START_FAILED, esp_err_to_name(err));
         return -1;
     }
 
-    diag_printf("Testing whether the input hears %.0f Hz at %d%% from the "
-              "output.\n", hz, signal.level_pct);
+    STRRES_PRINTF(STR_AUDIO_LOOPBACK_INTRO, hz, signal.level_pct);
 
     /*
      * Measure the same frequency twice, silent and then playing, and report
@@ -1155,15 +1150,14 @@ int cmd_audio_loopback(int argc, char **argv)
     audio_play_stop();
 
     if (isnan(quiet_db) || isnan(loud_db)) {
-        diag_error("Capture failed during the measurement");
+        STRRES_ERROR(STR_AUDIO_LOOPBACK_CAPTURE_FAILED);
         return -1;
     }
 
-    diag_printf("\n%-8s %10s %10s %8s\n", "slot", "quiet", "playing", "change");
+    STRRES_PRINTF(STR_AUDIO_LOOPBACK_TABLE_HEADER, "slot", "quiet", "playing", "change");
     for (int ch = 0; ch < 2; ch++) {
-        diag_printf("%-8s %7.1f dB %7.1f dB %6.1f dB\n",
-                  ch == 0 ? "left" : "right", quiet[ch], loud[ch],
-                  loud[ch] - quiet[ch]);
+        STRRES_PRINTF(STR_AUDIO_LOOPBACK_TABLE_ROW,
+                      ch == 0 ? "left" : "right", quiet[ch], loud[ch], loud[ch] - quiet[ch]);
     }
 
     double delta = loud_db - quiet_db;
@@ -1171,27 +1165,22 @@ int cmd_audio_loopback(int argc, char **argv)
 
     diag_printf("\n");
     if (delta >= LOOPBACK_HEARD_DB) {
-        diag_printf("Heard it: %.0f Hz rose %.1f dB in the %s slot when the "
-                  "output started.\n", hz, delta, slot ? "right" : "left");
+        STRRES_PRINTF(STR_AUDIO_LOOPBACK_HEARD, hz, delta, slot ? "right" : "left");
         if (audio_bus_rx_internal()) {
-            diag_printf("Internal loopback, so this proves the transmit and "
-                      "capture paths and nothing outside them.\n");
+            STRRES_PRINTF(STR_AUDIO_LOOPBACK_INTERNAL_NOTE);
         }
         return 0;
     }
 
     if (delta >= LOOPBACK_MARGINAL_DB) {
-        diag_printf("Marginal: %.0f Hz rose only %.1f dB -- something is "
-                  "getting through, but not a working path.\n", hz, delta);
+        STRRES_PRINTF(STR_AUDIO_LOOPBACK_MARGINAL, hz, delta);
     } else {
-        diag_printf("Not heard: %.0f Hz did not rise when the output started.\n",
-                  hz);
+        STRRES_PRINTF(STR_AUDIO_LOOPBACK_NOT_HEARD, hz);
     }
 
     /* The useful part of a negative result is knowing which half to suspect,
      * and these are the questions in the order they are cheapest to answer. */
-    diag_printf("Try in order: 'audio tone %.0f 3', 'audio record', then "
-              "'audio loopback %.0f level 80'.\n", hz, hz);
+    STRRES_PRINTF(STR_AUDIO_LOOPBACK_TRY, hz, hz);
     return -1;
 }
 
@@ -1204,13 +1193,14 @@ int cmd_audio_loopback(int argc, char **argv)
  * when there is one, and an input-only part gets the question otherwise -- a
  * codec with a microphone preamp may well have a gain worth setting.
  */
-static const audio_codec_t *require_codec(const char *operation)
+static const audio_codec_t *require_codec(strres_id_t no_codec)
 {
     const audio_codec_t *codec = tx_codec ? tx_codec : rx_codec;
     if (!codec) {
-        diag_error("No codec attached, so there is nothing to %s", operation);
-        diag_printf("Run 'audio codecs' for the parts this firmware knows, then "
-                  "attach one (for example 'audio-nau8822 init').\n");
+        /* A variable id, so unchecked; both ids given here are whole
+         * sentences that take no arguments. */
+        strres_error(no_codec);
+        STRRES_PRINTF(STR_AUDIO_NO_CODEC_NOTE);
         return NULL;
     }
     return codec;
@@ -1218,7 +1208,7 @@ static const audio_codec_t *require_codec(const char *operation)
 
 int cmd_audio_volume(int argc, char **argv)
 {
-    const audio_codec_t *codec = require_codec("set the volume on");
+    const audio_codec_t *codec = require_codec(STR_AUDIO_NO_CODEC_VOLUME);
     if (!codec) {
         return -1;
     }
@@ -1229,23 +1219,23 @@ int cmd_audio_volume(int argc, char **argv)
          * saying plainly: a fixed-gain amplifier has nowhere to put a volume
          * setting, but the generator can still be turned down.
          */
-        diag_error("%s has no volume control", codec->name);
-        diag_printf("Use the digital level instead: 'audio tone 1000 3 level 10'.\n");
+        STRRES_ERROR(STR_AUDIO_NO_VOLUME_CONTROL, codec->name);
+        STRRES_PRINTF(STR_AUDIO_NO_VOLUME_NOTE);
         return -1;
     }
 
     if (argc < 2) {
         if (last_volume_pct < 0) {
-            diag_printf("Volume has not been set this session.\n");
+            STRRES_PRINTF(STR_AUDIO_VOLUME_UNSET);
         } else {
-            diag_printf("Volume %d%%\n", last_volume_pct);
+            STRRES_PRINTF(STR_AUDIO_VOLUME_IS, last_volume_pct);
         }
         return 0;
     }
 
     int pct = 0;
     if (cli_parse_int_arg(argv[1], &pct) < 0 || pct < 0 || pct > 100) {
-        diag_error("Volume must be 0-100 percent");
+        STRRES_ERROR(STR_AUDIO_VOLUME_RANGE);
         return -1;
     }
 
@@ -1254,24 +1244,24 @@ int cmd_audio_volume(int argc, char **argv)
         return -1; /* the driver has already explained; see audio_codec_t */
     }
     if (err != ESP_OK) {
-        diag_error("Setting the volume on %s: %s", codec->name, esp_err_to_name(err));
+        STRRES_ERROR(STR_AUDIO_VOLUME_SET_FAILED, codec->name, esp_err_to_name(err));
         return -1;
     }
 
     last_volume_pct = pct;
-    diag_printf("Volume %d%%\n", pct);
+    STRRES_PRINTF(STR_AUDIO_VOLUME_SET, pct);
     return 0;
 }
 
 int cmd_audio_mute(int argc, char **argv)
 {
-    const audio_codec_t *codec = require_codec("mute");
+    const audio_codec_t *codec = require_codec(STR_AUDIO_NO_CODEC_MUTE);
     if (!codec) {
         return -1;
     }
 
     if (!codec->set_mute) {
-        diag_error("%s has no mute control", codec->name);
+        STRRES_ERROR(STR_AUDIO_NO_MUTE_CONTROL, codec->name);
         return -1;
     }
 
@@ -1282,7 +1272,7 @@ int cmd_audio_mute(int argc, char **argv)
         } else if (strcasecmp(argv[1], "off") == 0 || strcasecmp(argv[1], "false") == 0) {
             mute = false;
         } else {
-            diag_error("Expected 'on' or 'off', not '%s'", argv[1]);
+            STRRES_ERROR(STR_AUDIO_MUTE_EXPECTED_ON_OFF, argv[1]);
             return -1;
         }
     }
@@ -1292,12 +1282,19 @@ int cmd_audio_mute(int argc, char **argv)
         return -1; /* the driver has already explained; see audio_codec_t */
     }
     if (err != ESP_OK) {
-        diag_error("%s %s: %s", mute ? "Muting" : "Unmuting", codec->name,
-                 esp_err_to_name(err));
+        if (mute) {
+            STRRES_ERROR(STR_AUDIO_MUTE_FAILED, codec->name, esp_err_to_name(err));
+        } else {
+            STRRES_ERROR(STR_AUDIO_UNMUTE_FAILED, codec->name, esp_err_to_name(err));
+        }
         return -1;
     }
 
-    diag_printf("%s %s\n", codec->name, mute ? "muted" : "unmuted");
+    if (mute) {
+        STRRES_PRINTF(STR_AUDIO_MUTED, codec->name);
+    } else {
+        STRRES_PRINTF(STR_AUDIO_UNMUTED, codec->name);
+    }
     return 0;
 }
 
@@ -1316,20 +1313,24 @@ int cmd_audio_close(int argc, char **argv)
      * of state that makes the next bring-up attempt confusing.
      */
     if (tx_codec) {
-        diag_printf("Detaching %s\n", tx_codec->name);
+        STRRES_PRINTF(STR_AUDIO_DETACHING, tx_codec->name);
     }
     if (rx_codec && rx_codec != tx_codec) {
-        diag_printf("Detaching %s\n", rx_codec->name);
+        STRRES_PRINTF(STR_AUDIO_DETACHING, rx_codec->name);
     }
     audio_codec_detach();
 
     bool had_rx = audio_bus_rx_ready();
     if (!audio_bus_ready() && !had_rx) {
-        diag_printf("I2S was not initialized.\n");
+        STRRES_PRINTF(STR_AUDIO_NOT_INITIALIZED_RELEASE);
         return 0;
     }
 
     audio_bus_close();
-    diag_printf("I2S released%s.\n", had_rx ? ", receiver included" : "");
+    if (had_rx) {
+        STRRES_PRINTF(STR_AUDIO_RELEASED_WITH_RX);
+    } else {
+        STRRES_PRINTF(STR_AUDIO_RELEASED);
+    }
     return 0;
 }

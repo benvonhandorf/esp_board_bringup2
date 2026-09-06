@@ -71,9 +71,8 @@ static esp_err_t sph0645_configure(const audio_format_t *fmt)
     }
 
     if (fmt->bits == 16) {
-        diag_error("The SPH0645 needs 32-bit slots and the bus is set to 16");
-        diag_printf("Its oversampling ratio is fixed at 64, so the frame must "
-                  "be two 32-bit slots. Re-run 'audio bus ... bits 32'.\n");
+        STRRES_ERROR(STR_AUDIO_SPH0645_NEEDS_32_BIT);
+        STRRES_PRINTF(STR_AUDIO_SPH0645_NEEDS_32_BIT_NOTE);
         return ESP_ERR_NOT_SUPPORTED;
     }
 
@@ -83,21 +82,18 @@ static esp_err_t sph0645_configure(const audio_format_t *fmt)
     }
 
     if (bclk < BCLK_SLEEP_HZ) {
-        diag_error("Bit clock is %.3f MHz, below the 0.9 MHz at which the "
-                 "SPH0645 goes to sleep", bclk / 1e6);
-        diag_printf("Below %d Hz the part sleeps and reads as a dead "
-                  "microphone; it needs %d-%d Hz. Re-run 'audio bus ... rate "
-                  "48000 bits 32'.\n", BCLK_MIN_HZ / BCLK_PER_FRAME,
-                  BCLK_MIN_HZ / BCLK_PER_FRAME, BCLK_MAX_HZ / BCLK_PER_FRAME);
+        STRRES_ERROR(STR_AUDIO_SPH0645_BCLK_TOO_SLOW, bclk / 1e6);
+        STRRES_PRINTF(STR_AUDIO_SPH0645_BCLK_TOO_SLOW_NOTE,
+                      BCLK_MIN_HZ / BCLK_PER_FRAME, BCLK_MIN_HZ / BCLK_PER_FRAME,
+                      BCLK_MAX_HZ / BCLK_PER_FRAME);
         return ESP_ERR_NOT_SUPPORTED;
     }
 
     if (bclk < BCLK_MIN_HZ || bclk > BCLK_MAX_HZ) {
-        diag_error("Bit clock is %.3f MHz, outside the SPH0645's %.3f-%.3f MHz",
-                 bclk / 1e6, BCLK_MIN_HZ / 1e6, BCLK_MAX_HZ / 1e6);
-        diag_printf("In spec is %d-%d Hz; the part may still respond, but "
-                  "out of specification.\n",
-                  BCLK_MIN_HZ / BCLK_PER_FRAME, BCLK_MAX_HZ / BCLK_PER_FRAME);
+        STRRES_ERROR(STR_AUDIO_SPH0645_BCLK_OUT_OF_SPEC,
+                     bclk / 1e6, BCLK_MIN_HZ / 1e6, BCLK_MAX_HZ / 1e6);
+        STRRES_PRINTF(STR_AUDIO_SPH0645_BCLK_OUT_OF_SPEC_NOTE,
+                      BCLK_MIN_HZ / BCLK_PER_FRAME, BCLK_MAX_HZ / BCLK_PER_FRAME);
         return ESP_ERR_NOT_SUPPORTED;
     }
 
@@ -106,18 +102,18 @@ static esp_err_t sph0645_configure(const audio_format_t *fmt)
 
 static void sph0645_status(void)
 {
-    diag_printf("         Records into the %s slot", slot_name());
+    STRRES_PRINTF(STR_AUDIO_SPH0645_STATUS_SLOT, slot_name());
     if (sel_pin >= 0) {
-        diag_printf(", SELECT driven %s on GPIO %d\n",
-                  slot == AUDIO_CHANNEL_RIGHT ? "high" : "low", sel_pin);
+        STRRES_PRINTF(STR_AUDIO_SPH0645_STATUS_SELECT_DRIVEN,
+                      slot == AUDIO_CHANNEL_RIGHT ? "high" : "low", sel_pin);
     } else {
-        diag_printf("; SELECT is strapped on the board, not driven from here\n");
+        STRRES_PRINTF(STR_AUDIO_SPH0645_STATUS_SELECT_STRAPPED);
     }
 
     uint32_t bclk = audio_bus_bclk_hz();
     if (bclk) {
-        diag_printf("         Bit clock %.3f MHz (datasheet %.3f-%.3f)\n",
-                  bclk / 1e6, BCLK_MIN_HZ / 1e6, BCLK_MAX_HZ / 1e6);
+        STRRES_PRINTF(STR_AUDIO_SPH0645_STATUS_BCLK,
+                      bclk / 1e6, BCLK_MIN_HZ / 1e6, BCLK_MAX_HZ / 1e6);
     }
 
     /*
@@ -126,21 +122,18 @@ static void sph0645_status(void)
      * zero, so a reading of "0" in them is the part working as specified
      * rather than a truncation somewhere in this firmware.
      */
-    diag_printf("         24-bit words, 18 bits of real precision, LSBs zero\n");
-    diag_printf("         %.0f dB SPL reads %.0f dBFS; speech at arm's length is "
-              "about %.0f dBFS\n", SENSITIVITY_SPL, SENSITIVITY_DBFS,
-              SENSITIVITY_DBFS - (SENSITIVITY_SPL - 70.0));
+    STRRES_PRINTF(STR_AUDIO_SPH0645_STATUS_PRECISION);
+    STRRES_PRINTF(STR_AUDIO_SPH0645_STATUS_SPL,
+                  SENSITIVITY_SPL, SENSITIVITY_DBFS,
+                  SENSITIVITY_DBFS - (SENSITIVITY_SPL - 70.0));
 
     /* No control bus, so the same caveat as the NS4168 applies in reverse. */
-    diag_printf("         No control bus, so nothing here confirms the part is "
-              "really an SPH0645\n");
+    STRRES_PRINTF(STR_AUDIO_SPH0645_STATUS_NO_BUS);
 
     if (slot == AUDIO_CHANNEL_LEFT) {
-        diag_printf("         The right slot should be near silence; mirroring "
-                  "means no pull-down on the data line\n");
+        STRRES_PRINTF(STR_AUDIO_SPH0645_STATUS_MIRROR_RIGHT);
     } else {
-        diag_printf("         The left slot should be near silence; mirroring "
-                  "means no pull-down on the data line\n");
+        STRRES_PRINTF(STR_AUDIO_SPH0645_STATUS_MIRROR_LEFT);
     }
 }
 
@@ -156,7 +149,7 @@ static void sph0645_detach(void)
 
 const audio_codec_t sph0645_codec = {
     .name = "sph0645",
-    .description = "Knowles SPH0645LM4H-B I2S MEMS microphone (no control bus)",
+    .description = STR_AUDIO_SPH0645_GROUP_HELP,
     .directions = AUDIO_DIR_RX,
     .needs_mclk = false,
     .probe = NULL,          /* nothing to ask; the part only ever talks audio */
@@ -178,9 +171,8 @@ int cmd_sph0645_init(int argc, char **argv)
         return -1;
     }
     if (audio_bus_rx_mode() != AUDIO_RX_STD) {
-        diag_error("The SPH0645 is an I2S part, but the receiver is in PDM mode");
-        diag_printf("Open the bus with a receive line instead: 'audio bus <bclk> "
-                  "<ws> <dout> din <pin> bits 32'.\n");
+        STRRES_ERROR(STR_AUDIO_SPH0645_PDM_MODE_WRONG);
+        STRRES_PRINTF(STR_AUDIO_SPH0645_PDM_MODE_NOTE);
         return -1;
     }
 
@@ -200,19 +192,17 @@ int cmd_sph0645_init(int argc, char **argv)
             index++;
         } else if (strcasecmp(argv[index], "sel") == 0) {
             if (index + 1 >= argc) {
-                diag_error("'sel' needs a pin number");
+                STRRES_ERROR(STR_AUDIO_SPH0645_SEL_NEEDS_VALUE);
                 return -1;
             }
             if (cli_parse_int_arg(argv[index + 1], &pin) < 0 ||
                 !GPIO_IS_VALID_OUTPUT_GPIO(pin)) {
-                diag_error("SELECT must be an output-capable pin, not '%s'",
-                         argv[index + 1]);
+                STRRES_ERROR(STR_AUDIO_SPH0645_SEL_INVALID, argv[index + 1]);
                 return -1;
             }
             index += 2;
         } else {
-            diag_error("Unexpected argument '%s'; options are 'left', 'right' "
-                     "and 'sel <pin>'", argv[index]);
+            STRRES_ERROR(STR_AUDIO_SPH0645_UNEXPECTED_ARGUMENT, argv[index]);
             return -1;
         }
     }
@@ -240,8 +230,8 @@ int cmd_sph0645_init(int argc, char **argv)
         };
         esp_err_t err = gpio_config(&config);
         if (err != ESP_OK) {
-            diag_error("Configuring GPIO %d as SELECT: %s", pin,
-                     esp_err_to_name(err));
+            STRRES_ERROR(STR_AUDIO_SPH0645_SEL_CONFIG_FAILED,
+                         pin, esp_err_to_name(err));
             return -1;
         }
         sel_pin = pin;
@@ -257,12 +247,11 @@ int cmd_sph0645_init(int argc, char **argv)
     attached = true;
     audio_codec_attach(&sph0645_codec);
 
-    diag_printf("SPH0645 attached, recording the %s slot\n", slot_name());
+    STRRES_PRINTF(STR_AUDIO_SPH0645_ATTACHED, slot_name());
     if (!slot_given && sel_pin < 0) {
-        diag_printf("Assuming SELECT is strapped low. If 'audio record' shows "
-                  "the signal in the other slot, re-run with 'right'.\n");
+        STRRES_PRINTF(STR_AUDIO_SPH0645_ASSUMING_STRAPPED);
     }
-    diag_printf("Run 'audio record' to see what it hears.\n");
+    STRRES_PRINTF(STR_AUDIO_SPH0645_NEXT_STEP);
     return 0;
 }
 
@@ -272,12 +261,11 @@ int cmd_sph0645_status(int argc, char **argv)
     (void)argv;
 
     if (!attached) {
-        diag_printf("SPH0645 is not attached. Run 'audio-sph0645 init "
-                  "[left|right] [sel <pin>]'.\n");
+        STRRES_PRINTF(STR_AUDIO_SPH0645_NOT_ATTACHED);
         return 0;
     }
 
-    diag_printf("SPH0645 attached\n");
+    STRRES_PRINTF(STR_AUDIO_SPH0645_ATTACHED_STATUS);
     sph0645_status();
     return 0;
 }

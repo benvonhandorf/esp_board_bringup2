@@ -552,71 +552,123 @@ static const cli_group_t spi_group = {
 /* ------------------------------------------------------------------ */
 
 static const cli_command_t audio_commands[] = {
-    {"bus",      "<bclk> <ws> <dout> [din <pin>] [mclk <pin>] [rate <hz>] [bits <n>]",
-                 "Initialize I2S and start its clocks",              cmd_audio_bus},
-    {"pdm",      "<clk> <data> [rate <hz>]", "Receive from a PDM microphone", cmd_audio_pdm},
-    {"info",     "",   "Show pins, format, clocks and the attached codec", cmd_audio_info},
-    {"codecs",   "",   "List the parts this firmware can drive",      cmd_audio_codecs},
-    {"tone",     "<hz> [seconds|continuous] [level <pct>] [left|right|both]",
-                 "Play a sine tone",                                  cmd_audio_tone},
-    {"sweep",    "<start_hz> <end_hz> [seconds] [level <pct>] [log|linear]",
-                 "Sweep a sine tone between two frequencies",         cmd_audio_sweep},
-    {"stop",     "",   "End a continuous tone",                       cmd_audio_stop},
-    {"record",   "[seconds]", "Capture the input and report levels and a spectrum", cmd_audio_record},
-    {"capture",  "[seconds]", "Record to sequential SD files at 48 kHz, 10 s rollover", cmd_audio_capture_file},
-    {"level",    "[seconds]", "Live input level meter",               cmd_audio_level},
-    {"loopback", "[hz] [seconds] [level <pct>]",
-                 "Play a tone and measure whether the input hears it", cmd_audio_loopback},
-    {"volume",   "[pct]",      "Show or set the codec's output volume", cmd_audio_volume},
-    {"mute",     "[on|off]",   "Mute or unmute the codec",             cmd_audio_mute},
-    {"close",    "",           "Detach the codec and release I2S",     cmd_audio_close},
+    {"bus",      NULL, NULL, cmd_audio_bus},
+    {"pdm",      NULL, NULL, cmd_audio_pdm},
+    {"info",     NULL, NULL, cmd_audio_info},
+    {"codecs",   NULL, NULL, cmd_audio_codecs},
+    {"tone",     NULL, NULL, cmd_audio_tone},
+    {"sweep",    NULL, NULL, cmd_audio_sweep},
+    {"stop",     NULL, NULL, cmd_audio_stop},
+    {"record",   NULL, NULL, cmd_audio_record},
+    {"capture",  NULL, NULL, cmd_audio_capture_file},
+    {"level",    NULL, NULL, cmd_audio_level},
+    {"loopback", NULL, NULL, cmd_audio_loopback},
+    {"volume",   NULL, NULL, cmd_audio_volume},
+    {"mute",     NULL, NULL, cmd_audio_mute},
+    {"close",    NULL, NULL, cmd_audio_close},
 };
+
+/* Parallel to audio_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t audio_text[] = {
+    {STR_AUDIO_BUS_USAGE,       STR_AUDIO_BUS_HELP},
+    {STR_AUDIO_PDM_USAGE,       STR_AUDIO_PDM_HELP},
+    {STR_AUDIO_INFO_USAGE,      STR_AUDIO_INFO_HELP},
+    {STR_AUDIO_CODECS_USAGE,    STR_AUDIO_CODECS_HELP},
+    {STR_AUDIO_TONE_USAGE,      STR_AUDIO_TONE_HELP},
+    {STR_AUDIO_SWEEP_USAGE,     STR_AUDIO_SWEEP_HELP},
+    {STR_AUDIO_STOP_USAGE,      STR_AUDIO_STOP_HELP},
+    {STR_AUDIO_RECORD_USAGE,    STR_AUDIO_RECORD_HELP},
+    {STR_AUDIO_CAPTURE_USAGE,   STR_AUDIO_CAPTURE_HELP},
+    {STR_AUDIO_LEVEL_USAGE,     STR_AUDIO_LEVEL_HELP},
+    {STR_AUDIO_LOOPBACK_USAGE,  STR_AUDIO_LOOPBACK_HELP},
+    {STR_AUDIO_VOLUME_USAGE,    STR_AUDIO_VOLUME_HELP},
+    {STR_AUDIO_MUTE_USAGE,      STR_AUDIO_MUTE_HELP},
+    {STR_AUDIO_CLOSE_USAGE,     STR_AUDIO_CLOSE_HELP},
+};
+_Static_assert(ARRAY_COUNT(audio_text) == ARRAY_COUNT(audio_commands),
+               "audio help ids and commands must be the same length");
 
 static const cli_group_t audio_group = {
     .name = "audio",
-    .help = "Audio over I2S: tone, sweep, microphone capture and loopback testing",
     .commands = audio_commands,
     .command_count = ARRAY_COUNT(audio_commands),
+    .command_text = audio_text,
+    .help_id = STR_AUDIO_GROUP_HELP,
 };
 
 static const cli_command_t nau8822_commands[] = {
-    {"init",   "[address]",           "Power up and configure the codec (0x1a default)", cmd_nau8822_init},
-    {"status", "",                    "Show identity, routing and volume",  cmd_nau8822_status},
-    {"reg",    "<n> [value]",         "Read or write a 9-bit register",     cmd_nau8822_reg},
-    {"route",  "<hp|speaker|both>",   "Choose which outputs are driven",    cmd_nau8822_route},
-    {"input",  "<mic|line|off> [boost]", "Choose which input reaches the ADC", cmd_nau8822_input},
-    {"gain",   "[db]",                "Show or set the analog gain on the selected input", cmd_nau8822_gain},
+    {"init",   NULL, NULL, cmd_nau8822_init},
+    {"status", NULL, NULL, cmd_nau8822_status},
+    {"reg",    NULL, NULL, cmd_nau8822_reg},
+    {"route",  NULL, NULL, cmd_nau8822_route},
+    {"input",  NULL, NULL, cmd_nau8822_input},
+    {"gain",   NULL, NULL, cmd_nau8822_gain},
 };
+
+/* Parallel to nau8822_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t nau8822_text[] = {
+    {STR_AUDIO_NAU8822_INIT_USAGE,    STR_AUDIO_NAU8822_INIT_HELP},
+    {STR_AUDIO_NAU8822_STATUS_USAGE,  STR_AUDIO_NAU8822_STATUS_HELP},
+    {STR_AUDIO_NAU8822_REG_USAGE,     STR_AUDIO_NAU8822_REG_HELP},
+    {STR_AUDIO_NAU8822_ROUTE_USAGE,   STR_AUDIO_NAU8822_ROUTE_HELP},
+    {STR_AUDIO_NAU8822_INPUT_USAGE,   STR_AUDIO_NAU8822_INPUT_HELP},
+    {STR_AUDIO_NAU8822_GAIN_USAGE,    STR_AUDIO_NAU8822_GAIN_HELP},
+};
+_Static_assert(ARRAY_COUNT(nau8822_text) == ARRAY_COUNT(nau8822_commands),
+               "audio-nau8822 help ids and commands must be the same length");
 
 static const cli_group_t nau8822_group = {
     .name = "audio-nau8822",
-    .help = "Nuvoton NAU8822 stereo codec with speaker driver, I2C at 0x1a/0x1b",
     .commands = nau8822_commands,
     .command_count = ARRAY_COUNT(nau8822_commands),
+    .command_text = nau8822_text,
+    .help_id = STR_AUDIO_NAU8822_GROUP_HELP,
 };
 
 static const cli_command_t ns4168_commands[] = {
-    {"init",   "[sd <pin>]", "Attach the amplifier and enable it", cmd_ns4168_init},
-    {"status", "",           "Show the enable pin and its state",  cmd_ns4168_status},
+    {"init",   NULL, NULL, cmd_ns4168_init},
+    {"status", NULL, NULL, cmd_ns4168_status},
 };
+
+/* Parallel to ns4168_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t ns4168_text[] = {
+    {STR_AUDIO_NS4168_INIT_USAGE,    STR_AUDIO_NS4168_INIT_HELP},
+    {STR_AUDIO_NS4168_STATUS_USAGE,  STR_AUDIO_NS4168_STATUS_HELP},
+};
+_Static_assert(ARRAY_COUNT(ns4168_text) == ARRAY_COUNT(ns4168_commands),
+               "audio-ns4168 help ids and commands must be the same length");
 
 static const cli_group_t ns4168_group = {
     .name = "audio-ns4168",
-    .help = "NS4168 mono I2S class-D amplifier (no control bus)",
     .commands = ns4168_commands,
     .command_count = ARRAY_COUNT(ns4168_commands),
+    .command_text = ns4168_text,
+    .help_id = STR_AUDIO_NS4168_GROUP_HELP,
 };
 
 static const cli_command_t sph0645_commands[] = {
-    {"init",   "[left|right] [sel <pin>]", "Attach the microphone and check the bus suits it", cmd_sph0645_init},
-    {"status", "",                         "Show the slot, clock and what the part guarantees", cmd_sph0645_status},
+    {"init",   NULL, NULL, cmd_sph0645_init},
+    {"status", NULL, NULL, cmd_sph0645_status},
 };
+
+/* Parallel to sph0645_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t sph0645_text[] = {
+    {STR_AUDIO_SPH0645_INIT_USAGE,    STR_AUDIO_SPH0645_INIT_HELP},
+    {STR_AUDIO_SPH0645_STATUS_USAGE,  STR_AUDIO_SPH0645_STATUS_HELP},
+};
+_Static_assert(ARRAY_COUNT(sph0645_text) == ARRAY_COUNT(sph0645_commands),
+               "audio-sph0645 help ids and commands must be the same length");
 
 static const cli_group_t sph0645_group = {
     .name = "audio-sph0645",
-    .help = "Knowles SPH0645LM4H-B I2S MEMS microphone (no control bus)",
     .commands = sph0645_commands,
     .command_count = ARRAY_COUNT(sph0645_commands),
+    .command_text = sph0645_text,
+    .help_id = STR_AUDIO_SPH0645_GROUP_HELP,
 };
 
 /* ------------------------------------------------------------------ */
@@ -624,21 +676,37 @@ static const cli_group_t sph0645_group = {
 /* ------------------------------------------------------------------ */
 
 static const cli_command_t sd_commands[] = {
-    {"spi",     "<clk> <mosi> <miso> <cs> [cd <pin>] [khz <freq>]", "Bring a card up over SPI", cmd_sd_spi},
-    {"mmc",     "<clk> <cmd> <d0> [<d1> <d2> <d3>] [cd <pin>] [khz <freq>]", "Bring a card up in 1-bit or 4-bit SD mode", cmd_sd_mmc},
-    {"info",    "",                                    "Report the detected card",  cmd_sd_info},
-    {"bench",   "[size_kb] [block_kb]",                "Measure write and read speed through FAT", cmd_sd_bench},
-    {"raw",     "[size_kb] [block_kb] [start_sector]", "Measure read speed with no filesystem", cmd_sd_raw},
-    {"sweep",   "[max_khz] [size_kb] [block_kb]",      "Find the fastest clock the card reads correctly at", cmd_sd_sweep},
-    {"results", "[clear]",                             "Show or delete the saved results file", cmd_sd_results},
-    {"close",   "",                                    "Unmount, release the card and free the bus", cmd_sd_close},
+    {"spi",     NULL, NULL, cmd_sd_spi},
+    {"mmc",     NULL, NULL, cmd_sd_mmc},
+    {"info",    NULL, NULL, cmd_sd_info},
+    {"bench",   NULL, NULL, cmd_sd_bench},
+    {"raw",     NULL, NULL, cmd_sd_raw},
+    {"sweep",   NULL, NULL, cmd_sd_sweep},
+    {"results", NULL, NULL, cmd_sd_results},
+    {"close",   NULL, NULL, cmd_sd_close},
 };
+
+/* Parallel to sd_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t sd_text[] = {
+    {STR_SD_SPI_USAGE,      STR_SD_SPI_HELP},
+    {STR_SD_MMC_USAGE,      STR_SD_MMC_HELP},
+    {STR_SD_INFO_USAGE,     STR_SD_INFO_HELP},
+    {STR_SD_BENCH_USAGE,    STR_SD_BENCH_HELP},
+    {STR_SD_RAW_USAGE,      STR_SD_RAW_HELP},
+    {STR_SD_SWEEP_USAGE,    STR_SD_SWEEP_HELP},
+    {STR_SD_RESULTS_USAGE,  STR_SD_RESULTS_HELP},
+    {STR_SD_CLOSE_USAGE,    STR_SD_CLOSE_HELP},
+};
+_Static_assert(ARRAY_COUNT(sd_text) == ARRAY_COUNT(sd_commands),
+               "sd help ids and commands must be the same length");
 
 static const cli_group_t sd_group = {
     .name = "sd",
-    .help = "SD/MMC cards over SPI, 1-bit or 4-bit SD, with speed testing",
     .commands = sd_commands,
     .command_count = ARRAY_COUNT(sd_commands),
+    .command_text = sd_text,
+    .help_id = STR_SD_GROUP_HELP,
 };
 
 /* ------------------------------------------------------------------ */

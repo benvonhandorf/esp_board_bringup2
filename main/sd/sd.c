@@ -102,8 +102,7 @@ bool sd_owns_spi_host(void)
 static bool require_card(void)
 {
     if (!card) {
-        diag_error("SD card not initialized. Run 'sd spi <clk> <mosi> <miso> <cs>' "
-                 "or 'sd mmc <clk> <cmd> <d0>' first.");
+        STRRES_ERROR(STR_SD_NOT_INITIALIZED);
         return false;
     }
     return true;
@@ -195,24 +194,23 @@ static int take_options(int argc, char **argv, int index, int *freq_khz, int *cd
 {
     while (index < argc) {
         if (index + 1 >= argc) {
-            diag_error("'%s' needs a value", argv[index]);
+            STRRES_ERROR(STR_SD_OPTION_NEEDS_VALUE, argv[index]);
             return -1;
         }
         if (strcasecmp(argv[index], "khz") == 0) {
             if (cli_parse_int_arg(argv[index + 1], freq_khz) < 0 ||
                 *freq_khz < MIN_FREQ_KHZ || *freq_khz > MAX_FREQ_KHZ) {
-                diag_error("Frequency must be %d-%d kHz", MIN_FREQ_KHZ, MAX_FREQ_KHZ);
+                STRRES_ERROR(STR_SD_FREQUENCY_RANGE, MIN_FREQ_KHZ, MAX_FREQ_KHZ);
                 return -1;
             }
         } else if (strcasecmp(argv[index], "cd") == 0) {
             if (cli_parse_int_arg(argv[index + 1], cd_pin) < 0 ||
                 !GPIO_IS_VALID_GPIO(*cd_pin)) {
-                diag_error("Card detect must be a valid pin number, not '%s'", argv[index + 1]);
+                STRRES_ERROR(STR_SD_CD_INVALID, argv[index + 1]);
                 return -1;
             }
         } else {
-            diag_error("Unexpected argument '%s'; options are 'khz <freq>' and 'cd <pin>'",
-                     argv[index]);
+            STRRES_ERROR(STR_SD_UNEXPECTED_ARGUMENT, argv[index]);
             return -1;
         }
         index += 2;
@@ -225,8 +223,7 @@ static bool check_pins(const int *pins, int count, const char *const *names)
 {
     for (int i = 0; i < count; i++) {
         if (!GPIO_IS_VALID_OUTPUT_GPIO(pins[i])) {
-            diag_error("%s: GPIO %d is not an output-capable pin on this chip",
-                     names[i], pins[i]);
+            STRRES_ERROR(STR_SD_PIN_NOT_OUTPUT_CAPABLE, names[i], pins[i]);
             return false;
         }
     }
@@ -243,19 +240,19 @@ static int take_sizes(int argc, char **argv, int first, size_t *total_bytes, siz
     int block_kb = DEFAULT_BLOCK_KB;
 
     if (argc > first && cli_parse_int_arg(argv[first], &size_kb) < 0) {
-        diag_error("Transfer size must be a whole number of KB");
+        STRRES_ERROR(STR_SD_TRANSFER_SIZE_WHOLE_KB);
         return -1;
     }
     if (argc > first + 1 && cli_parse_int_arg(argv[first + 1], &block_kb) < 0) {
-        diag_error("Block size must be a whole number of KB");
+        STRRES_ERROR(STR_SD_BLOCK_SIZE_WHOLE_KB);
         return -1;
     }
     if (size_kb < 1 || size_kb > MAX_SIZE_KB) {
-        diag_error("Transfer size must be 1-%d KB", MAX_SIZE_KB);
+        STRRES_ERROR(STR_SD_TRANSFER_SIZE_RANGE, MAX_SIZE_KB);
         return -1;
     }
     if (block_kb < 1 || block_kb > MAX_BLOCK_KB) {
-        diag_error("Block size must be 1-%d KB", MAX_BLOCK_KB);
+        STRRES_ERROR(STR_SD_BLOCK_SIZE_RANGE, MAX_BLOCK_KB);
         return -1;
     }
     if (block_kb > size_kb) {
@@ -295,7 +292,7 @@ int cmd_sd_info(int argc, char **argv)
         return -1;
     }
 
-    diag_printf("Interface: %s on pins ", iface_name());
+    STRRES_PRINTF(STR_SD_INFO_INTERFACE, iface_name());
     for (int i = 0; i < cfg.pin_count; i++) {
         diag_printf("%s%d", i ? "," : "", cfg.pins[i]);
     }
@@ -303,12 +300,14 @@ int cmd_sd_info(int argc, char **argv)
 
     if (cfg.cd_pin != GPIO_NUM_NC) {
         /* Active low: the switch closes to ground when a card is seated. */
-        diag_printf("Detect:    GPIO %d reads %d (%s)\n", cfg.cd_pin,
-                  gpio_get_level(cfg.cd_pin),
-                  gpio_get_level(cfg.cd_pin) ? "no card" : "card present");
+        if (gpio_get_level(cfg.cd_pin)) {
+            STRRES_PRINTF(STR_SD_INFO_DETECT_EMPTY, cfg.cd_pin);
+        } else {
+            STRRES_PRINTF(STR_SD_INFO_DETECT_PRESENT, cfg.cd_pin);
+        }
     }
-    diag_printf("Type:      %s\n", card_type());
-    diag_printf("Name:      %.8s\n", card->cid.name);
+    STRRES_PRINTF(STR_SD_INFO_TYPE, card_type());
+    STRRES_PRINTF(STR_SD_INFO_NAME, card->cid.name);
 
     /*
      * The SD CID packs the manufacture date into 12 bits as
@@ -316,24 +315,24 @@ int cmd_sd_info(int argc, char **argv)
      * the date for SD cards rather than print something plausible but wrong.
      */
     if (!card->is_mmc) {
-        diag_printf("CID:       mfg 0x%02X, OEM 0x%04X, rev %d.%d, serial 0x%08X, made %04d-%02d\n",
-                  (unsigned)card->cid.mfg_id, (unsigned)card->cid.oem_id,
-                  (card->cid.revision >> 4) & 0xF, card->cid.revision & 0xF,
-                  (unsigned)card->cid.serial,
-                  2000 + (card->cid.date >> 4), card->cid.date & 0xF);
+        STRRES_PRINTF(STR_SD_INFO_CID_SD,
+                      (unsigned)card->cid.mfg_id, (unsigned)card->cid.oem_id,
+                      (card->cid.revision >> 4) & 0xF, card->cid.revision & 0xF,
+                      (unsigned)card->cid.serial, 2000 + (card->cid.date >> 4),
+                      card->cid.date & 0xF);
     } else {
-        diag_printf("CID:       mfg 0x%02X, OEM 0x%04X, rev %d, serial 0x%08X\n",
-                  (unsigned)card->cid.mfg_id, (unsigned)card->cid.oem_id,
-                  card->cid.revision, (unsigned)card->cid.serial);
+        STRRES_PRINTF(STR_SD_INFO_CID_MMC,
+                      (unsigned)card->cid.mfg_id, (unsigned)card->cid.oem_id,
+                      card->cid.revision, (unsigned)card->cid.serial);
     }
 
     uint64_t bytes = (uint64_t)card->csd.capacity * (uint64_t)card->csd.sector_size;
-    diag_printf("Capacity:  %.2f GiB (%llu bytes, %d sectors of %d bytes)\n",
-              (double)bytes / (1024.0 * 1024.0 * 1024.0), (unsigned long long)bytes,
-              card->csd.capacity, card->csd.sector_size);
-    diag_printf("CSD:       ver %d, read_bl_len %d, command classes 0x%03X\n",
-              card->is_mmc ? card->csd.csd_ver : card->csd.csd_ver + 1,
-              card->csd.read_block_len, (unsigned)card->csd.card_command_class);
+    STRRES_PRINTF(STR_SD_INFO_CAPACITY,
+                  (double)bytes / (1024.0 * 1024.0 * 1024.0), (unsigned long long)bytes,
+                  card->csd.capacity, card->csd.sector_size);
+    STRRES_PRINTF(STR_SD_INFO_CSD,
+                  card->is_mmc ? card->csd.csd_ver : card->csd.csd_ver + 1,
+                  card->csd.read_block_len, (unsigned)card->csd.card_command_class);
 
     /*
      * real_freq_khz is what the host divider actually produced, which is not
@@ -342,39 +341,41 @@ int cmd_sd_info(int argc, char **argv)
      * or the card is the limit.
      */
     if (card->real_freq_khz == 0) {
-        diag_printf("Clock:     unknown\n");
+        STRRES_PRINTF(STR_SD_INFO_CLOCK_UNKNOWN);
     } else {
-        diag_printf("Clock:     %.3f MHz requested %d kHz, negotiated ceiling %.3f MHz%s%s\n",
-                  card->real_freq_khz / 1000.0, cfg.freq_khz, card->max_freq_khz / 1000.0,
-                  card->is_ddr ? ", DDR" : "", card->is_uhs1 ? ", UHS-I" : "");
+        STRRES_PRINTF(STR_SD_INFO_CLOCK,
+                      card->real_freq_khz / 1000.0, cfg.freq_khz, card->max_freq_khz / 1000.0,
+                      card->is_ddr ? ", DDR" : "", card->is_uhs1 ? ", UHS-I" : "");
         /*
          * The CSD speed is what the card advertises after any high-speed switch,
          * and is therefore the line between running it in spec and overclocking
          * it. `sd sweep` finds out what it will actually tolerate.
          */
-        diag_printf("Card rated: %.3f MHz per CSD%s\n", card->csd.tr_speed / 1e6,
-                  card->real_freq_khz * 1000 > card->csd.tr_speed ? "  <-- OVERCLOCKED" : "");
+        if (card->real_freq_khz * 1000 > card->csd.tr_speed) {
+            STRRES_PRINTF(STR_SD_INFO_CARD_RATED_OVER, card->csd.tr_speed / 1e6);
+        } else {
+            STRRES_PRINTF(STR_SD_INFO_CARD_RATED, card->csd.tr_speed / 1e6);
+        }
     }
 
-    diag_printf("Bus width: %d bit negotiated\n", 1 << card->log_bus_width);
+    STRRES_PRINTF(STR_SD_INFO_BUS_WIDTH, 1 << card->log_bus_width);
     if (!card->is_mmc && !card->is_sdio) {
-        diag_printf("SCR:       spec version %d, card supports%s%s\n",
-                  card->scr.sd_spec,
-                  (card->scr.bus_width & BIT(0)) ? " 1-bit" : "",
-                  (card->scr.bus_width & BIT(2)) ? " 4-bit" : "");
-        diag_printf("SSR:       %d-bit in use, allocation unit %" PRIu32 " KiB\n",
-                  card->ssr.cur_bus_width ? 4 : 1, (uint32_t)card->ssr.alloc_unit_kb);
+        STRRES_PRINTF(STR_SD_INFO_SCR,
+                      card->scr.sd_spec, (card->scr.bus_width & BIT(0)) ? " 1-bit" : "",
+                      (card->scr.bus_width & BIT(2)) ? " 4-bit" : "");
+        STRRES_PRINTF(STR_SD_INFO_SSR, card->ssr.cur_bus_width ? 4 : 1,
+                      (unsigned long)card->ssr.alloc_unit_kb);
     }
 
     if (mounted) {
         uint64_t total = 0, freespace = 0;
         if (esp_vfs_fat_info(SD_MOUNT_POINT, &total, &freespace) == ESP_OK) {
-            diag_printf("FAT:       mounted at %s, %llu MiB total, %llu MiB free\n",
-                      SD_MOUNT_POINT, (unsigned long long)(total / (1024 * 1024)),
-                      (unsigned long long)(freespace / (1024 * 1024)));
+            STRRES_PRINTF(STR_SD_INFO_FAT_MOUNTED,
+                          SD_MOUNT_POINT, (unsigned long long)(total / (1024 * 1024)),
+                          (unsigned long long)(freespace / (1024 * 1024)));
         }
     } else {
-        diag_printf("FAT:       not mounted ('sd bench' mounts it)\n");
+        STRRES_PRINTF(STR_SD_INFO_FAT_ABSENT);
     }
 
     return 0;
@@ -519,13 +520,13 @@ static void explain_init_timeout(esp_err_t err)
     if (err != ESP_ERR_TIMEOUT) {
         return;
     }
-    diag_printf("      Timed out. Which log line above it stopped on says where:\n");
-    diag_printf("      - 'clock_update_command' or 'failed to set clk': wiring, not\n");
-    diag_printf("        the card. Check with 'gpio short' and 'gpio rc'.\n");
-    diag_printf("      - 'send_op_cond': the wiring works and the card's power-up\n");
-    diag_printf("        failed. Power-cycle the board (a reset will not do), measure\n");
-    diag_printf("        VDD at the socket during the attempt, and try another card.\n");
-    diag_printf("      See docs/sd.md for what each one rules out.\n");
+    STRRES_PRINTF(STR_SD_HINT_TIMEOUT);
+    STRRES_PRINTF(STR_SD_HINT_CLOCK_UPDATE);
+    STRRES_PRINTF(STR_SD_HINT_CLOCK_UPDATE_2);
+    STRRES_PRINTF(STR_SD_HINT_SEND_OP_COND);
+    STRRES_PRINTF(STR_SD_HINT_SEND_OP_COND_2);
+    STRRES_PRINTF(STR_SD_HINT_SEND_OP_COND_3);
+    STRRES_PRINTF(STR_SD_HINT_SEE_DOCS);
 }
 
 /*
@@ -553,8 +554,7 @@ static void warn_if_bus_held_low(const int *pins, int count, const char *const *
             continue;
         }
         if (gpio_get_level(pins[i]) == 0) {
-            diag_printf("Warning: %s (GPIO %d) is held low, which alone can "
-                      "stall init\n", names[i], pins[i]);
+            STRRES_PRINTF(STR_SD_WARN_LINE_LOW, names[i], pins[i]);
         }
     }
 
@@ -582,9 +582,7 @@ static void warn_if_bus_held_low(const int *pins, int count, const char *const *
 
     for (int i = 1; i < count; i++) {
         if (gpio_get_level(pins[i]) == 0) {
-            diag_printf("Warning: %s (GPIO %d) is shorted to %s (GPIO %d); the "
-                      "host cannot clock past this\n",
-                      names[i], pins[i], names[0], pins[0]);
+            STRRES_PRINTF(STR_SD_WARN_LINE_SHORTED, names[i], pins[i], names[0], pins[0]);
         }
     }
     gpio_set_level(pins[0], 1);
@@ -604,9 +602,7 @@ static bool frequency_is_reserved(int freq_khz)
 #else
     if (freq_khz == SDMMC_FREQ_DDR50 || freq_khz == SDMMC_FREQ_SDR50 ||
         freq_khz == SDMMC_FREQ_SDR104) {
-        diag_error("%d kHz selects a UHS-I mode, which %s does not support. Ask for "
-                 "a nearby rate such as %d kHz instead.",
-                 freq_khz, CONFIG_IDF_TARGET, freq_khz - 1000);
+        STRRES_ERROR(STR_SD_UHS_UNSUPPORTED, freq_khz, CONFIG_IDF_TARGET, freq_khz - 1000);
         return true;
     }
     return false;
@@ -616,7 +612,7 @@ static bool frequency_is_reserved(int freq_khz)
 int cmd_sd_spi(int argc, char **argv)
 {
     if (argc < 5) {
-        diag_printf("Usage: spi <clk> <mosi> <miso> <cs> [cd <pin>] [khz <freq>]\n");
+        STRRES_PRINTF(STR_SD_USAGE_SPI);
         return -1;
     }
 
@@ -624,7 +620,7 @@ int cmd_sd_spi(int argc, char **argv)
     static const char *const names[4] = {"CLK", "MOSI", "MISO", "CS"};
     for (int i = 0; i < 4; i++) {
         if (cli_parse_int_arg(argv[i + 1], &pins[i]) < 0) {
-            diag_error("%s must be a pin number", names[i]);
+            STRRES_ERROR(STR_SD_PIN_NOT_A_NUMBER, names[i]);
             return -1;
         }
     }
@@ -643,7 +639,7 @@ int cmd_sd_spi(int argc, char **argv)
     }
 
     if (spi_group_owns_host()) {
-        diag_error("The 'spi' group holds the SPI host. Release it with 'spi free' first.");
+        STRRES_ERROR(STR_SD_SPI_HOST_BUSY);
         return -1;
     }
 
@@ -657,13 +653,13 @@ int cmd_sd_spi(int argc, char **argv)
 
     esp_err_t err = open_card();
     if (err != ESP_OK) {
-        diag_error("Initializing the card over SPI at %d kHz: %s", freq_khz,
-                 esp_err_to_name(err));
+        STRRES_ERROR(STR_SD_SPI_INIT_FAILED,
+                     freq_khz, esp_err_to_name(err));
         explain_init_timeout(err);
         return -1;
     }
 
-    diag_printf("Card up over SPI at %.3f MHz\n", card->real_freq_khz / 1000.0);
+    STRRES_PRINTF(STR_SD_SPI_UP, card->real_freq_khz / 1000.0);
     return cmd_sd_info(0, NULL);
 }
 
@@ -678,7 +674,7 @@ int cmd_sd_mmc(int argc, char **argv)
     while (index < argc && pin_count < 6 &&
            strcasecmp(argv[index], "khz") != 0 && strcasecmp(argv[index], "cd") != 0) {
         if (cli_parse_int_arg(argv[index], &pins[pin_count]) < 0) {
-            diag_error("%s must be a pin number, not '%s'", names[pin_count], argv[index]);
+            STRRES_ERROR(STR_SD_PIN_NOT_A_NUMBER_NAMED, names[pin_count], argv[index]);
             return -1;
         }
         pin_count++;
@@ -686,8 +682,8 @@ int cmd_sd_mmc(int argc, char **argv)
     }
 
     if (pin_count != 3 && pin_count != 6) {
-        diag_printf("Usage: mmc <clk> <cmd> <d0> [<d1> <d2> <d3>] [cd <pin>] [khz <freq>]\n");
-        diag_error("Give three pins for 1-bit mode or six for 4-bit mode");
+        STRRES_PRINTF(STR_SD_USAGE_MMC);
+        STRRES_ERROR(STR_SD_MMC_PIN_COUNT);
         return -1;
     }
 
@@ -714,13 +710,13 @@ int cmd_sd_mmc(int argc, char **argv)
 
     esp_err_t err = open_card();
     if (err != ESP_OK) {
-        diag_error("Initializing the card over %s at %d kHz: %s", iface_name(), freq_khz,
-                 esp_err_to_name(err));
+        STRRES_ERROR(STR_SD_MMC_INIT_FAILED,
+                     iface_name(), freq_khz, esp_err_to_name(err));
         explain_init_timeout(err);
         return -1;
     }
 
-    diag_printf("Card up over %s at %.3f MHz\n", iface_name(), card->real_freq_khz / 1000.0);
+    STRRES_PRINTF(STR_SD_MMC_UP, iface_name(), card->real_freq_khz / 1000.0);
     return cmd_sd_info(0, NULL);
 }
 #else  /* !SOC_SDMMC_HOST_SUPPORTED */
@@ -728,8 +724,7 @@ int cmd_sd_mmc(int argc, char **argv)
 {
     (void)argc;
     (void)argv;
-    diag_error("%s has no SD host peripheral, so 1-bit and 4-bit SD mode are not "
-             "possible. Use 'sd spi' instead.", CONFIG_IDF_TARGET);
+    STRRES_ERROR(STR_SD_NO_SD_HOST, CONFIG_IDF_TARGET);
     return -1;
 }
 #endif
@@ -740,14 +735,14 @@ int cmd_sd_close(int argc, char **argv)
     (void)argv;
 
     if (cfg.iface == IFACE_NONE) {
-        diag_printf("No SD card is initialized.\n");
+        STRRES_PRINTF(STR_SD_NOTHING_INITIALIZED);
         return 0;
     }
     teardown();
     cfg.iface = IFACE_NONE;
     cfg.pin_count = 0;
     cfg.cd_pin = GPIO_NUM_NC;
-    diag_printf("SD released.\n");
+    STRRES_PRINTF(STR_SD_RELEASED);
     return 0;
 }
 
@@ -770,7 +765,7 @@ static bool mount_fat(bool quiet)
     esp_err_t err = ff_diskio_get_drive(&fat_pdrv);
     if (err != ESP_OK || fat_pdrv == 0xFF) {
         if (!quiet) {
-            diag_error("No free FATFS drive slot: %s", esp_err_to_name(err));
+            STRRES_ERROR(STR_SD_NO_DRIVE_SLOT, esp_err_to_name(err));
         }
         fat_pdrv = 0xFF;
         return false;
@@ -788,7 +783,7 @@ static bool mount_fat(bool quiet)
     err = esp_vfs_fat_register(&conf, &fs);
     if (err != ESP_OK) {
         if (!quiet) {
-            diag_error("Registering %s with the VFS: %s", SD_MOUNT_POINT, esp_err_to_name(err));
+            STRRES_ERROR(STR_SD_VFS_REGISTER_FAILED, SD_MOUNT_POINT, esp_err_to_name(err));
         }
         ff_diskio_unregister(fat_pdrv);
         fat_pdrv = 0xFF;
@@ -803,10 +798,9 @@ static bool mount_fat(bool quiet)
         if (quiet) {
             /* nothing: the caller reports it in its own terms */
         } else if (res == FR_NO_FILESYSTEM) {
-            diag_error("The card has no FAT filesystem; 'sd info' and 'sd raw' "
-                     "still work.");
+            STRRES_ERROR(STR_SD_NO_FILESYSTEM);
         } else {
-            diag_error("Mounting FAT: FatFs error %d", res);
+            STRRES_ERROR(STR_SD_MOUNT_FAILED, res);
         }
         return false;
     }
@@ -905,12 +899,76 @@ static void tee(strbuf_t *sb, const char *fmt, ...)
 }
 
 /*
+ * The same, for text that lives on the res partition.
+ *
+ * strres_printf() cannot serve here: this output has two sinks, so the format
+ * has to exist as a value rather than only reaching a printf. strres_hold()
+ * lends it for the length of the call and pins nothing longer -- one hold at a
+ * time, released before the next line. A miss prints the id, the way
+ * strres_printf() would, so a line is never silently dropped from either sink.
+ *
+ * Call it through TEE(), which checks the arguments against the English text
+ * the way STRRES_PRINTF() does.
+ */
+static void tee_id(strbuf_t *sb, strres_id_t id, ...)
+{
+    strres_hold_t hold = {0};
+    const char *fmt = strres_hold(id, &hold);
+
+    if (fmt) {
+        va_list console;
+        va_start(console, id);
+        va_list captured;
+        va_copy(captured, console);
+
+        diag_vprintf(fmt, console);
+        sb_vprintf(sb, fmt, captured);
+
+        va_end(captured);
+        va_end(console);
+    } else {
+        tee(sb, "[str:%04X]", (unsigned)id);
+    }
+    strres_release(&hold);
+}
+
+#define TEE(sb, id, ...)                                                \
+    do {                                                                \
+        if (0) strres_check_format(STRRES_FMT_##id, ##__VA_ARGS__);     \
+        tee_id((sb), (id), ##__VA_ARGS__);                              \
+    } while (0)
+
+/* The run header goes only to the file, and needs the format as a value for the
+ * same reason. */
+static void file_id(FILE *f, strres_id_t id, ...)
+{
+    strres_hold_t hold = {0};
+    const char *fmt = strres_hold(id, &hold);
+
+    if (fmt) {
+        va_list args;
+        va_start(args, id);
+        vfprintf(f, fmt, args);
+        va_end(args);
+    } else {
+        fprintf(f, "[str:%04X]", (unsigned)id);
+    }
+    strres_release(&hold);
+}
+
+#define FILE_PRINTF(f, id, ...)                                         \
+    do {                                                                \
+        if (0) strres_check_format(STRRES_FMT_##id, ##__VA_ARGS__);     \
+        file_id((f), (id), ##__VA_ARGS__);                              \
+    } while (0)
+
+/*
  * Stamp enough identity into the file that a result found on a card months later
  * can be tied back to the board, the wiring and the card it came from. The
  * station MAC is the part that is actually unique per board; the chip model and
  * pin roles say which design and which harness.
  */
-static void write_run_header(FILE *f, const char *test_name)
+static void write_run_header(FILE *f, strres_id_t test_name)
 {
     static const char *const mmc_pin_names[6] = {"CLK", "CMD", "D0", "D1", "D2", "D3"};
     static const char *const spi_pin_names[4] = {"CLK", "MOSI", "MISO", "CS"};
@@ -918,35 +976,34 @@ static void write_run_header(FILE *f, const char *test_name)
     esp_chip_info_t chip;
     esp_chip_info(&chip);
 
-    fprintf(f, "\n================================================================\n");
-    fprintf(f, "%s\n", test_name);
-    fprintf(f, "Uptime:    %llu s when run. The board has no RTC, so entries are in\n"
-               "           file order, not wall-clock order.\n",
-            (unsigned long long)(esp_timer_get_time() / 1000000));
+    FILE_PRINTF(f, STR_SD_FILE_RULE_DOUBLE);
+    /* A variable id, so unchecked -- and it is a whole line that takes no
+     * arguments, which is the only shape this is ever given. */
+    file_id(f, test_name);
+    FILE_PRINTF(f, STR_SD_FILE_UPTIME, (unsigned long long)(esp_timer_get_time() / 1000000));
 
-    fprintf(f, "Chip:      %s rev v%d.%d, %d core%s\n",
-            app_chip_model_name(chip.model), chip.revision / 100, chip.revision % 100,
-            chip.cores, chip.cores == 1 ? "" : "s");
+    FILE_PRINTF(f, STR_SD_FILE_CHIP,
+                app_chip_model_name(chip.model), chip.revision / 100, chip.revision % 100,
+                chip.cores, chip.cores == 1 ? "" : "s");
 
     uint32_t flash_size = 0;
     if (esp_flash_get_size(NULL, &flash_size) == ESP_OK) {
-        fprintf(f, "Flash:     %" PRIu32 " KB\n", flash_size / 1024);
+        FILE_PRINTF(f, STR_SD_FILE_FLASH, (unsigned long)(flash_size / 1024));
     }
 
     uint8_t mac[6];
     if (esp_read_mac(mac, ESP_MAC_WIFI_STA) == ESP_OK) {
-        fprintf(f, "MAC (STA): %02x:%02x:%02x:%02x:%02x:%02x  <- identifies this board\n",
-                mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        FILE_PRINTF(f, STR_SD_FILE_MAC, mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     }
 
     const esp_app_desc_t *app = esp_app_get_description();
     if (app) {
-        fprintf(f, "Firmware:  %s %s (built %s %s)\n", app->project_name, app->version,
-                app->date, app->time);
+        FILE_PRINTF(f, STR_SD_FILE_FIRMWARE,
+                    app->project_name, app->version, app->date, app->time);
     }
-    fprintf(f, "ESP-IDF:   %s\n", esp_get_idf_version());
+    FILE_PRINTF(f, STR_SD_FILE_IDF, esp_get_idf_version());
 
-    fprintf(f, "Interface: %s on ", iface_name());
+    FILE_PRINTF(f, STR_SD_FILE_INTERFACE, iface_name());
     const char *const *names = (cfg.iface == IFACE_SPI) ? spi_pin_names : mmc_pin_names;
     for (int i = 0; i < cfg.pin_count; i++) {
         fprintf(f, "%s%s=GPIO%d", i ? ", " : "", names[i], cfg.pins[i]);
@@ -954,17 +1011,20 @@ static void write_run_header(FILE *f, const char *test_name)
     fprintf(f, "\n");
 
     if (card) {
-        fprintf(f, "Clock:     %.3f MHz (requested %d kHz), card rated %.3f MHz%s\n",
-                card->real_freq_khz / 1000.0, cfg.freq_khz, card->csd.tr_speed / 1e6,
-                card->real_freq_khz * 1000 > card->csd.tr_speed ? "  -- OVERCLOCKED" : "");
-        fprintf(f, "Card:      %.8s, %s, %.2f GiB, CID mfg 0x%02X serial 0x%08X, made %04d-%02d\n",
-                card->cid.name, card_type(),
-                (double)((uint64_t)card->csd.capacity * (uint64_t)card->csd.sector_size) /
-                    (1024.0 * 1024.0 * 1024.0),
-                (unsigned)card->cid.mfg_id, (unsigned)card->cid.serial,
-                2000 + (card->cid.date >> 4), card->cid.date & 0xF);
+        if (card->real_freq_khz * 1000 > card->csd.tr_speed) {
+            FILE_PRINTF(f, STR_SD_FILE_CLOCK_OVER, card->real_freq_khz / 1000.0,
+                        cfg.freq_khz, card->csd.tr_speed / 1e6);
+        } else {
+            FILE_PRINTF(f, STR_SD_FILE_CLOCK, card->real_freq_khz / 1000.0,
+                        cfg.freq_khz, card->csd.tr_speed / 1e6);
+        }
+        FILE_PRINTF(f, STR_SD_FILE_CARD,
+                    card->cid.name, card_type(),
+                    (double)((uint64_t)card->csd.capacity * (uint64_t)card->csd.sector_size) / (1024.0 * 1024.0 * 1024.0),
+                    (unsigned)card->cid.mfg_id, (unsigned)card->cid.serial,
+                    2000 + (card->cid.date >> 4), card->cid.date & 0xF);
     }
-    fprintf(f, "----------------------------------------------------------------\n");
+    FILE_PRINTF(f, STR_SD_FILE_RULE_SINGLE);
 }
 
 /*
@@ -974,19 +1034,19 @@ static void write_run_header(FILE *f, const char *test_name)
  * runs, so a card with no filesystem, or a full one, gets a note rather than
  * turning a good result into a failed command.
  */
-static void results_save(const char *test_name, const strbuf_t *sb)
+static void results_save(strres_id_t test_name, const strbuf_t *sb)
 {
     if (!sb->data || sb->len == 0) {
         return;
     }
     if (!mount_fat(/*quiet=*/true)) {
-        diag_printf("Results not saved: the card has no FAT filesystem to write to.\n");
+        STRRES_PRINTF(STR_SD_RESULTS_NO_FS);
         return;
     }
 
     FILE *f = fopen(SD_RESULTS_FILE, "a");
     if (!f) {
-        diag_printf("Results not saved: opening %s: %s\n", SD_RESULTS_FILE, strerror(errno));
+        STRRES_PRINTF(STR_SD_RESULTS_OPEN_FAILED, SD_RESULTS_FILE, strerror(errno));
         return;
     }
 
@@ -997,9 +1057,9 @@ static void results_save(const char *test_name, const strbuf_t *sb)
     fclose(f);
 
     if (ok) {
-        diag_printf("Results appended to %s\n", SD_RESULTS_FILE);
+        STRRES_PRINTF(STR_SD_RESULTS_APPENDED, SD_RESULTS_FILE);
     } else {
-        diag_printf("Results not saved: writing %s: %s\n", SD_RESULTS_FILE, strerror(errno));
+        STRRES_PRINTF(STR_SD_RESULTS_WRITE_FAILED, SD_RESULTS_FILE, strerror(errno));
     }
 }
 
@@ -1021,28 +1081,28 @@ int cmd_sd_results(int argc, char **argv)
 
     if (argc > 1) {
         if (strcasecmp(argv[1], "clear") != 0) {
-            diag_printf("Usage: results [clear]\n");
+            STRRES_PRINTF(STR_SD_USAGE_RESULTS);
             return -1;
         }
         if (unlink(SD_RESULTS_FILE) != 0) {
             if (errno == ENOENT) {
-                diag_printf("No results file to clear.\n");
+                STRRES_PRINTF(STR_SD_RESULTS_NONE_TO_CLEAR);
                 return 0;
             }
-            diag_error("Removing %s: %s", SD_RESULTS_FILE, strerror(errno));
+            STRRES_ERROR(STR_SD_REMOVE_FAILED, SD_RESULTS_FILE, strerror(errno));
             return -1;
         }
-        diag_printf("Cleared %s\n", SD_RESULTS_FILE);
+        STRRES_PRINTF(STR_SD_RESULTS_CLEARED, SD_RESULTS_FILE);
         return 0;
     }
 
     FILE *f = fopen(SD_RESULTS_FILE, "r");
     if (!f) {
         if (errno == ENOENT) {
-            diag_printf("No results saved yet. Run 'sd bench', 'sd raw' or 'sd sweep'.\n");
+            STRRES_PRINTF(STR_SD_RESULTS_NONE);
             return 0;
         }
-        diag_error("Opening %s: %s", SD_RESULTS_FILE, strerror(errno));
+        STRRES_ERROR(STR_SD_OPEN_FAILED, SD_RESULTS_FILE, strerror(errno));
         return -1;
     }
 
@@ -1080,12 +1140,11 @@ static void report(strbuf_t *sb, const char *label, const bench_result_t *r, siz
     double kib = (double)r->bytes / 1024.0;
 
     if (seconds <= 0.0) {
-        tee(sb, "%-6s %6.0f KiB in under 1 us -- too small to measure\n", label, kib);
+        TEE(sb, STR_SD_BENCH_TOO_FAST, label, kib);
         return;
     }
 
-    tee(sb, "%-6s %6.0f KiB in %7.3f s = %8.1f KiB/s (%.2f MiB/s), "
-            "worst %u KiB block %.1f ms\n",
+    TEE(sb, STR_SD_BENCH_RESULT,
         label, kib, seconds, kib / seconds, kib / seconds / 1024.0,
         (unsigned)(block_bytes / 1024), (double)r->worst_block_us / 1000.0);
 }
@@ -1121,8 +1180,7 @@ int cmd_sd_bench(int argc, char **argv)
     uint8_t *pattern = heap_caps_malloc(block_bytes, MALLOC_CAP_DMA);
     uint8_t *readback = heap_caps_malloc(block_bytes, MALLOC_CAP_DMA);
     if (!pattern || !readback) {
-        diag_error("Out of DMA-capable memory for a %u KiB block",
-                 (unsigned)(block_bytes / 1024));
+        STRRES_ERROR(STR_SD_OUT_OF_DMA_MEMORY, (unsigned)(block_bytes / 1024));
         free(pattern);
         free(readback);
         return -1;
@@ -1131,9 +1189,9 @@ int cmd_sd_bench(int argc, char **argv)
     strbuf_t sb;
     sb_init(&sb);
 
-    tee(&sb, "FAT benchmark on %s: %u KiB in %u KiB blocks over %s at %.3f MHz\n",
-        SD_BENCH_FILE, (unsigned)(total_bytes / 1024),
-        (unsigned)(block_bytes / 1024), iface_name(), card->real_freq_khz / 1000.0);
+    TEE(&sb, STR_SD_BENCH_HEADER,
+        SD_BENCH_FILE, (unsigned)(total_bytes / 1024), (unsigned)(block_bytes / 1024),
+        iface_name(), card->real_freq_khz / 1000.0);
 
     int result = -1;
     bench_result_t write_result = {0};
@@ -1141,7 +1199,7 @@ int cmd_sd_bench(int argc, char **argv)
 
     FILE *f = fopen(SD_BENCH_FILE, "wb");
     if (!f) {
-        diag_error("Creating %s: %s", SD_BENCH_FILE, strerror(errno));
+        STRRES_ERROR(STR_SD_CREATE_FAILED, SD_BENCH_FILE, strerror(errno));
         goto done;
     }
 
@@ -1152,7 +1210,7 @@ int cmd_sd_bench(int argc, char **argv)
         int64_t elapsed = esp_timer_get_time() - start;
 
         if (written != block_bytes) {
-            diag_error("Writing block %u: %s", (unsigned)i, strerror(errno));
+            STRRES_ERROR(STR_SD_BLOCK_WRITE_FAILED, (unsigned)i, strerror(errno));
             fclose(f);
             goto cleanup_file;
         }
@@ -1175,16 +1233,16 @@ int cmd_sd_bench(int argc, char **argv)
     fclose(f);
 
     if (!flushed) {
-        diag_error("Flushing %s: %s", SD_BENCH_FILE, strerror(errno));
+        STRRES_ERROR(STR_SD_FLUSH_FAILED, SD_BENCH_FILE, strerror(errno));
         goto cleanup_file;
     }
 
     report(&sb, "Write", &write_result, block_bytes);
-    tee(&sb, "       final flush %.1f ms\n", (double)flush_us / 1000.0);
+    TEE(&sb, STR_SD_BENCH_FINAL_FLUSH, (double)flush_us / 1000.0);
 
     f = fopen(SD_BENCH_FILE, "rb");
     if (!f) {
-        diag_error("Reopening %s: %s", SD_BENCH_FILE, strerror(errno));
+        STRRES_ERROR(STR_SD_REOPEN_FAILED, SD_BENCH_FILE, strerror(errno));
         goto cleanup_file;
     }
 
@@ -1194,7 +1252,7 @@ int cmd_sd_bench(int argc, char **argv)
         int64_t elapsed = esp_timer_get_time() - start;
 
         if (got != block_bytes) {
-            diag_error("Reading block %u: short read of %u bytes", (unsigned)i, (unsigned)got);
+            STRRES_ERROR(STR_SD_BLOCK_SHORT_READ, (unsigned)i, (unsigned)got);
             fclose(f);
             goto cleanup_file;
         }
@@ -1208,8 +1266,7 @@ int cmd_sd_bench(int argc, char **argv)
          * the CPU, not to the card. */
         fill_pattern(pattern, block_bytes, i);
         if (memcmp(pattern, readback, block_bytes) != 0) {
-            diag_error("Block %u read back wrong; the throughput above cannot be "
-                     "trusted.", (unsigned)i);
+            STRRES_ERROR(STR_SD_BLOCK_MISMATCH, (unsigned)i);
             fclose(f);
             goto cleanup_file;
         }
@@ -1217,21 +1274,20 @@ int cmd_sd_bench(int argc, char **argv)
     fclose(f);
 
     report(&sb, "Read", &read_result, block_bytes);
-    tee(&sb, "Data verified: %u KiB read back byte-for-byte.\n",
-        (unsigned)(read_result.bytes / 1024));
+    TEE(&sb, STR_SD_BENCH_VERIFIED, (unsigned)(read_result.bytes / 1024));
     result = 0;
 
 cleanup_file:
     /* The card is left as it was found; this is a bring-up tool, not a
      * destructive one. */
     if (unlink(SD_BENCH_FILE) != 0 && errno != ENOENT) {
-        diag_error("Removing %s: %s", SD_BENCH_FILE, strerror(errno));
+        STRRES_ERROR(STR_SD_REMOVE_FAILED, SD_BENCH_FILE, strerror(errno));
         result = -1;
     }
 
 done:
     if (result == 0) {
-        results_save("SD card FAT filesystem benchmark", &sb);
+        results_save(STR_SD_FILE_TEST_BENCH, &sb);
     }
     sb_free(&sb);
     free(pattern);
@@ -1252,14 +1308,13 @@ int cmd_sd_raw(int argc, char **argv)
 
     int start_sector = 0;
     if (argc > 3 && (cli_parse_int_arg(argv[3], &start_sector) < 0 || start_sector < 0)) {
-        diag_error("Start sector must be a non-negative sector number");
+        STRRES_ERROR(STR_SD_START_SECTOR_INVALID);
         return -1;
     }
 
     const size_t sector_size = (size_t)card->csd.sector_size;
     if (sector_size == 0 || block_bytes < sector_size) {
-        diag_error("Block size must be at least the %u byte sector size",
-                 (unsigned)sector_size);
+        STRRES_ERROR(STR_SD_BLOCK_BELOW_SECTOR, (unsigned)sector_size);
         return -1;
     }
 
@@ -1268,21 +1323,20 @@ int cmd_sd_raw(int argc, char **argv)
     block_bytes = sectors_per_block * sector_size;
     const uint32_t blocks = (uint32_t)(total_bytes / block_bytes);
     if (blocks == 0) {
-        diag_error("Transfer size is smaller than one block");
+        STRRES_ERROR(STR_SD_TRANSFER_BELOW_BLOCK);
         return -1;
     }
 
     const uint64_t last_sector = (uint64_t)start_sector + (uint64_t)blocks * sectors_per_block;
     if (last_sector > (uint64_t)card->csd.capacity) {
-        diag_error("Sectors %d-%llu are past the end of the card (%d sectors)",
-                 start_sector, (unsigned long long)last_sector - 1, card->csd.capacity);
+        STRRES_ERROR(STR_SD_SECTORS_PAST_END,
+                     start_sector, (unsigned long long)last_sector - 1, card->csd.capacity);
         return -1;
     }
 
     uint8_t *buffer = heap_caps_malloc(block_bytes, MALLOC_CAP_DMA);
     if (!buffer) {
-        diag_error("Out of DMA-capable memory for a %u KiB block",
-                 (unsigned)(block_bytes / 1024));
+        STRRES_ERROR(STR_SD_OUT_OF_DMA_MEMORY, (unsigned)(block_bytes / 1024));
         return -1;
     }
 
@@ -1294,9 +1348,9 @@ int cmd_sd_raw(int argc, char **argv)
     strbuf_t sb;
     sb_init(&sb);
 
-    tee(&sb, "Raw read of %u KiB from sector %d in %u KiB blocks over %s at %.3f MHz\n",
-        (unsigned)(blocks * block_bytes / 1024), start_sector,
-        (unsigned)(block_bytes / 1024), iface_name(), card->real_freq_khz / 1000.0);
+    TEE(&sb, STR_SD_RAW_HEADER,
+        (unsigned)(blocks * block_bytes / 1024), start_sector, (unsigned)(block_bytes / 1024),
+        iface_name(), card->real_freq_khz / 1000.0);
 
     bench_result_t result = {0};
     for (uint32_t i = 0; i < blocks; i++) {
@@ -1307,8 +1361,8 @@ int cmd_sd_raw(int argc, char **argv)
         int64_t elapsed = esp_timer_get_time() - start;
 
         if (err != ESP_OK) {
-            diag_error("Reading %u sectors at %u: %s", (unsigned)sectors_per_block,
-                     (unsigned)sector, esp_err_to_name(err));
+            STRRES_ERROR(STR_SD_SECTOR_READ_FAILED,
+                         (unsigned)sectors_per_block, (unsigned)sector, esp_err_to_name(err));
             sb_free(&sb);
             free(buffer);
             return -1;
@@ -1322,7 +1376,7 @@ int cmd_sd_raw(int argc, char **argv)
 
     report(&sb, "Read", &result, block_bytes);
     free(buffer);
-    results_save("SD card raw sector read benchmark", &sb);
+    results_save(STR_SD_FILE_TEST_RAW, &sb);
     sb_free(&sb);
     return 0;
 }
@@ -1415,7 +1469,7 @@ int cmd_sd_sweep(int argc, char **argv)
     int max_khz = MAX_FREQ_KHZ;
     if (argc > 1 && (cli_parse_int_arg(argv[1], &max_khz) < 0 ||
                      max_khz < SWEEP_BASELINE_KHZ || max_khz > MAX_FREQ_KHZ)) {
-        diag_error("Ceiling must be %d-%d kHz", SWEEP_BASELINE_KHZ, MAX_FREQ_KHZ);
+        STRRES_ERROR(STR_SD_CEILING_RANGE, SWEEP_BASELINE_KHZ, MAX_FREQ_KHZ);
         return -1;
     }
 
@@ -1426,14 +1480,14 @@ int cmd_sd_sweep(int argc, char **argv)
 
     const size_t sector_size = (size_t)card->csd.sector_size;
     if (sector_size == 0 || block_bytes < sector_size) {
-        diag_error("Block size must be at least the %u byte sector size", (unsigned)sector_size);
+        STRRES_ERROR(STR_SD_BLOCK_BELOW_SECTOR, (unsigned)sector_size);
         return -1;
     }
     const size_t sectors_per_block = block_bytes / sector_size;
     block_bytes = sectors_per_block * sector_size;
     const uint32_t blocks = (uint32_t)(total_bytes / block_bytes);
     if (blocks == 0 || (uint64_t)blocks * sectors_per_block > (uint64_t)card->csd.capacity) {
-        diag_error("Test region does not fit on the card");
+        STRRES_ERROR(STR_SD_REGION_TOO_LARGE);
         return -1;
     }
 
@@ -1442,19 +1496,15 @@ int cmd_sd_sweep(int argc, char **argv)
 
     uint8_t *buffer = heap_caps_malloc(block_bytes, MALLOC_CAP_DMA);
     if (!buffer) {
-        diag_error("Out of DMA-capable memory for a %u KiB block",
-                 (unsigned)(block_bytes / 1024));
+        STRRES_ERROR(STR_SD_OUT_OF_DMA_MEMORY, (unsigned)(block_bytes / 1024));
         return -1;
     }
 
     strbuf_t sb;
     sb_init(&sb);
 
-    tee(&sb, "Clock sweep over %s, %u KiB read per step from sector 0.\n",
-        iface_name(), (unsigned)(blocks * block_bytes / 1024));
-    tee(&sb, "Measurement is read-only: nothing is written to the card at a clock\n"
-             "that has not been verified. The results file is written at the end,\n"
-             "at the fastest rate that passed.\n");
+    TEE(&sb, STR_SD_SWEEP_HEADER, iface_name(), (unsigned)(blocks * block_bytes / 1024));
+    TEE(&sb, STR_SD_SWEEP_READONLY_NOTE);
 
     /*
      * The drivers log the same lines on every single init, and the sweep does
@@ -1479,8 +1529,7 @@ int cmd_sd_sweep(int argc, char **argv)
     cfg.freq_khz = SWEEP_BASELINE_KHZ;
     esp_err_t err = open_card();
     if (err != ESP_OK) {
-        diag_error("Re-initializing at the %d kHz reference rate: %s",
-                 SWEEP_BASELINE_KHZ, esp_err_to_name(err));
+        STRRES_ERROR(STR_SD_REFERENCE_REINIT_FAILED, SWEEP_BASELINE_KHZ, esp_err_to_name(err));
         goto done;
     }
 
@@ -1491,15 +1540,13 @@ int cmd_sd_sweep(int argc, char **argv)
         uint32_t again = 0;
         err = read_crc(buffer, block_bytes, blocks, sectors_per_block, &again, NULL);
         if (err == ESP_OK && again != reference_crc) {
-            diag_error("The card read back differently at the in-spec %d kHz "
-                     "reference rate, so nothing above it can be trusted "
-                     "either.", SWEEP_BASELINE_KHZ);
+            STRRES_ERROR(STR_SD_REFERENCE_MISMATCH, SWEEP_BASELINE_KHZ);
             goto done;
         }
     }
     if (err != ESP_OK) {
-        diag_error("Reading the reference at %d kHz: %s", SWEEP_BASELINE_KHZ,
-                 esp_err_to_name(err));
+        STRRES_ERROR(STR_SD_REFERENCE_READ_FAILED,
+                     SWEEP_BASELINE_KHZ, esp_err_to_name(err));
         goto done;
     }
 
@@ -1515,11 +1562,9 @@ int cmd_sd_sweep(int argc, char **argv)
      * High Speed operation as overclocking.
      */
     const int baseline_rated_khz = card->csd.tr_speed / 1000;
-    tee(&sb, "Reference CRC 0x%08X, stable over two passes. Card is rated for "
-             "%.3f MHz at default speed;\nthat rises if it accepts the high-speed "
-             "switch, which is only attempted above %d kHz.\n\n",
+    TEE(&sb, STR_SD_SWEEP_REFERENCE,
         (unsigned)reference_crc, baseline_rated_khz / 1000.0, SWEEP_BASELINE_KHZ);
-    tee(&sb, "  Requested     Actual   Read speed   Result\n");
+    TEE(&sb, STR_SD_SWEEP_TABLE_HEADER);
 
     int best_requested_khz = 0;
     int best_actual_khz = 0;
@@ -1540,14 +1585,12 @@ int cmd_sd_sweep(int argc, char **argv)
         cfg.freq_khz = requested;
         err = open_card();
         if (err != ESP_OK) {
-            tee(&sb, "  %7d kHz          -            -   init failed: %s\n",
-                requested, esp_err_to_name(err));
+            TEE(&sb, STR_SD_SWEEP_INIT_FAILED, requested, esp_err_to_name(err));
             if (!first_failure_khz) {
                 first_failure_khz = requested;
             }
             if (++consecutive_failures >= SWEEP_MAX_CONSECUTIVE_FAILURES) {
-                tee(&sb, "  ... stopping after %d consecutive failures.\n",
-                    consecutive_failures);
+                TEE(&sb, STR_SD_SWEEP_STOPPING, consecutive_failures);
                 break;
             }
             continue;
@@ -1558,8 +1601,7 @@ int cmd_sd_sweep(int argc, char **argv)
          * same card was at the reference rate. */
         const int step_rated_khz = card->csd.tr_speed / 1000;
         if (actual == previous_actual_khz) {
-            tee(&sb, "  %7d kHz  %7.3f MHz            -   same clock as the previous "
-                "step, skipped\n", requested, actual / 1000.0);
+            TEE(&sb, STR_SD_SWEEP_SAME_CLOCK, requested, actual / 1000.0);
             if (++consecutive_duplicates >= SWEEP_MAX_CONSECUTIVE_DUPLICATES) {
                 host_clamped = true;
                 break;
@@ -1574,19 +1616,21 @@ int cmd_sd_sweep(int argc, char **argv)
         err = read_crc(buffer, block_bytes, blocks, sectors_per_block, &crc, &timing);
 
         if (err != ESP_OK) {
-            tee(&sb, "  %7d kHz  %7.3f MHz            -   read failed: %s\n",
+            TEE(&sb, STR_SD_SWEEP_READ_FAILED,
                 requested, actual / 1000.0, esp_err_to_name(err));
         } else if (crc != reference_crc) {
             /* This is the failure mode that matters: the transfer "succeeded"
              * and returned corrupt data. Without the CRC it would have been
              * recorded as a pass with a very good throughput figure. */
-            tee(&sb, "  %7d kHz  %7.3f MHz   %8.1f KiB/s   DATA MISMATCH (CRC 0x%08X)\n",
+            TEE(&sb, STR_SD_SWEEP_MISMATCH,
                 requested, actual / 1000.0, throughput_kib_s(&timing), (unsigned)crc);
         } else {
             const double kib_s = throughput_kib_s(&timing);
-            tee(&sb, "  %7d kHz  %7.3f MHz   %8.1f KiB/s   ok%s\n",
-                requested, actual / 1000.0, kib_s,
-                actual > step_rated_khz ? "  (overclocked)" : "");
+            if (actual > step_rated_khz) {
+                TEE(&sb, STR_SD_SWEEP_OK_OVER, requested, actual / 1000.0, kib_s);
+            } else {
+                TEE(&sb, STR_SD_SWEEP_OK, requested, actual / 1000.0, kib_s);
+            }
             if (actual > best_actual_khz) {
                 best_requested_khz = requested;
                 best_actual_khz = actual;
@@ -1601,23 +1645,21 @@ int cmd_sd_sweep(int argc, char **argv)
             first_failure_khz = requested;
         }
         if (++consecutive_failures >= SWEEP_MAX_CONSECUTIVE_FAILURES) {
-            tee(&sb, "  ... stopping after %d consecutive failures.\n", consecutive_failures);
+            TEE(&sb, STR_SD_SWEEP_STOPPING, consecutive_failures);
             break;
         }
     }
 
     tee(&sb, "\n");
     if (best_actual_khz == 0) {
-        diag_error("No rate passed, not even the %d kHz reference.", SWEEP_BASELINE_KHZ);
+        STRRES_ERROR(STR_SD_NO_RATE_PASSED, SWEEP_BASELINE_KHZ);
         cfg.freq_khz = entry_freq_khz;
     } else {
-        tee(&sb, "Fastest verified: %.3f MHz at %.1f KiB/s (%.2f MiB/s), %.2fx the "
-                 "reference.\n", best_actual_khz / 1000.0, best_kib_s,
-            best_kib_s / 1024.0,
-            throughput_kib_s(&reference_timing) > 0.0
-                ? best_kib_s / throughput_kib_s(&reference_timing) : 0.0);
+        TEE(&sb, STR_SD_SWEEP_FASTEST,
+            best_actual_khz / 1000.0, best_kib_s, best_kib_s / 1024.0,
+            throughput_kib_s(&reference_timing) > 0.0 ? best_kib_s / throughput_kib_s(&reference_timing) : 0.0);
         if (first_failure_khz) {
-            tee(&sb, "First failure:    %d kHz requested.\n", first_failure_khz);
+            TEE(&sb, STR_SD_SWEEP_FIRST_FAILURE, first_failure_khz);
             /*
              * Above SDMMC_FREQ_DEFAULT the driver tries the CMD6 high-speed
              * switch, and it does so while the bus is still at the 400kHz
@@ -1632,13 +1674,7 @@ int cmd_sd_sweep(int argc, char **argv)
              */
             if (best_actual_khz <= SDMMC_FREQ_DEFAULT &&
                 first_failure_khz > SDMMC_FREQ_DEFAULT) {
-                tee(&sb, "That first failure is the step where the driver begins "
-                         "attempting the high-speed switch, which it only does above "
-                         "%d kHz. The switch runs at the 400 kHz init clock, before the "
-                         "bus is ever set to the requested rate, so this is a protocol "
-                         "threshold rather than a signal limit -- requesting %d kHz "
-                         "fails where %d kHz works. Suspect the card's high-speed "
-                         "handling, not the board.\n",
+                TEE(&sb, STR_SD_SWEEP_HIGH_SPEED_NOTE,
                     SDMMC_FREQ_DEFAULT, SDMMC_FREQ_DEFAULT + 1, SDMMC_FREQ_DEFAULT);
             }
         } else if (host_clamped) {
@@ -1647,22 +1683,16 @@ int cmd_sd_sweep(int argc, char **argv)
              * request produced the identical clock, so the card was never
              * actually driven any faster and its own limit is still unknown.
              */
-            tee(&sb, "Limited by the host, not the card: every request above %d kHz "
-                     "produced the same %.3f MHz, so the card was never clocked any "
-                     "faster than that. %s cannot drive it harder on this interface.\n",
+            TEE(&sb, STR_SD_SWEEP_HOST_LIMITED,
                 best_requested_khz, best_actual_khz / 1000.0, CONFIG_IDF_TARGET);
         } else {
-            tee(&sb, "No failures up to the %d kHz ceiling that was asked for; raise "
-                     "it to look further.\n", max_khz);
+            TEE(&sb, STR_SD_SWEEP_NO_FAILURES, max_khz);
         }
         if (best_actual_khz > best_rated_khz) {
-            tee(&sb, "This is %.3f MHz above the card's rated %.3f MHz. Passing one "
-                     "read sweep is not a stability guarantee: overclocking is out of "
-                     "spec, and margin varies with temperature, supply and wiring.\n",
+            TEE(&sb, STR_SD_SWEEP_OVERCLOCKED_NOTE,
                 (best_actual_khz - best_rated_khz) / 1000.0, best_rated_khz / 1000.0);
         } else {
-            tee(&sb, "Within spec: the card is rated for %.3f MHz at this setting, so "
-                     "nothing here was an overclock.\n", best_rated_khz / 1000.0);
+            TEE(&sb, STR_SD_SWEEP_WITHIN_SPEC, best_rated_khz / 1000.0);
         }
         cfg.freq_khz = best_requested_khz;
         result = 0;
@@ -1672,14 +1702,14 @@ int cmd_sd_sweep(int argc, char **argv)
      * sweep happened to stop. */
     err = open_card();
     if (err != ESP_OK) {
-        diag_error("Re-initializing at %d kHz after the sweep: %s", cfg.freq_khz,
-                 esp_err_to_name(err));
+        STRRES_ERROR(STR_SD_SWEEP_REINIT_FAILED,
+                     cfg.freq_khz, esp_err_to_name(err));
         result = -1;
     } else {
-        tee(&sb, "Card re-initialized at %.3f MHz.\n", card->real_freq_khz / 1000.0);
+        TEE(&sb, STR_SD_SWEEP_REINITIALIZED, card->real_freq_khz / 1000.0);
         /* Only now, back at a rate that passed verification, is it safe to put
          * anything on the card. */
-        results_save("SD card clock sweep / overclocking test", &sb);
+        results_save(STR_SD_FILE_TEST_SWEEP, &sb);
     }
 
 done:

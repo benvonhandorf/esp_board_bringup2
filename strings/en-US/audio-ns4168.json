@@ -1,0 +1,25 @@
+{
+  "section": "audio-ns4168",
+  "strings": {
+    "attached": "NS4168 attached",
+    "attached_hard_enabled": "; no SD pin given, so it is assumed hard-enabled\n",
+    "attached_status": "NS4168 attached\n",
+    "attached_via_gpio": " and enabled via GPIO %d\n",
+    "group.help": "NS4168 mono I2S class-D amplifier (no control bus)",
+    "init.help": "Attach the amplifier and enable it",
+    "init.usage": "[sd <pin>]",
+    "mono_note": "Mono part: use 'audio tone <hz> <s> left' and then 'right' to find which slot it plays.\n",
+    "no_sd_pin": "No SD pin was given, so this amplifier cannot be muted from the board",
+    "no_sd_pin_note": "Re-attach with the pin ('audio-ns4168 init sd <pin>'), or turn the signal down with 'audio tone <hz> <s> level 5'.\n",
+    "not_attached": "NS4168 is not attached. Run 'audio-ns4168 init [sd <pin>]'.\n",
+    "sd_config_failed": "Configuring GPIO %d as the SD pin: %s",
+    "sd_invalid": "SD must be an output-capable pin, not '%s'",
+    "sd_needs_value": "'sd' needs a pin number",
+    "status.help": "Show the enable pin and its state",
+    "status.usage": "",
+    "status_no_bus": "         No control bus, so nothing here confirms the part is really an NS4168\n",
+    "status_no_sd_pin": "         SD pin not wired to a GPIO; the amplifier is always enabled\n",
+    "status_sd_pin": "         SD GPIO %d, currently %s\n",
+    "unexpected_argument": "Unexpected argument '%s'; the only option is 'sd <pin>'"
+  }
+}

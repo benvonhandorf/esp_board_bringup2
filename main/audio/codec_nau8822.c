@@ -328,17 +328,15 @@ static esp_err_t nau8822_configure(const audio_format_t *fmt)
      * up front and say what to do.
      */
     if (fmt->mclk_pin < 0) {
-        diag_error("The NAU8822 needs MCLK, and the bus was opened without it");
-        diag_printf("Re-open the bus with the pin, for example "
-                  "'audio bus <bclk> <ws> <dout> mclk <pin>'.\n");
+        STRRES_ERROR(STR_AUDIO_NAU8822_NEEDS_MCLK);
+        STRRES_PRINTF(STR_AUDIO_NAU8822_NEEDS_MCLK_NOTE);
         return ESP_ERR_NOT_SUPPORTED;
     }
 
     int divider = mclk_divider_code(fmt->mclk_multiple);
     if (divider < 0) {
-        diag_error("An MCLK of %dx the sample rate cannot be divided to the 256x "
-                 "the codec needs", fmt->mclk_multiple);
-        diag_printf("Use 'mclkmult 256', 384, 512 or 768 on 'audio bus'.\n");
+        STRRES_ERROR(STR_AUDIO_NAU8822_MCLK_RATIO_BAD, fmt->mclk_multiple);
+        STRRES_PRINTF(STR_AUDIO_NAU8822_MCLK_RATIO_NOTE);
         return ESP_ERR_NOT_SUPPORTED;
     }
 
@@ -546,8 +544,7 @@ static esp_err_t apply_power(void)
 static esp_err_t nau8822_set_volume(int percent)
 {
     if (!initialized) {
-        diag_error("The NAU8822 has not been initialized; run "
-                 "'audio-nau8822 init' first");
+        STRRES_ERROR(STR_AUDIO_NAU8822_NOT_INITIALIZED);
         return ESP_ERR_NOT_SUPPORTED;
     }
     volume_pct = percent;
@@ -557,8 +554,7 @@ static esp_err_t nau8822_set_volume(int percent)
 static esp_err_t nau8822_set_mute(bool mute)
 {
     if (!initialized) {
-        diag_error("The NAU8822 has not been initialized; run "
-                 "'audio-nau8822 init' first");
+        STRRES_ERROR(STR_AUDIO_NAU8822_NOT_INITIALIZED);
         return ESP_ERR_NOT_SUPPORTED;
     }
     /* The DAC's own soft mute ramps rather than cutting, so it does not click,
@@ -636,7 +632,7 @@ static void nau8822_detach(void)
 
 const audio_codec_t nau8822_codec = {
     .name = "nau8822",
-    .description = "Nuvoton NAU8822 stereo codec with speaker driver, I2C at 0x1a/0x1b",
+    .description = STR_AUDIO_NAU8822_GROUP_HELP,
     .directions = AUDIO_DIR_TX | AUDIO_DIR_RX,
     .needs_mclk = true,
     .probe = nau8822_probe,
@@ -662,8 +658,7 @@ int cmd_nau8822_init(int argc, char **argv)
         int value = 0;
         if (cli_parse_num_arg(argv[1], &value) < 0 ||
             (value != NAU8822_ADDR_LOW && value != NAU8822_ADDR_HIGH)) {
-            diag_error("Address must be 0x%02x (CSB low) or 0x%02x (CSB high)",
-                     NAU8822_ADDR_LOW, NAU8822_ADDR_HIGH);
+            STRRES_ERROR(STR_AUDIO_NAU8822_ADDRESS_RANGE, NAU8822_ADDR_LOW, NAU8822_ADDR_HIGH);
             return -1;
         }
         address = (uint8_t)value;
@@ -671,19 +666,18 @@ int cmd_nau8822_init(int argc, char **argv)
 
     esp_err_t err = nau8822_probe();
     if (err != ESP_OK) {
-        diag_error("Nothing responded at 0x%02x: %s", address, esp_err_to_name(err));
+        STRRES_ERROR(STR_AUDIO_NAU8822_NO_RESPONSE, address, esp_err_to_name(err));
         return -1;
     }
 
     if (readback_works) {
-        diag_printf("0x%02x device ID 0x%03x\n", address, device_id_seen);
+        STRRES_PRINTF(STR_AUDIO_NAU8822_PROBE_ID, address, device_id_seen);
     } else {
-        diag_printf("0x%02x acknowledges writes but does not read back, so it "
-                  "cannot be identified further.\n", address);
+        STRRES_PRINTF(STR_AUDIO_NAU8822_PROBE_WRITE_ONLY, address);
     }
 
     if (nau8822_reset() != ESP_OK) {
-        diag_error("Resetting the codec at 0x%02x failed", address);
+        STRRES_ERROR(STR_AUDIO_NAU8822_RESET_FAILED, address);
         return -1;
     }
 
@@ -693,7 +687,7 @@ int cmd_nau8822_init(int argc, char **argv)
     err = write_reg(REG_POWER_MANAGEMENT_1,
                     PM1_REFIMP_80K | PM1_IOBUF_EN | PM1_ABIAS_EN);
     if (err != ESP_OK) {
-        diag_error("Powering up the codec: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_AUDIO_NAU8822_POWER_UP_FAILED, esp_err_to_name(err));
         return -1;
     }
 
@@ -702,7 +696,7 @@ int cmd_nau8822_init(int argc, char **argv)
         return -1; /* already explained */
     }
     if (err != ESP_OK) {
-        diag_error("Configuring the audio interface: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_AUDIO_NAU8822_INTERFACE_CONFIG_FAILED, esp_err_to_name(err));
         return -1;
     }
 
@@ -710,7 +704,7 @@ int cmd_nau8822_init(int argc, char **argv)
     if (write_reg(REG_DAC_CONTROL, 0) != ESP_OK ||
         write_reg(REG_LEFT_DAC_VOLUME, 0xff) != ESP_OK ||
         write_reg(REG_RIGHT_DAC_VOLUME, 0xff | VOL_UPDATE) != ESP_OK) {
-        diag_error("Configuring the DAC failed");
+        STRRES_ERROR(STR_AUDIO_NAU8822_DAC_CONFIG_FAILED);
         return -1;
     }
 
@@ -718,14 +712,14 @@ int cmd_nau8822_init(int argc, char **argv)
      * off so a tone that comes out came from the I2S input and nowhere else. */
     if (write_reg(REG_LEFT_MIXER, MIX_DAC2MIX) != ESP_OK ||
         write_reg(REG_RIGHT_MIXER, MIX_DAC2MIX) != ESP_OK) {
-        diag_error("Configuring the output mixers failed");
+        STRRES_ERROR(STR_AUDIO_NAU8822_MIXER_CONFIG_FAILED);
         return -1;
     }
 
     /* Thermal shutdown on: the speaker driver can be asked for more than the
      * package will take, and a bring-up bench is exactly where that happens. */
     if (write_reg(REG_OUTPUT_CONTROL, 0x002) != ESP_OK) {
-        diag_error("Configuring the output stage failed");
+        STRRES_ERROR(STR_AUDIO_NAU8822_OUTPUT_STAGE_FAILED);
         return -1;
     }
 
@@ -742,24 +736,22 @@ int cmd_nau8822_init(int argc, char **argv)
     line_code = BOOST_CODE_0DB;
     err = apply_input();
     if (err != ESP_OK) {
-        diag_error("Configuring the capture path: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_AUDIO_NAU8822_CAPTURE_CONFIG_FAILED, esp_err_to_name(err));
         return -1;
     }
 
     route = ROUTE_BOTH;
     err = apply_power();
     if (err != ESP_OK) {
-        diag_error("Enabling the outputs: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_AUDIO_NAU8822_OUTPUT_ENABLE_FAILED, esp_err_to_name(err));
         return -1;
     }
 
     initialized = true;
     audio_codec_attach(&nau8822_codec);
 
-    diag_printf("NAU8822 initialized at 0x%02x, headphone and speaker outputs "
-              "live at %d%%\n", address, volume_pct);
-    diag_printf("The ADC is off. Run 'audio-nau8822 input mic' or '... input "
-              "line' to record.\n");
+    STRRES_PRINTF(STR_AUDIO_NAU8822_INITIALIZED, address, volume_pct);
+    STRRES_PRINTF(STR_AUDIO_NAU8822_ADC_OFF);
     return 0;
 }
 
@@ -772,15 +764,30 @@ static const char *route_name(void)
     }
 }
 
-static const char *input_name(void)
+static strres_id_t input_name_id(void)
 {
     switch (input_path) {
-    case INPUT_MIC:  return input_boost
-                            ? "microphone (MICP/MICN, PGA, +20 dB boost)"
-                            : "microphone (MICP/MICN, through the PGA)";
-    case INPUT_LINE: return "line (L2/R2, straight to the boost mixer)";
-    default:         return "off";
+    case INPUT_MIC:  return input_boost ? STR_AUDIO_NAU8822_INPUT_NAME_MIC_BOOST
+                                        : STR_AUDIO_NAU8822_INPUT_NAME_MIC;
+    case INPUT_LINE: return STR_AUDIO_NAU8822_INPUT_NAME_LINE;
+    default:         return STR_AUDIO_NAU8822_INPUT_NAME_OFF;
     }
+}
+
+/*
+ * The input name appears inside larger sentences as a %s, so unlike almost
+ * everything else here it has to exist as a value rather than only reach a
+ * printf. strres_copy() is the API for exactly that: it writes into a buffer
+ * the caller already owns and hands back nothing to free.
+ */
+#define INPUT_NAME_LEN 48
+
+static const char *input_name(char *buf, size_t len)
+{
+    if (strres_copy(input_name_id(), buf, len) < 0) {
+        snprintf(buf, len, "[str:%04X]", (unsigned)input_name_id());
+    }
+    return buf;
 }
 
 /* The gain actually programmed, which is not what was asked for: both paths
@@ -799,14 +806,14 @@ static double input_gain_db(void)
 
 static void nau8822_status(void)
 {
-    diag_printf("         I2C 0x%02x, route %s, volume %d%%\n", address,
-              route_name(), volume_pct);
+    STRRES_PRINTF(STR_AUDIO_NAU8822_STATUS_LINE,
+                  address, route_name(), volume_pct);
     if (input_path == INPUT_OFF) {
-        diag_printf("         Input off; 'audio-nau8822 input mic' or "
-                  "'... input line' powers the ADC\n");
+        STRRES_PRINTF(STR_AUDIO_NAU8822_STATUS_INPUT_OFF);
     } else {
-        diag_printf("         Input %s at %+.2f dB\n", input_name(),
-                  input_gain_db());
+        char name[INPUT_NAME_LEN];
+        STRRES_PRINTF(STR_AUDIO_NAU8822_STATUS_INPUT,
+                      input_name(name, sizeof(name)), input_gain_db());
     }
 
     if (readback_works) {
@@ -814,15 +821,13 @@ static void nau8822_status(void)
         uint16_t revision = 0;
         read_reg(REG_DEVICE_ID, &id);
         read_reg(REG_DEVICE_REVISION, &revision);
-        diag_printf("         Device ID 0x%03x, revision 0x%03x, read back live\n",
-                  id, revision);
+        STRRES_PRINTF(STR_AUDIO_NAU8822_STATUS_DEVICE_ID, id, revision);
     } else {
-        diag_printf("         Registers do not read back; values shown are the "
-                  "driver's shadow copy\n");
+        STRRES_PRINTF(STR_AUDIO_NAU8822_STATUS_NO_READBACK);
     }
 
-    diag_printf("         DAC %s\n",
-              (shadow[REG_DAC_CONTROL] & DAC_SOFTMUTE) ? "muted" : "unmuted");
+    STRRES_PRINTF(STR_AUDIO_NAU8822_STATUS_DAC,
+                  (shadow[REG_DAC_CONTROL] & DAC_SOFTMUTE) ? "muted" : "unmuted");
 }
 
 int cmd_nau8822_status(int argc, char **argv)
@@ -831,12 +836,11 @@ int cmd_nau8822_status(int argc, char **argv)
     (void)argv;
 
     if (!initialized) {
-        diag_printf("NAU8822 is not initialized. Run 'audio-nau8822 init "
-                  "[address]'.\n");
+        STRRES_PRINTF(STR_AUDIO_NAU8822_NOT_INITIALIZED_STATUS);
         return 0;
     }
 
-    diag_printf("NAU8822 initialized\n");
+    STRRES_PRINTF(STR_AUDIO_NAU8822_STATUS_ATTACHED);
     nau8822_status();
     return 0;
 }
@@ -847,39 +851,42 @@ int cmd_nau8822_reg(int argc, char **argv)
         return -1;
     }
     if (argc < 2) {
-        diag_printf("Usage: reg <n> [value]\n");
+        STRRES_PRINTF(STR_AUDIO_NAU8822_USAGE_REG);
         return -1;
     }
 
     int reg = 0;
     if (cli_parse_num_arg(argv[1], &reg) < 0 || reg < 0 || reg >= REG_COUNT) {
-        diag_error("Register must be 0x00-0x%02x", REG_COUNT - 1);
+        STRRES_ERROR(STR_AUDIO_NAU8822_REGISTER_RANGE, REG_COUNT - 1);
         return -1;
     }
 
     if (argc > 2) {
         int value = 0;
         if (cli_parse_num_arg(argv[2], &value) < 0 || value < 0 || value > 0x1ff) {
-            diag_error("Value must be 0x000-0x1ff (the registers are 9 bits wide)");
+            STRRES_ERROR(STR_AUDIO_NAU8822_VALUE_RANGE);
             return -1;
         }
         esp_err_t err = write_reg((uint8_t)reg, (uint16_t)value);
         if (err != ESP_OK) {
-            diag_error("Writing register 0x%02x: %s", reg, esp_err_to_name(err));
+            STRRES_ERROR(STR_AUDIO_NAU8822_REGISTER_WRITE_FAILED, reg, esp_err_to_name(err));
             return -1;
         }
-        diag_printf("R%d (0x%02x) <- 0x%03x\n", reg, reg, value);
+        STRRES_PRINTF(STR_AUDIO_NAU8822_REGISTER_WRITTEN, reg, reg, value);
         return 0;
     }
 
-    diag_printf("R%d (0x%02x) shadow 0x%03x", reg, reg, shadow[reg]);
+    STRRES_PRINTF(STR_AUDIO_NAU8822_REGISTER_SHADOW, reg, reg, shadow[reg]);
 
     uint16_t live = 0;
     if (read_reg((uint8_t)reg, &live) == ESP_OK) {
-        diag_printf(", device 0x%03x%s\n", live,
-                  live == shadow[reg] ? "" : "  <- differs");
+        if (live == shadow[reg]) {
+            STRRES_PRINTF(STR_AUDIO_NAU8822_REGISTER_DEVICE, live);
+        } else {
+            STRRES_PRINTF(STR_AUDIO_NAU8822_REGISTER_DEVICE_DIFFERS, live);
+        }
     } else {
-        diag_printf(", device does not read back\n");
+        STRRES_PRINTF(STR_AUDIO_NAU8822_REGISTER_NO_READBACK);
     }
     return 0;
 }
@@ -887,12 +894,11 @@ int cmd_nau8822_reg(int argc, char **argv)
 int cmd_nau8822_route(int argc, char **argv)
 {
     if (!initialized) {
-        diag_error("The NAU8822 has not been initialized; run "
-                 "'audio-nau8822 init' first");
+        STRRES_ERROR(STR_AUDIO_NAU8822_NOT_INITIALIZED);
         return -1;
     }
     if (argc < 2) {
-        diag_printf("Usage: route <hp|speaker|both>   (currently %s)\n", route_name());
+        STRRES_PRINTF(STR_AUDIO_NAU8822_USAGE_ROUTE, route_name());
         return -1;
     }
 
@@ -903,17 +909,17 @@ int cmd_nau8822_route(int argc, char **argv)
     } else if (strcasecmp(argv[1], "both") == 0) {
         route = ROUTE_BOTH;
     } else {
-        diag_error("Route must be hp, speaker or both, not '%s'", argv[1]);
+        STRRES_ERROR(STR_AUDIO_NAU8822_ROUTE_INVALID, argv[1]);
         return -1;
     }
 
     esp_err_t err = apply_power();
     if (err != ESP_OK) {
-        diag_error("Switching the output route: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_AUDIO_NAU8822_ROUTE_FAILED, esp_err_to_name(err));
         return -1;
     }
 
-    diag_printf("Route %s\n", route_name());
+    STRRES_PRINTF(STR_AUDIO_NAU8822_ROUTE_SET, route_name());
     return 0;
 }
 
@@ -924,17 +930,17 @@ int cmd_nau8822_route(int argc, char **argv)
 int cmd_nau8822_input(int argc, char **argv)
 {
     if (!initialized) {
-        diag_error("The NAU8822 has not been initialized; run "
-                 "'audio-nau8822 init' first");
+        STRRES_ERROR(STR_AUDIO_NAU8822_NOT_INITIALIZED);
         return -1;
     }
 
     if (argc < 2) {
-        diag_printf("Input %s\n", input_name());
+        char name[INPUT_NAME_LEN];
+        STRRES_PRINTF(STR_AUDIO_NAU8822_INPUT_IS, input_name(name, sizeof(name)));
         if (input_path != INPUT_OFF) {
-            diag_printf("Gain %+.2f dB\n", input_gain_db());
+            STRRES_PRINTF(STR_AUDIO_NAU8822_GAIN_IS, input_gain_db());
         }
-        diag_printf("Usage: input <mic|line|off> [boost]\n");
+        STRRES_PRINTF(STR_AUDIO_NAU8822_USAGE_INPUT);
         return 0;
     }
 
@@ -946,26 +952,22 @@ int cmd_nau8822_input(int argc, char **argv)
     } else if (strcasecmp(argv[1], "off") == 0) {
         wanted = INPUT_OFF;
     } else {
-        diag_error("Input must be mic, line or off, not '%s'", argv[1]);
+        STRRES_ERROR(STR_AUDIO_NAU8822_INPUT_INVALID, argv[1]);
         return -1;
     }
 
     bool boost = false;
     if (argc > 2) {
         if (strcasecmp(argv[2], "boost") != 0) {
-            diag_error("Unexpected argument '%s'; the only option is 'boost'",
-                     argv[2]);
+            STRRES_ERROR(STR_AUDIO_NAU8822_UNEXPECTED_ARGUMENT_INPUT, argv[2]);
             return -1;
         }
         if (wanted != INPUT_MIC) {
             /* The +20 dB stage sits between the PGA and the ADC, and the line
              * path does not go through it. Silently ignoring the word would
              * leave the user believing in gain that is not there. */
-            diag_error("'boost' is the +20 dB stage on the microphone path; the "
-                     "line input does not pass through it");
-            diag_printf("Use 'audio-nau8822 input line' then 'audio-nau8822 gain "
-                      "<db>', or 'audio-nau8822 input mic boost' for a real "
-                      "microphone.\n");
+            STRRES_ERROR(STR_AUDIO_NAU8822_BOOST_LINE_ONLY);
+            STRRES_PRINTF(STR_AUDIO_NAU8822_BOOST_LINE_NOTE);
             return -1;
         }
         boost = true;
@@ -983,13 +985,14 @@ int cmd_nau8822_input(int argc, char **argv)
     if (err != ESP_OK) {
         input_path = previous;
         input_boost = previous_boost;
-        diag_error("Switching the input: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_AUDIO_NAU8822_INPUT_FAILED, esp_err_to_name(err));
         return -1;
     }
 
-    diag_printf("Input %s\n", input_name());
+    char name[INPUT_NAME_LEN];
+    STRRES_PRINTF(STR_AUDIO_NAU8822_INPUT_SET, input_name(name, sizeof(name)));
     if (input_path != INPUT_OFF) {
-        diag_printf("Gain %+.2f dB\n", input_gain_db());
+        STRRES_PRINTF(STR_AUDIO_NAU8822_GAIN_SET, input_gain_db());
 
         /*
          * The ADC now has somewhere to send samples only if the transport was
@@ -997,9 +1000,7 @@ int cmd_nau8822_input(int argc, char **argv)
          * record` report a dead input on a codec that is working perfectly.
          */
         if (audio_bus_rx_mode() != AUDIO_RX_STD) {
-            diag_printf("The I2S bus has no receive line, so nothing will reach "
-                      "'audio record'. Re-run 'audio bus <bclk> <ws> <dout> "
-                      "din <pin> mclk <pin>' with the codec's ADCOUT.\n");
+            STRRES_PRINTF(STR_AUDIO_NAU8822_NO_RECEIVE_LINE);
         }
     }
     return 0;
@@ -1008,25 +1009,27 @@ int cmd_nau8822_input(int argc, char **argv)
 int cmd_nau8822_gain(int argc, char **argv)
 {
     if (!initialized) {
-        diag_error("The NAU8822 has not been initialized; run "
-                 "'audio-nau8822 init' first");
+        STRRES_ERROR(STR_AUDIO_NAU8822_NOT_INITIALIZED);
         return -1;
     }
     if (input_path == INPUT_OFF) {
-        diag_error("No input is selected, so there is no gain to set");
-        diag_printf("Run 'audio-nau8822 input mic' or '... input line' first.\n");
+        STRRES_ERROR(STR_AUDIO_NAU8822_NO_INPUT_SELECTED);
+        STRRES_PRINTF(STR_AUDIO_NAU8822_NO_INPUT_NOTE);
         return -1;
     }
 
     if (argc < 2) {
-        diag_printf("Gain %+.2f dB on the %s\n", input_gain_db(),
-                  input_path == INPUT_MIC ? "microphone path" : "line path");
+        if (input_path == INPUT_MIC) {
+            STRRES_PRINTF(STR_AUDIO_NAU8822_GAIN_ON_MIC, input_gain_db());
+        } else {
+            STRRES_PRINTF(STR_AUDIO_NAU8822_GAIN_ON_LINE, input_gain_db());
+        }
         return 0;
     }
 
     double db = 0.0;
     if (cli_parse_double_arg(argv[1], &db) < 0) {
-        diag_error("Gain must be a number of decibels, not '%s'", argv[1]);
+        STRRES_ERROR(STR_AUDIO_NAU8822_GAIN_NOT_A_NUMBER, argv[1]);
         return -1;
     }
 
@@ -1038,18 +1041,16 @@ int cmd_nau8822_gain(int argc, char **argv)
     if (input_path == INPUT_MIC) {
         double max_db = PGA_MIN_DB + PGA_CODE_MAX * PGA_STEP_DB;
         if (db < PGA_MIN_DB || db > max_db) {
-            diag_error("The microphone PGA covers %+.2f to %+.2f dB", PGA_MIN_DB,
-                     max_db);
-            diag_printf("The +20 dB boost stage is separate: 'audio-nau8822 "
-                      "input mic boost'.\n");
+            STRRES_ERROR(STR_AUDIO_NAU8822_MIC_GAIN_RANGE,
+                         PGA_MIN_DB, max_db);
+            STRRES_PRINTF(STR_AUDIO_NAU8822_MIC_BOOST_NOTE);
             return -1;
         }
         pga_code = (int)lrint((db - PGA_MIN_DB) / PGA_STEP_DB);
     } else {
         double max_db = BOOST_MIN_DB + (BOOST_CODE_MAX - 1) * BOOST_STEP_DB;
         if (db < BOOST_MIN_DB || db > max_db) {
-            diag_error("The line input covers %+.0f to %+.0f dB in 3 dB steps",
-                     BOOST_MIN_DB, max_db);
+            STRRES_ERROR(STR_AUDIO_NAU8822_LINE_GAIN_RANGE, BOOST_MIN_DB, max_db);
             return -1;
         }
         line_code = (int)lrint((db - BOOST_MIN_DB) / BOOST_STEP_DB) + 1;
@@ -1057,10 +1058,10 @@ int cmd_nau8822_gain(int argc, char **argv)
 
     esp_err_t err = apply_input_gain();
     if (err != ESP_OK) {
-        diag_error("Setting the input gain: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_AUDIO_NAU8822_GAIN_FAILED, esp_err_to_name(err));
         return -1;
     }
 
-    diag_printf("Gain %+.2f dB\n", input_gain_db());
+    STRRES_PRINTF(STR_AUDIO_NAU8822_GAIN_SET_ONLY, input_gain_db());
     return 0;
 }

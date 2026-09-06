@@ -34,10 +34,8 @@ static esp_err_t drive(bool on)
 static esp_err_t ns4168_set_mute(bool mute)
 {
     if (sd_pin < 0) {
-        diag_error("No SD pin was given, so this amplifier cannot be muted from "
-                 "the board");
-        diag_printf("Re-attach with the pin ('audio-ns4168 init sd <pin>'), or "
-                  "turn the signal down with 'audio tone <hz> <s> level 5'.\n");
+        STRRES_ERROR(STR_AUDIO_NS4168_NO_SD_PIN);
+        STRRES_PRINTF(STR_AUDIO_NS4168_NO_SD_PIN_NOTE);
         return ESP_ERR_NOT_SUPPORTED;
     }
     return drive(!mute);
@@ -46,16 +44,14 @@ static esp_err_t ns4168_set_mute(bool mute)
 static void ns4168_status(void)
 {
     if (sd_pin < 0) {
-        diag_printf("         SD pin not wired to a GPIO; the amplifier is "
-                  "always enabled\n");
+        STRRES_PRINTF(STR_AUDIO_NS4168_STATUS_NO_SD_PIN);
     } else {
-        diag_printf("         SD GPIO %d, currently %s\n", sd_pin,
-                  enabled ? "enabled" : "shut down");
+        STRRES_PRINTF(STR_AUDIO_NS4168_STATUS_SD_PIN,
+                      sd_pin, enabled ? "enabled" : "shut down");
     }
     /* Worth stating because it is the usual reason a mono amp is silent on a
      * board that is plainly clocking correctly. */
-    diag_printf("         No control bus, so nothing here confirms the part is "
-              "really an NS4168\n");
+    STRRES_PRINTF(STR_AUDIO_NS4168_STATUS_NO_BUS);
 }
 
 static void ns4168_detach(void)
@@ -73,7 +69,7 @@ static void ns4168_detach(void)
 
 const audio_codec_t ns4168_codec = {
     .name = "ns4168",
-    .description = "NS4168 mono I2S class-D amplifier (no control bus)",
+    .description = STR_AUDIO_NS4168_GROUP_HELP,
     .directions = AUDIO_DIR_TX,
     .needs_mclk = false,
     .probe = NULL,
@@ -100,19 +96,17 @@ int cmd_ns4168_init(int argc, char **argv)
     while (index < argc) {
         if (strcasecmp(argv[index], "sd") == 0) {
             if (index + 1 >= argc) {
-                diag_error("'sd' needs a pin number");
+                STRRES_ERROR(STR_AUDIO_NS4168_SD_NEEDS_VALUE);
                 return -1;
             }
             if (cli_parse_int_arg(argv[index + 1], &pin) < 0 ||
                 !GPIO_IS_VALID_OUTPUT_GPIO(pin)) {
-                diag_error("SD must be an output-capable pin, not '%s'",
-                         argv[index + 1]);
+                STRRES_ERROR(STR_AUDIO_NS4168_SD_INVALID, argv[index + 1]);
                 return -1;
             }
             index += 2;
         } else {
-            diag_error("Unexpected argument '%s'; the only option is 'sd <pin>'",
-                     argv[index]);
+            STRRES_ERROR(STR_AUDIO_NS4168_UNEXPECTED_ARGUMENT, argv[index]);
             return -1;
         }
     }
@@ -132,8 +126,8 @@ int cmd_ns4168_init(int argc, char **argv)
         };
         esp_err_t err = gpio_config(&config);
         if (err != ESP_OK) {
-            diag_error("Configuring GPIO %d as the SD pin: %s", sd_pin,
-                     esp_err_to_name(err));
+            STRRES_ERROR(STR_AUDIO_NS4168_SD_CONFIG_FAILED,
+                         sd_pin, esp_err_to_name(err));
             sd_pin = -1;
             return -1;
         }
@@ -143,11 +137,11 @@ int cmd_ns4168_init(int argc, char **argv)
     attached = true;
     audio_codec_attach(&ns4168_codec);
 
-    diag_printf("NS4168 attached");
+    STRRES_PRINTF(STR_AUDIO_NS4168_ATTACHED);
     if (sd_pin >= 0) {
-        diag_printf(" and enabled via GPIO %d\n", sd_pin);
+        STRRES_PRINTF(STR_AUDIO_NS4168_ATTACHED_VIA_GPIO, sd_pin);
     } else {
-        diag_printf("; no SD pin given, so it is assumed hard-enabled\n");
+        STRRES_PRINTF(STR_AUDIO_NS4168_ATTACHED_HARD_ENABLED);
     }
 
     /*
@@ -157,8 +151,7 @@ int cmd_ns4168_init(int argc, char **argv)
      * average of the two depending on what is fitted. `audio tone 1000 3 left`
      * followed by `... right` is the quick way to find out which.
      */
-    diag_printf("Mono part: use 'audio tone <hz> <s> left' and then 'right' to "
-              "find which slot it plays.\n");
+    STRRES_PRINTF(STR_AUDIO_NS4168_MONO_NOTE);
     return 0;
 }
 
@@ -168,11 +161,11 @@ int cmd_ns4168_status(int argc, char **argv)
     (void)argv;
 
     if (!attached) {
-        diag_printf("NS4168 is not attached. Run 'audio-ns4168 init [sd <pin>]'.\n");
+        STRRES_PRINTF(STR_AUDIO_NS4168_NOT_ATTACHED);
         return 0;
     }
 
-    diag_printf("NS4168 attached\n");
+    STRRES_PRINTF(STR_AUDIO_NS4168_ATTACHED_STATUS);
     ns4168_status();
     return 0;
 }

@@ -6,6 +6,7 @@
 #include <stdint.h>
 
 #include "esp_err.h"
+#include "strres.h"
 
 /*
  * Audio bring-up: an I2S transport, a test signal generator, and codec drivers.
@@ -77,8 +78,13 @@ typedef enum {
  * in app_console.c.
  */
 typedef struct audio_codec {
-    const char *name;
-    const char *description;   /* one line, shown by `audio codecs` */
+    const char *name;          /* what the user types; an identifier, not prose */
+    /*
+     * One line, shown by `audio codecs`. An id rather than a literal, and the
+     * same id the part's command group uses for its own help -- the sentence
+     * was written twice and is now stored once.
+     */
+    strres_id_t description;
     audio_dir_t directions;
     bool needs_mclk;           /* refuse to attach on a bus with no MCLK pin */
 
