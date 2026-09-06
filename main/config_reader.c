@@ -61,6 +61,38 @@ static esp_err_t parse(app_config_full_t *out, const char *json, size_t len,
     return ESP_OK;
 }
 
+/*
+ * The configuration a unit runs when it has none of its own: every section
+ * present and empty, so each is filled from the defaults in its owning
+ * component's schema. That only works if every field either has a default or is
+ * genuinely required -- a required field with no default aborts its section
+ * before the rest of the defaults are applied, and the section comes back
+ * zeroed. That was the bug behind a `scan_interval_ms` of 0 and a radio that
+ * scanned without pause. The fix belongs in the schema; this document is what
+ * proves it, at boot, on the path a freshly flashed unit takes.
+ */
+static const char DEFAULT_CONFIG[] =
+    "{\"config_version\":1,\"wifi\":{},\"mqtt\":{},\"ntp\":{},\"http\":{}}";
+
+static esp_err_t parse_defaults(app_config_full_t *out)
+{
+    char err[128] = "";
+    esp_err_t err_code = parse(out, DEFAULT_CONFIG, strlen(DEFAULT_CONFIG),
+                               err, sizeof(err));
+    if (err_code != ESP_OK) {
+        /*
+         * Reachable only if a schema gained a required field with no default,
+         * which no configuration file can cause and no test over a valid file
+         * will catch. `out` is zeroed rather than defaulted at this point, and
+         * downstream a zeroed field is a live value, not an unset one -- so say
+         * plainly that it is the defaults themselves that are broken.
+         */
+        ESP_LOGE(TAG, "built-in defaults do not parse: %s", err);
+        ESP_LOGE(TAG, "every unset field is now zero, not its default");
+    }
+    return err_code;
+}
+
 static esp_err_t mount_filesystem(void)
 {
     esp_vfs_littlefs_conf_t conf = {
@@ -139,9 +171,7 @@ esp_err_t config_reader_load(app_config_full_t *out, char *err, size_t err_len)
          */
         ESP_LOGW(TAG, "no config.json; using schema defaults");
         snprintf(s_source, sizeof(s_source), "default");
-        static const char EMPTY[] = "{\"config_version\":1,\"wifi\":{},\"mqtt\":{},"
-                                    "\"ntp\":{},\"http\":{}}";
-        return parse(out, EMPTY, strlen(EMPTY), err, err_len);
+        return parse_defaults(out);
     }
     if (read_err != ESP_OK) {
         snprintf(err, err_len, "reading config: %s", esp_err_to_name(read_err));
@@ -154,6 +184,23 @@ esp_err_t config_reader_load(app_config_full_t *out, char *err, size_t err_len)
     esp_err_t parse_err = parse(out, json, len, err, err_len);
     if (parse_err != ESP_OK) {
         ESP_LOGE(TAG, "config from %s is invalid: %s", s_source, err);
+        /*
+         * parse() zeroes `out` and returns at the first section that fails, so
+         * without this the caller is handed a struct of zeros -- not defaults,
+         * whatever the message it prints next says. Nothing downstream reads a
+         * zero as "unset": wifi_manager took a scan_interval_ms of 0 and rearmed
+         * its scan timer for "now", indefinitely. Reparsing the defaults costs a
+         * few hundred microseconds once at boot, and is the difference between
+         * "the configuration was rejected" and "the configuration was rejected
+         * and the device now misbehaves in a way that does not name it".
+         *
+         * All of it is replaced, not only the section that failed: a device
+         * running half the operator's configuration and half defaults is harder
+         * to diagnose than one running defaults and saying so. `err` still holds
+         * the original failure, so the caller reports the real reason.
+         */
+        parse_defaults(out);
+        snprintf(s_source, sizeof(s_source), "default");
     } else {
         ESP_LOGI(TAG, "config loaded from %s", s_source);
     }
