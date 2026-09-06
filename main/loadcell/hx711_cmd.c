@@ -45,7 +45,7 @@ static hx711_handle_t hx;
 static bool require_init(void)
 {
     if (!hx || !hx711_is_ready(hx)) {
-        diag_error("HX711 not initialized. Run 'loadcell init <dout> <sck>' first.");
+        STRRES_ERROR(STR_LOADCELL_NOT_INITIALIZED);
         return false;
     }
     return true;
@@ -57,7 +57,7 @@ static bool require_ready(void)
         return false;
     }
     if (hx711_is_powered_down(hx)) {
-        diag_error("HX711 is powered down. Run 'loadcell power on' first.");
+        STRRES_ERROR(STR_LOADCELL_POWERED_DOWN);
         return false;
     }
     return true;
@@ -74,8 +74,8 @@ static char channel_char(hx711_mode_t mode)
 
 static void print_mode_of(hx711_mode_t mode)
 {
-    diag_printf("Channel %c, gain %d (%d clock pulses)\n", channel_char(mode),
-              hx711_mode_gain(mode), hx711_mode_pulses(mode));
+    STRRES_PRINTF(STR_LOADCELL_CHANNEL_GAIN,
+                  channel_char(mode), hx711_mode_gain(mode), hx711_mode_pulses(mode));
 }
 
 static void print_mode(void)
@@ -92,35 +92,29 @@ static void print_mode(void)
  * is the console's to say, because it is the only side that knows the pins were
  * typed by a person who might have typed them wrong.
  */
-static void report_read_error(esp_err_t err, const char *context)
+static void report_read_error(esp_err_t err, strres_id_t context)
 {
     hx711_status_t status = {0};
     hx711_get_status(hx, &status);
 
     switch (err) {
     case ESP_ERR_TIMEOUT:
-        diag_error("DOUT (GPIO %d) never went low, so no conversion became "
-                 "ready. Check the wiring, the part's power, and that PD_SCK "
-                 "(GPIO %d) is not stuck high.",
-                 status.dout_gpio, status.sck_gpio);
+        STRRES_ERROR(STR_LOADCELL_DOUT_NEVER_LOW, status.dout_gpio, status.sck_gpio);
         break;
     case ESP_ERR_HX711_CLOCK_STRETCHED:
         /* worst_high_us is monotonic and was just updated by the burst that
          * failed, so it is that burst's figure. */
-        diag_error("A clock pulse was held high for %lu us against the T3 "
-                 "limit of %d us; the reading was discarded. If it repeats, "
-                 "something is stalling the CPU -- usually a flash write.",
-                 (unsigned long)hx711_worst_high_us(hx), HX711_T3_MAX_US);
+        STRRES_ERROR(STR_LOADCELL_CLOCK_STRETCHED,
+                     (unsigned long)hx711_worst_high_us(hx), HX711_T3_MAX_US);
         break;
     case ESP_ERR_HX711_NO_CLOCK:
-        diag_error("DOUT (GPIO %d) did not return high after the clock burst: "
-                 "either the clock is not reaching the part -- check PD_SCK is "
-                 "on GPIO %d -- or DOUT is shorted to ground.",
-                 status.dout_gpio, status.sck_gpio);
+        STRRES_ERROR(STR_LOADCELL_DOUT_STUCK_LOW, status.dout_gpio, status.sck_gpio);
         break;
     default:
-        if (context) {
-            diag_error("%s: %s", context, esp_err_to_name(err));
+        /* The id is a variable here, so this is the one call in the file the
+         * compiler cannot check; every id given to it takes exactly one %s. */
+        if (context != STRRES_ID_NONE) {
+            strres_error(context, esp_err_to_name(err));
         }
         break;
     }
@@ -134,9 +128,7 @@ static void warn_if_saturated(const hx711_stats_t *stats)
      * excitation is missing, or the gain is too high for the signal.
      */
     if (stats->saturated) {
-        diag_error("ADC saturated at full scale. Check the bridge excitation, "
-                 "the gain, and that the bridge sits inside the common mode "
-                 "window (AGND+1.2 V to AVDD-1.3 V).");
+        STRRES_ERROR(STR_LOADCELL_ADC_SATURATED);
     }
 }
 
@@ -147,16 +139,13 @@ static void report_batch_error(esp_err_t err, const hx711_stats_t *stats,
     hx711_get_status(hx, &status);
 
     if (err == ESP_ERR_HX711_STUCK_READING) {
-        diag_error("All %d readings were identical (0x%06lX), so DOUT (GPIO "
-                 "%d) is not carrying real data. Check it is on the HX711's "
-                 "DOUT pin and not shorted.",
-                 stats->samples, (unsigned long)(stats->min & 0xFFFFFF),
-                 status.dout_gpio);
+        STRRES_ERROR(STR_LOADCELL_STUCK_READING,
+                     stats->samples, (unsigned long)(stats->min & 0xFFFFFF), status.dout_gpio);
         return;
     }
 
-    report_read_error(err, NULL);
-    diag_error("Reading conversion %d of %d failed", stats->samples + 1, wanted);
+    report_read_error(err, STRRES_ID_NONE);
+    STRRES_ERROR(STR_LOADCELL_CONVERSION_FAILED, stats->samples + 1, wanted);
 }
 
 /*
@@ -171,8 +160,8 @@ static void warn_if_slow(int samples)
     hx711_get_status(hx, &status);
 
     if (status.sps > 0.0 && (double)samples / status.sps > 2.0) {
-        diag_printf("Averaging %d samples at %.1f SPS will take about %.0f s.\n",
-                  samples, status.sps, (double)samples / status.sps);
+        STRRES_PRINTF(STR_LOADCELL_LONG_WAIT,
+                      samples, status.sps, (double)samples / status.sps);
     }
 }
 
@@ -194,16 +183,13 @@ static void report_rate(double sps)
 {
     switch (hx711_rate_classify(sps)) {
     case HX711_RATE_10SPS:
-        diag_printf("Rate %.1f SPS -- RATE strap low (10 SPS nominal), period "
-                  "%.0f ms\n", sps, 1000.0 / sps);
+        STRRES_PRINTF(STR_LOADCELL_RATE_STRAP_LOW, sps, 1000.0 / sps);
         break;
     case HX711_RATE_80SPS:
-        diag_printf("Rate %.1f SPS -- RATE strap high (80 SPS nominal), period "
-                  "%.1f ms\n", sps, 1000.0 / sps);
+        STRRES_PRINTF(STR_LOADCELL_RATE_STRAP_HIGH, sps, 1000.0 / sps);
         break;
     case HX711_RATE_UNKNOWN:
-        diag_printf("Rate %.1f SPS -- neither strap. Check XI (pin 14) is "
-                  "grounded; a stalled console task also does this\n", sps);
+        STRRES_PRINTF(STR_LOADCELL_RATE_NO_STRAP, sps);
         break;
     }
 }
@@ -218,7 +204,7 @@ static void report_rate(double sps)
  */
 static void announce_settling(void)
 {
-    diag_printf("Settling: discarding %d conversions\n", HX711_CHANGE_DISCARDS);
+    STRRES_PRINTF(STR_LOADCELL_SETTLING, HX711_CHANGE_DISCARDS);
 }
 
 /* What the change dropped, which is only known once it has run. */
@@ -234,12 +220,9 @@ static void report_scale_dropped(const hx711_change_report_t *change)
          * measured here: it came from a bench run at a different gain, where it
          * is wrong by exactly the gain ratio.
          */
-        diag_printf("Tare and scale dropped: a supplied factor belongs to the "
-                  "gain it was measured at. Give both with 'loadcell init "
-                  "<dout> <sck> gain <n> scale <counts_per_unit>'.\n");
+        STRRES_PRINTF(STR_LOADCELL_TARE_SCALE_DROPPED_SUPPLIED);
     } else {
-        diag_printf("Tare and scale dropped; run 'loadcell tare' and "
-                  "'loadcell calibrate' again.\n");
+        STRRES_PRINTF(STR_LOADCELL_TARE_SCALE_DROPPED);
     }
 }
 
@@ -256,7 +239,7 @@ static int take_sample_count(int argc, char **argv, int index, int *samples)
     }
     if (cli_parse_int_arg(argv[index], samples) < 0 ||
         *samples < 1 || *samples > MAX_SAMPLES) {
-        diag_error("Sample count must be 1-%d", MAX_SAMPLES);
+        STRRES_ERROR(STR_LOADCELL_SAMPLE_COUNT_RANGE, MAX_SAMPLES);
         return -1;
     }
     return 0;
@@ -274,11 +257,11 @@ static int take_sample_count(int argc, char **argv, int index, int *samples)
 static int parse_scale_arg(const char *token, double *counts_per_unit)
 {
     if (cli_parse_double_arg(token, counts_per_unit) < 0) {
-        diag_error("Scale factor must be a number");
+        STRRES_ERROR(STR_LOADCELL_SCALE_NOT_A_NUMBER);
         return -1;
     }
     if (*counts_per_unit == 0.0) {
-        diag_error("Scale factor must not be zero");
+        STRRES_ERROR(STR_LOADCELL_SCALE_ZERO);
         return -1;
     }
     return 0;
@@ -288,7 +271,7 @@ static int parse_gain_arg(const char *token, hx711_mode_t *out)
 {
     int gain = 0;
     if (cli_parse_int_arg(token, &gain) < 0) {
-        diag_error("Gain must be a number");
+        STRRES_ERROR(STR_LOADCELL_GAIN_NOT_A_NUMBER);
         return -1;
     }
 
@@ -302,20 +285,33 @@ static int parse_gain_arg(const char *token, hx711_mode_t *out)
      * Written out in gain order rather than generated from hx711_modes[], which
      * is in pulse order, and carrying the aside about channel B.
      */
-    diag_printf("Gain must be 32, 64 or 128, and each one fixes the channel "
-              "too:\n");
-    diag_printf("   32  channel B (26 pulses) -- B has no other gain\n");
-    diag_printf("   64  channel A (27 pulses)\n");
-    diag_printf("  128  channel A (25 pulses)\n");
+    STRRES_PRINTF(STR_LOADCELL_GAIN_CHOICES);
+    STRRES_PRINTF(STR_LOADCELL_GAIN_CHOICE_32);
+    STRRES_PRINTF(STR_LOADCELL_GAIN_CHOICE_64);
+    STRRES_PRINTF(STR_LOADCELL_GAIN_CHOICE_128);
     return -1;
 }
 
 static void print_init_usage(void)
 {
-    diag_printf("Usage: init <dout> <sck> [gain <32|64|128>] "
-              "[scale <counts_per_unit>]\n");
-    diag_printf("<dout> is the GPIO on DOUT (an input here), <sck> the one on "
-              "PD_SCK (an output). Gain defaults to 128 on channel A.\n");
+    STRRES_PRINTF(STR_LOADCELL_USAGE_INIT);
+    STRRES_PRINTF(STR_LOADCELL_USAGE_INIT_PINS);
+}
+
+/*
+ * Report a scale factor and where it came from.
+ *
+ * Two whole sentences rather than one with a "%s" for the provenance: the
+ * clause is prose, and prose passed as an argument stays in the image while the
+ * sentence around it does not.
+ */
+static void print_scale_provenance(double counts_per_unit, bool supplied)
+{
+    if (supplied) {
+        STRRES_PRINTF(STR_LOADCELL_SCALE_IS_SUPPLIED, counts_per_unit);
+    } else {
+        STRRES_PRINTF(STR_LOADCELL_SCALE_IS_MEASURED, counts_per_unit);
+    }
 }
 
 /*
@@ -343,12 +339,12 @@ static void print_init_usage(void)
 static void print_scale_for_consumer(double counts_per_unit, double precision,
                                      bool precision_valid, hx711_mode_t mode)
 {
-    diag_printf("    scale factor for the consumer:  %.17g  /*", counts_per_unit);
+    STRRES_PRINTF(STR_LOADCELL_SCALE_FACTOR_COMMENT, counts_per_unit);
     if (precision_valid) {
         diag_printf(" +/-%.2f%%,", precision);
     }
-    diag_printf(" channel %c gain %d, counts per unit */\n", channel_char(mode),
-              hx711_mode_gain(mode));
+    STRRES_PRINTF(STR_LOADCELL_SCALE_FACTOR_COMMENT_END,
+                  channel_char(mode), hx711_mode_gain(mode));
 }
 
 /*
@@ -366,9 +362,7 @@ static void warn_if_channel_b(hx711_mode_t requested)
     if (requested != HX711_MODE_B32) {
         return;
     }
-    diag_printf("Channel B has a fixed gain of 32, and on most load cell "
-              "breakouts INB+/INB- go nowhere -- the reading will be drift, "
-              "not an error.\n");
+    STRRES_PRINTF(STR_LOADCELL_CHANNEL_B_NOTE);
 }
 
 /* ------------------------------------------------------------------ */
@@ -380,26 +374,24 @@ static void report_bringup_failure(const hx711_bringup_report_t *report,
 {
     switch (report->failed_stage) {
     case HX711_STAGE_CONFIGURE_SCK:
-        diag_error("Configuring GPIO %d as the PD_SCK output failed",
-                 report->sck_gpio);
+        STRRES_ERROR(STR_LOADCELL_SCK_CONFIG_FAILED, report->sck_gpio);
         break;
     case HX711_STAGE_CONFIGURE_DOUT:
-        diag_error("Configuring GPIO %d as the DOUT input failed",
-                 report->dout_gpio);
+        STRRES_ERROR(STR_LOADCELL_DOUT_CONFIG_FAILED, report->dout_gpio);
         break;
     case HX711_STAGE_FIRST_READY:
     case HX711_STAGE_SET_MODE:
     case HX711_STAGE_MEASURE_RATE:
     case HX711_STAGE_FIRST_READING:
-        report_read_error(err, "Bringing up the HX711");
+        report_read_error(err, STR_LOADCELL_BRINGING_UP_FAILED);
         break;
     case HX711_STAGE_SET_SCALE:
-        diag_error("Setting the scale factor to %g failed", scale_wanted);
+        STRRES_ERROR(STR_LOADCELL_SCALE_SET_FAILED, scale_wanted);
         break;
     case HX711_STAGE_PINS:
     case HX711_STAGE_SETTLE:
     case HX711_STAGE_NONE:
-        diag_error("Bringing up the HX711 failed: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_LOADCELL_BRINGUP_FAILED, esp_err_to_name(err));
         break;
     }
 }
@@ -414,7 +406,7 @@ int cmd_hx711_init(int argc, char **argv)
     int dout = -1;
     int sck = -1;
     if (cli_parse_int_arg(argv[1], &dout) < 0 || cli_parse_int_arg(argv[2], &sck) < 0) {
-        diag_error("Both pins must be GPIO numbers");
+        STRRES_ERROR(STR_LOADCELL_PINS_NUMERIC);
         return -1;
     }
 
@@ -422,7 +414,7 @@ int cmd_hx711_init(int argc, char **argv)
     for (int i = 3; i < argc; i++) {
         if (strcasecmp(argv[i], "gain") == 0) {
             if (++i >= argc) {
-                diag_error("Give the gain, e.g. 'loadcell init 5 6 gain 128'");
+                STRRES_ERROR(STR_LOADCELL_INIT_GAIN_MISSING);
                 return -1;
             }
             if (parse_gain_arg(argv[i], &opts.mode) < 0) {
@@ -430,7 +422,7 @@ int cmd_hx711_init(int argc, char **argv)
             }
         } else if (strcasecmp(argv[i], "scale") == 0) {
             if (++i >= argc) {
-                diag_error("Give the scale factor, e.g. 'loadcell init 10 3 scale 1074.3'");
+                STRRES_ERROR(STR_LOADCELL_INIT_SCALE_MISSING);
                 return -1;
             }
             if (parse_scale_arg(argv[i], &opts.counts_per_unit) < 0) {
@@ -451,19 +443,18 @@ int cmd_hx711_init(int argc, char **argv)
      * about this session, not about the HX711.
      */
     if (!GPIO_IS_VALID_GPIO(dout)) {
-        diag_error("GPIO %d does not exist on this chip", dout);
+        STRRES_ERROR(STR_LOADCELL_GPIO_ABSENT, dout);
         return -1;
     }
 
     const char *why = NULL;
     if (!app_pin_is_drivable(sck, &why)) {
-        diag_error("GPIO %d cannot be used for PD_SCK: %s", sck, why);
+        STRRES_ERROR(STR_LOADCELL_SCK_UNUSABLE, sck, why);
         return -1;
     }
 
     if (dout == sck) {
-        diag_error("DOUT and PD_SCK must be different pins; both were given as "
-                 "GPIO %d", dout);
+        STRRES_ERROR(STR_LOADCELL_PINS_DISTINCT, dout);
         return -1;
     }
 
@@ -489,7 +480,7 @@ int cmd_hx711_init(int argc, char **argv)
      * driver's: DOUT must come back high after the burst, which only the clock
      * reaching the device can cause.
      */
-    diag_printf("Waiting for the first conversion...\n");
+    STRRES_PRINTF(STR_LOADCELL_WAITING_FIRST);
     /*
      * Both waits are announced before the driver blocks for either. In the
      * fused version this line came out between the first-ready wait and the
@@ -509,24 +500,24 @@ int cmd_hx711_init(int argc, char **argv)
 
     warn_if_saturated(&report.first_reading);
 
-    diag_printf("HX711 responding on DOUT GPIO %d, PD_SCK GPIO %d\n",
-              report.dout_gpio, report.sck_gpio);
+    STRRES_PRINTF(STR_LOADCELL_RESPONDING, report.dout_gpio, report.sck_gpio);
     print_mode_of(report.mode);
     if (report.rate_measured) {
         report_rate(report.sps);
     }
-    diag_printf("Idle reading %.1f counts (5 samples, spread %ld)\n",
-              report.first_reading.mean,
-              (long)(report.first_reading.max - report.first_reading.min));
+    STRRES_PRINTF(STR_LOADCELL_IDLE_READING,
+                  report.first_reading.mean,
+                  (long)(report.first_reading.max - report.first_reading.min));
 
     const hx711_scale_t *scale = hx711_get_scale(hx);
     if (scale->supplied) {
-        diag_printf("Scale %.1f counts per unit (supplied, not measured)\n",
-                  scale->counts_per_unit);
+        STRRES_PRINTF(STR_LOADCELL_SCALE_SUPPLIED, scale->counts_per_unit);
     }
-    diag_printf("Run 'loadcell tare' with no load, then %s\n",
-              scale->supplied ? "'loadcell weight'"
-                              : "'loadcell calibrate <known mass>'");
+    if (scale->supplied) {
+        STRRES_PRINTF(STR_LOADCELL_NEXT_STEP_WEIGH);
+    } else {
+        STRRES_PRINTF(STR_LOADCELL_NEXT_STEP_CALIBRATE);
+    }
     return 0;
 }
 
@@ -548,8 +539,7 @@ int cmd_hx711_gain(int argc, char **argv)
     }
 
     if (hx711_mode_channel(requested) == HX711_CHANNEL_B) {
-        diag_printf("Gain 32 exists only on channel B, so this also switches "
-                  "channel.\n");
+        STRRES_PRINTF(STR_LOADCELL_GAIN_32_SWITCHES_CHANNEL);
     }
     warn_if_channel_b(requested);
 
@@ -558,7 +548,7 @@ int cmd_hx711_gain(int argc, char **argv)
     hx711_change_report_t change = {0};
     esp_err_t err = hx711_set_mode(hx, requested, &change);
     if (err != ESP_OK) {
-        report_read_error(err, "Settling after the gain change");
+        report_read_error(err, STR_LOADCELL_SETTLE_GAIN_FAILED);
         return -1;
     }
     report_scale_dropped(&change);
@@ -584,7 +574,7 @@ int cmd_hx711_input(int argc, char **argv)
     } else if (strcasecmp(argv[1], "b") == 0) {
         channel = HX711_CHANNEL_B;
     } else {
-        diag_error("Input must be 'a' or 'b'");
+        STRRES_ERROR(STR_LOADCELL_INPUT_INVALID);
         return -1;
     }
 
@@ -597,7 +587,7 @@ int cmd_hx711_input(int argc, char **argv)
     hx711_change_report_t change = {0};
     esp_err_t err = hx711_set_channel(hx, channel, &change);
     if (err != ESP_OK) {
-        report_read_error(err, "Settling after the channel change");
+        report_read_error(err, STR_LOADCELL_SETTLE_CHANNEL_FAILED);
         return -1;
     }
     report_scale_dropped(&change);
@@ -618,7 +608,7 @@ int cmd_hx711_power(int argc, char **argv)
     }
 
     if (argc < 2) {
-        diag_printf("Power is %s\n", hx711_is_powered_down(hx) ? "down" : "up");
+        STRRES_PRINTF(STR_LOADCELL_POWER_IS, hx711_is_powered_down(hx) ? "down" : "up");
         return 0;
     }
 
@@ -627,19 +617,17 @@ int cmd_hx711_power(int argc, char **argv)
 
     if (strcasecmp(argv[1], "off") == 0) {
         if (hx711_is_powered_down(hx)) {
-            diag_printf("Already powered down\n");
+            STRRES_PRINTF(STR_LOADCELL_ALREADY_DOWN);
             return 0;
         }
         hx711_power_down(hx);
-        diag_printf("PD_SCK (GPIO %d) held high; the part powers down after "
-                  "%d us, and the bridge with it if the internal regulator "
-                  "feeds it\n", status.sck_gpio, HX711_POWERDOWN_US);
+        STRRES_PRINTF(STR_LOADCELL_POWER_DOWN_NOTE, status.sck_gpio, HX711_POWERDOWN_US);
         return 0;
     }
 
     if (strcasecmp(argv[1], "on") == 0) {
         if (!hx711_is_powered_down(hx)) {
-            diag_printf("Already powered up\n");
+            STRRES_PRINTF(STR_LOADCELL_ALREADY_UP);
             return 0;
         }
         announce_settling();
@@ -647,17 +635,16 @@ int cmd_hx711_power(int argc, char **argv)
         hx711_change_report_t change = {0};
         esp_err_t err = hx711_power_up(hx, &change);
         if (err != ESP_OK) {
-            report_read_error(err, "Powering the HX711 back up");
+            report_read_error(err, STR_LOADCELL_POWER_UP_FAILED);
             return -1;
         }
         report_scale_dropped(&change);
-        diag_printf("PD_SCK released; the part reset and the configured "
-                  "setting was re-applied\n");
+        STRRES_PRINTF(STR_LOADCELL_POWER_UP_NOTE);
         print_mode_of(change.mode);
         return 0;
     }
 
-    diag_printf("Usage: power [on|off]\n");
+    STRRES_PRINTF(STR_LOADCELL_USAGE_POWER);
     return -1;
 }
 
@@ -677,26 +664,26 @@ int cmd_hx711_raw(int argc, char **argv)
     if (argc > 1) {
         if (cli_parse_int_arg(argv[1], &samples) < 0 || samples < 1 ||
             samples > MAX_SAMPLES) {
-            diag_error("Sample count must be 1-%d", MAX_SAMPLES);
+            STRRES_ERROR(STR_LOADCELL_SAMPLE_COUNT_RANGE, MAX_SAMPLES);
             return -1;
         }
     }
 
     hx711_mode_t mode = HX711_MODE_A128;
     hx711_get_mode(hx, &mode);
-    diag_printf("Raw ADC readings (channel %c, gain %d):\n", channel_char(mode),
-              hx711_mode_gain(mode));
+    STRRES_PRINTF(STR_LOADCELL_RAW_HEADER,
+                  channel_char(mode), hx711_mode_gain(mode));
 
     for (int i = 0; i < samples; i++) {
         int32_t value = 0;
         esp_err_t err = hx711_read_raw(hx, &value);
         if (err != ESP_OK) {
-            report_read_error(err, "Reading a conversion");
-            diag_error("Reading sample %d failed", i + 1);
+            report_read_error(err, STR_LOADCELL_CONVERSION_READ_FAILED);
+            STRRES_ERROR(STR_LOADCELL_SAMPLE_FAILED, i + 1);
             return -1;
         }
-        diag_printf("  %8ld  (%.4f%% of full scale)\n", (long)value,
-                  value * 100.0 / HX711_FULL_SCALE);
+        STRRES_PRINTF(STR_LOADCELL_RAW_ROW,
+                      (long)value, value * 100.0 / HX711_FULL_SCALE);
     }
 
     return 0;
@@ -720,15 +707,14 @@ int cmd_hx711_read(int argc, char **argv)
 
     /* Percent of full scale is wiring-independent; an absolute voltage would
      * depend on AVDD, which this driver has no way to know. */
-    diag_printf("Raw %10.1f counts  (%d samples, spread %ld, %.4f%% of full scale)\n",
-              stats.mean, samples, (long)(stats.max - stats.min),
-              stats.mean * 100.0 / HX711_FULL_SCALE);
+    STRRES_PRINTF(STR_LOADCELL_READ_RAW,
+                  stats.mean, samples, (long)(stats.max - stats.min),
+                  stats.mean * 100.0 / HX711_FULL_SCALE);
 
     const hx711_scale_t *scale = hx711_get_scale(hx);
 
     if (scale->tare_samples > 0) {
-        diag_printf("     %10.1f counts net of tare\n",
-                  stats.mean - scale->tare_counts);
+        STRRES_PRINTF(STR_LOADCELL_READ_NET, stats.mean - scale->tare_counts);
     }
 
     /*
@@ -748,10 +734,10 @@ int cmd_hx711_read(int argc, char **argv)
         if (samples < 2) {
             /* One conversion has no spread, so quote no error bar rather than
              * a zero one. */
-            diag_printf("     %10.4f units\n", weight.units);
+            STRRES_PRINTF(STR_LOADCELL_READ_UNITS, weight.units);
         } else {
-            diag_printf("     %10.4f units  (+/-%.4f)\n", weight.units,
-                      weight.uncertainty_units);
+            STRRES_PRINTF(STR_LOADCELL_READ_UNITS_PM,
+                          weight.units, weight.uncertainty_units);
         }
     }
 
@@ -780,9 +766,9 @@ int cmd_hx711_tare(int argc, char **argv)
     warn_if_saturated(&stats);
 
     const hx711_scale_t *scale = hx711_get_scale(hx);
-    diag_printf("Tare set to %ld counts (%d samples, spread %ld, mean known to "
-              "+/-%.1f)\n", (long)scale->tare_counts, samples,
-              (long)(stats.max - stats.min), stats.stderr_mean);
+    STRRES_PRINTF(STR_LOADCELL_TARE_SET,
+                  (long)scale->tare_counts, samples, (long)(stats.max - stats.min),
+                  stats.stderr_mean);
     return 0;
 }
 
@@ -793,15 +779,14 @@ int cmd_hx711_calibrate(int argc, char **argv)
     }
 
     if (argc < 2) {
-        diag_printf("Usage: calibrate <known mass> [samples]\n");
-        diag_printf("Run 'loadcell tare' with the scale empty first, then place a known "
-                  "mass and run this. The unit is whatever you use here.\n");
+        STRRES_PRINTF(STR_LOADCELL_USAGE_CALIBRATE);
+        STRRES_PRINTF(STR_LOADCELL_CALIBRATE_HOW);
         return -1;
     }
 
     double known = 0.0;
     if (cli_parse_double_arg(argv[1], &known) < 0 || known == 0.0) {
-        diag_error("The known mass must be a non-zero number");
+        STRRES_ERROR(STR_LOADCELL_MASS_INVALID);
         return -1;
     }
 
@@ -817,17 +802,11 @@ int cmd_hx711_calibrate(int argc, char **argv)
     esp_err_t err = hx711_calibrate(hx, known, samples, &stats, &result);
 
     if (err == ESP_ERR_HX711_TOO_FEW_SAMPLES) {
-        diag_error("'loadcell tare' and 'loadcell calibrate' need at least two "
-                 "samples. Re-run as 'loadcell tare 10' and "
-                 "'loadcell calibrate %g 10'.", known);
+        STRRES_ERROR(STR_LOADCELL_NEED_TWO_SAMPLES, known);
         return -1;
     }
     if (err == ESP_ERR_HX711_WITHIN_NOISE) {
-        diag_error("Moved %.1f counts from the tare, within the +/-%.1f the "
-                 "two averages are known to. Is the mass on the cell, and was "
-                 "'loadcell tare' run empty? Or average harder: "
-                 "'loadcell tare 100' then 'loadcell calibrate %g 100'.",
-                 result.net_counts, result.uncertainty, known);
+        STRRES_ERROR(STR_LOADCELL_TARE_DRIFT, result.net_counts, result.uncertainty, known);
         return -1;
     }
     if (err != ESP_OK) {
@@ -836,14 +815,12 @@ int cmd_hx711_calibrate(int argc, char **argv)
     }
     warn_if_saturated(&stats);
 
-    diag_printf("Calibrated: %.1f counts per unit (%.1f counts for %.4f units)\n",
-              result.counts_per_unit, result.net_counts, known);
-    diag_printf("Scale good to +/-%.2f%% (%.1f counts of uncertainty)\n",
-              result.precision_percent, result.uncertainty);
+    STRRES_PRINTF(STR_LOADCELL_CALIBRATED, result.counts_per_unit, result.net_counts, known);
+    STRRES_PRINTF(STR_LOADCELL_CALIBRATE_PRECISION,
+                  result.precision_percent, result.uncertainty);
     if (result.precision_percent > 1.0) {
-        diag_printf("For about %.2f%%, run 'loadcell tare 100' and "
-                  "'loadcell calibrate %g 100'\n",
-                  result.precision_percent / sqrt(100.0 / samples), known);
+        STRRES_PRINTF(STR_LOADCELL_CALIBRATE_MORE_SAMPLES,
+                      result.precision_percent / sqrt(100.0 / samples), known);
     }
     print_scale_for_consumer(result.counts_per_unit, result.precision_percent,
                              true, result.mode);
@@ -870,14 +847,10 @@ int cmd_hx711_scale(int argc, char **argv)
 
     if (argc < 2) {
         if (!scale->calibrated) {
-            diag_printf("No scale factor. Run 'loadcell tare' then "
-                      "'loadcell calibrate <known mass>', or set one with "
-                      "'loadcell scale <counts_per_unit>'.\n");
+            STRRES_PRINTF(STR_LOADCELL_NO_SCALE);
             return 0;
         }
-        diag_printf("Scale %.1f counts per unit (%s)\n", scale->counts_per_unit,
-                  scale->supplied ? "supplied, not measured this session"
-                                  : "measured this session");
+        print_scale_provenance(scale->counts_per_unit, scale->supplied);
         print_scale_for_consumer(scale->counts_per_unit, 0.0, false, mode);
         return 0;
     }
@@ -888,12 +861,11 @@ int cmd_hx711_scale(int argc, char **argv)
     }
 
     if (hx711_set_scale(hx, counts_per_unit) != ESP_OK) {
-        diag_error("Setting the scale factor to %g failed", counts_per_unit);
+        STRRES_ERROR(STR_LOADCELL_SCALE_SET_FAILED, counts_per_unit);
         return -1;
     }
 
-    diag_printf("Scale set to %.1f counts per unit (supplied, not measured)\n",
-              counts_per_unit);
+    STRRES_PRINTF(STR_LOADCELL_SCALE_SET, counts_per_unit);
 
     /*
      * The factor says nothing about where zero is, and the two are separate
@@ -901,8 +873,7 @@ int cmd_hx711_scale(int argc, char **argv)
      * be the first to mention it.
      */
     if (scale->tare_samples == 0) {
-        diag_printf("No tare yet; run 'loadcell tare' with the cell empty "
-                  "before weighing\n");
+        STRRES_PRINTF(STR_LOADCELL_NO_TARE);
     }
 
     /*
@@ -910,9 +881,7 @@ int cmd_hx711_scale(int argc, char **argv)
      * setting on this part. Worth saying at the moment someone has just typed a
      * number in by hand.
      */
-    diag_printf("This factor belongs to the gain now in force, and a gain or "
-              "channel change drops it. To survive 'loadcell init', give it as "
-              "'loadcell init <dout> <sck> scale %.17g'.\n", counts_per_unit);
+    STRRES_PRINTF(STR_LOADCELL_SCALE_SUPPLIED_NOTE, counts_per_unit);
     return 0;
 }
 
@@ -925,8 +894,7 @@ int cmd_hx711_weight(int argc, char **argv)
     const hx711_scale_t *scale = hx711_get_scale(hx);
 
     if (!scale->calibrated) {
-        diag_error("Not calibrated. Run 'loadcell tare' with no load, then "
-                 "'loadcell calibrate <known mass>'.");
+        STRRES_ERROR(STR_LOADCELL_NOT_CALIBRATED);
         return -1;
     }
 
@@ -939,9 +907,7 @@ int cmd_hx711_weight(int argc, char **argv)
      * conversions.
      */
     if (scale->tare_samples == 0) {
-        diag_error("A scale factor is set but no tare has been taken, so every "
-                 "weight would be the bridge's own offset reported as load. "
-                 "Run 'loadcell tare' with the cell empty.");
+        STRRES_ERROR(STR_LOADCELL_TARE_MISSING);
         return -1;
     }
 
@@ -961,14 +927,13 @@ int cmd_hx711_weight(int argc, char **argv)
     if (samples < 2) {
         /* No spread from one conversion, so quote no error bar rather than a
          * zero one. */
-        diag_printf("Weight %12.4f units  (1 sample, no noise estimate, "
-                  "%.1f raw counts)\n", weight.units, weight.net_counts);
+        STRRES_PRINTF(STR_LOADCELL_WEIGHT_ONE_SAMPLE, weight.units, weight.net_counts);
         return 0;
     }
 
-    diag_printf("Weight %12.4f units  (+/-%.4f over %d samples, spread %.4f, "
-              "%.1f raw counts)\n", weight.units, weight.uncertainty_units,
-              samples, weight.spread_units, weight.net_counts);
+    STRRES_PRINTF(STR_LOADCELL_WEIGHT,
+                  weight.units, weight.uncertainty_units, samples, weight.spread_units,
+                  weight.net_counts);
     return 0;
 }
 
@@ -978,7 +943,7 @@ int cmd_hx711_close(int argc, char **argv)
     (void)argv;
 
     if (!hx || !hx711_is_ready(hx)) {
-        diag_printf("Nothing to release\n");
+        STRRES_PRINTF(STR_LOADCELL_NOTHING_TO_RELEASE);
         return 0;
     }
 
@@ -989,7 +954,7 @@ int cmd_hx711_close(int argc, char **argv)
     hx711_delete(hx);
     hx = NULL;
 
-    diag_printf("HX711 released; both pins are back in their reset state\n");
+    STRRES_PRINTF(STR_LOADCELL_RELEASED);
     return 0;
 }
 
@@ -1006,15 +971,14 @@ int cmd_hx711_status(int argc, char **argv)
     (void)argc;
     (void)argv;
 
-    diag_printf("HX711 24-bit ADC, no control bus and no registers\n");
-    diag_printf("Settings (Table 3), selected by the number of clock pulses:\n");
+    STRRES_PRINTF(STR_LOADCELL_INFO_PART);
+    STRRES_PRINTF(STR_LOADCELL_INFO_SETTINGS_HEADER);
     for (size_t i = 0; i < sizeof(hx711_modes) / sizeof(hx711_modes[0]); i++) {
-        diag_printf("  %2d pulses  channel %c, gain %3d\n",
-                  hx711_mode_pulses(hx711_modes[i]),
-                  channel_char(hx711_modes[i]),
-                  hx711_mode_gain(hx711_modes[i]));
+        STRRES_PRINTF(STR_LOADCELL_INFO_SETTINGS_ROW,
+                      hx711_mode_pulses(hx711_modes[i]), channel_char(hx711_modes[i]),
+                      hx711_mode_gain(hx711_modes[i]));
     }
-    diag_printf("Coding: two's complement, saturating at 0x800000 / 0x7FFFFF\n");
+    STRRES_PRINTF(STR_LOADCELL_INFO_CODING);
 
     hx711_status_t status = {0};
     if (hx) {
@@ -1028,36 +992,33 @@ int cmd_hx711_status(int argc, char **argv)
      * think, and the cell saturates earlier than expected.
      */
     const int gain = hx711_mode_gain(status.mode);
-    diag_printf("Input range: +/-0.5 x AVDD/gain -- at gain %d that is "
-              "+/-%.1f mV at AVDD 5.0 V, +/-%.1f mV at 3.3 V\n",
-              gain, 0.5 * 5000.0 / gain, 0.5 * 3300.0 / gain);
-    diag_printf("Common mode window: AGND+1.2 V to AVDD-1.3 V -- outside it a "
-              "bridge reads confidently and wrongly; check it with a meter\n");
+    STRRES_PRINTF(STR_LOADCELL_INFO_INPUT_RANGE,
+                  gain, 0.5 * 5000.0 / gain, 0.5 * 3300.0 / gain);
+    STRRES_PRINTF(STR_LOADCELL_INFO_COMMON_MODE);
 
     if (!status.ready) {
-        diag_printf("Not initialized; run 'loadcell init <dout> <sck>'\n");
+        STRRES_PRINTF(STR_LOADCELL_STATUS_NOT_INITIALIZED);
         return 0;
     }
 
     /* The datasheet says nothing about what DOUT does while the part is powered
      * down, so do not report the level as if it meant something. */
     if (status.powered_down) {
-        diag_printf("DOUT GPIO %d, level not meaningful while powered down\n",
-                  status.dout_gpio);
+        STRRES_PRINTF(STR_LOADCELL_STATUS_DOUT_POWERED_DOWN, status.dout_gpio);
+    } else if (status.dout_level) {
+        STRRES_PRINTF(STR_LOADCELL_STATUS_DOUT_HIGH, status.dout_gpio);
     } else {
-        diag_printf("DOUT GPIO %d, now %s\n", status.dout_gpio,
-                  status.dout_level ? "high (converting)"
-                                    : "low (a result is waiting)");
+        STRRES_PRINTF(STR_LOADCELL_STATUS_DOUT_LOW, status.dout_gpio);
     }
-    diag_printf("PD_SCK GPIO %d, now %s\n", status.sck_gpio,
-              status.sck_level ? "high" : "low");
-    diag_printf("Power: %s\n", status.powered_down ? "down" : "up");
-    diag_printf("Set by this session: ");
+    STRRES_PRINTF(STR_LOADCELL_STATUS_SCK,
+                  status.sck_gpio, status.sck_level ? "high" : "low");
+    STRRES_PRINTF(STR_LOADCELL_STATUS_POWER, status.powered_down ? "down" : "up");
+    STRRES_PRINTF(STR_LOADCELL_STATUS_SESSION_PREFIX);
     print_mode_of(status.mode);
 
     bool reached = true;
     if (status.powered_down) {
-        diag_printf("Rate not measured while powered down\n");
+        STRRES_PRINTF(STR_LOADCELL_STATUS_RATE_POWERED_DOWN);
     } else {
         double sps = 0.0;
         esp_err_t err = hx711_measure_rate(hx, &sps);
@@ -1068,7 +1029,7 @@ int cmd_hx711_status(int argc, char **argv)
              * so print them -- but this command failed to reach the part, and
              * `i2c nau7802 status` returns -1 in the same situation rather than
              * reporting success. */
-            report_read_error(err, "Measuring the output rate");
+            report_read_error(err, STR_LOADCELL_RATE_MEASURE_FAILED);
             reached = false;
         }
     }
@@ -1076,21 +1037,20 @@ int cmd_hx711_status(int argc, char **argv)
     /* Re-read: the rate measurement above may have moved the timing figures. */
     hx711_get_status(hx, &status);
 
-    diag_printf("Worst PD_SCK high phase %lu us (T3 limit %d us)",
-              (unsigned long)status.worst_high_us, HX711_T3_MAX_US);
+    STRRES_PRINTF(STR_LOADCELL_STATUS_WORST_HIGH,
+                  (unsigned long)status.worst_high_us, HX711_T3_MAX_US);
     if (status.stretched_bursts > 0) {
-        diag_printf("; %lu burst(s) exceeded it and were discarded",
-                  (unsigned long)status.stretched_bursts);
+        STRRES_PRINTF(STR_LOADCELL_STATUS_BURSTS_DISCARDED,
+                      (unsigned long)status.stretched_bursts);
     }
     diag_printf("\n");
 
-    diag_printf("Tare %ld counts; %s\n", (long)status.scale.tare_counts,
-              status.scale.calibrated ? "calibrated" : "not calibrated");
+    STRRES_PRINTF(STR_LOADCELL_STATUS_TARE,
+                  (long)status.scale.tare_counts,
+                  status.scale.calibrated ? "calibrated" : "not calibrated");
     if (status.scale.calibrated) {
-        diag_printf("Scale %.1f counts per unit (%s)\n",
-                  status.scale.counts_per_unit,
-                  status.scale.supplied ? "supplied, not measured this session"
-                                        : "measured this session");
+        print_scale_provenance(status.scale.counts_per_unit,
+                               status.scale.supplied);
         print_scale_for_consumer(status.scale.counts_per_unit, 0.0, false,
                                  status.mode);
         /*
@@ -1100,12 +1060,10 @@ int cmd_hx711_status(int argc, char **argv)
          * docs/loadcell.md carries the rest of the reasoning.
          */
         if (status.scale.supplied) {
-            diag_printf("The +/- on a weight is repeatability, not the accuracy "
-                      "of a supplied factor\n");
+            STRRES_PRINTF(STR_LOADCELL_WEIGHT_PRECISION_NOTE);
         }
         if (status.scale.tare_samples == 0) {
-            diag_printf("No tare yet; run 'loadcell tare' with the cell empty "
-                      "before weighing\n");
+            STRRES_PRINTF(STR_LOADCELL_NO_TARE);
         }
     }
 
@@ -1118,8 +1076,6 @@ int cmd_hx711_status(int argc, char **argv)
      * be measured once and compiled into a consumer or passed to 'loadcell init'. The
      * tare cannot -- it is the bridge's own zero, and it moves.
      */
-    diag_printf("A reset loses the tare and scale. Give the factor back with "
-              "'loadcell init <dout> <sck> scale <counts_per_unit>'; the tare "
-              "has to be measured again.\n");
+    STRRES_PRINTF(STR_LOADCELL_RESET_NOTE);
     return reached ? 0 : -1;
 }

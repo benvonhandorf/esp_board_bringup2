@@ -415,28 +415,51 @@ static const cli_group_t sht4x_group = {
 };
 
 static const cli_command_t nau7802_commands[] = {
-    {"init",      "[ldo <volts>] [drdy <pin>] [gain <1..128>] [scale <counts_per_unit>]", "Power up, configure and self-calibrate", cmd_nau7802_init},
-    {"status",    "",                    "Show configuration and calibration state", cmd_nau7802_status},
-    {"gain",      "[1..128]",            "Show or set the PGA gain",                 cmd_nau7802_gain},
-    {"rate",      "[10|20|40|80|320]",   "Show or set the sample rate in SPS",       cmd_nau7802_rate},
-    {"input",     "[a|b]",               "Show or set the input channel",            cmd_nau7802_input},
-    {"drdy",      "[<pin>|off]",         "Show or set the GPIO wired to the DRDY output", cmd_nau7802_drdy},
-    {"ldomode",   "[0|1]",               "Show or set the regulator loop compensation (AVDD cap ESR)", cmd_nau7802_ldomode},
-    {"pgacap",    "[on|off]",            "Show or set the PGA output bypass capacitor", cmd_nau7802_pgacap},
-    {"raw",       "[samples] [a|b]",     "Raw ADC readings for diagnostics",         cmd_nau7802_raw},
-    {"registers", "",                    "Dump all device registers",                cmd_nau7802_registers},
-    {"read",      "[samples]",           "Averaged raw ADC counts, in units if calibrated", cmd_nau7802_read},
-    {"tare",      "[samples]",           "Capture the zero offset with no load",     cmd_nau7802_tare},
-    {"calibrate", "<known mass> [samples]", "Derive the scale from a known mass",    cmd_nau7802_calibrate},
-    {"scale",     "[counts_per_unit]",   "Show or set the scale factor without measuring one", cmd_nau7802_scale},
-    {"weight",    "[samples]",           "Report the load in calibrated units",      cmd_nau7802_weight},
+    {"init",      NULL, NULL, cmd_nau7802_init},
+    {"status",    NULL, NULL, cmd_nau7802_status},
+    {"gain",      NULL, NULL, cmd_nau7802_gain},
+    {"rate",      NULL, NULL, cmd_nau7802_rate},
+    {"input",     NULL, NULL, cmd_nau7802_input},
+    {"drdy",      NULL, NULL, cmd_nau7802_drdy},
+    {"ldomode",   NULL, NULL, cmd_nau7802_ldomode},
+    {"pgacap",    NULL, NULL, cmd_nau7802_pgacap},
+    {"raw",       NULL, NULL, cmd_nau7802_raw},
+    {"registers", NULL, NULL, cmd_nau7802_registers},
+    {"read",      NULL, NULL, cmd_nau7802_read},
+    {"tare",      NULL, NULL, cmd_nau7802_tare},
+    {"calibrate", NULL, NULL, cmd_nau7802_calibrate},
+    {"scale",     NULL, NULL, cmd_nau7802_scale},
+    {"weight",    NULL, NULL, cmd_nau7802_weight},
 };
+
+/* Parallel to nau7802_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t nau7802_text[] = {
+    {STR_I2C_NAU7802_INIT_USAGE,       STR_I2C_NAU7802_INIT_HELP},
+    {STR_I2C_NAU7802_STATUS_USAGE,     STR_I2C_NAU7802_STATUS_HELP},
+    {STR_I2C_NAU7802_GAIN_USAGE,       STR_I2C_NAU7802_GAIN_HELP},
+    {STR_I2C_NAU7802_RATE_USAGE,       STR_I2C_NAU7802_RATE_HELP},
+    {STR_I2C_NAU7802_INPUT_USAGE,      STR_I2C_NAU7802_INPUT_HELP},
+    {STR_I2C_NAU7802_DRDY_USAGE,       STR_I2C_NAU7802_DRDY_HELP},
+    {STR_I2C_NAU7802_LDOMODE_USAGE,    STR_I2C_NAU7802_LDOMODE_HELP},
+    {STR_I2C_NAU7802_PGACAP_USAGE,     STR_I2C_NAU7802_PGACAP_HELP},
+    {STR_I2C_NAU7802_RAW_USAGE,        STR_I2C_NAU7802_RAW_HELP},
+    {STR_I2C_NAU7802_REGISTERS_USAGE,  STR_I2C_NAU7802_REGISTERS_HELP},
+    {STR_I2C_NAU7802_READ_USAGE,       STR_I2C_NAU7802_READ_HELP},
+    {STR_I2C_NAU7802_TARE_USAGE,       STR_I2C_NAU7802_TARE_HELP},
+    {STR_I2C_NAU7802_CALIBRATE_USAGE,  STR_I2C_NAU7802_CALIBRATE_HELP},
+    {STR_I2C_NAU7802_SCALE_USAGE,      STR_I2C_NAU7802_SCALE_HELP},
+    {STR_I2C_NAU7802_WEIGHT_USAGE,     STR_I2C_NAU7802_WEIGHT_HELP},
+};
+_Static_assert(ARRAY_COUNT(nau7802_text) == ARRAY_COUNT(nau7802_commands),
+               "i2c-nau7802 help ids and commands must be the same length");
 
 static const cli_group_t nau7802_group = {
     .name = "i2c-nau7802",
-    .help = "Nuvoton NAU7802 24-bit bridge ADC / load cell at 0x2a",
     .commands = nau7802_commands,
     .command_count = ARRAY_COUNT(nau7802_commands),
+    .command_text = nau7802_text,
+    .help_id = STR_I2C_NAU7802_GROUP_HELP,
 };
 
 /* ------------------------------------------------------------------ */
@@ -444,25 +467,45 @@ static const cli_group_t nau7802_group = {
 /* ------------------------------------------------------------------ */
 
 static const cli_command_t loadcell_commands[] = {
-    {"init",      "<dout> <sck> [gain <32|64|128>] [scale <counts_per_unit>]", "Claim the pins and prove the part responds", cmd_hx711_init},
-    {"status",    "",                    "Show the pins, setting, measured rate and calibration state", cmd_hx711_status},
-    {"gain",      "[32|64|128]",         "Show or set the gain (32 is channel B only)", cmd_hx711_gain},
-    {"input",     "[a|b]",               "Show or set the input channel",            cmd_hx711_input},
-    {"power",     "[on|off]",            "Power the part down via PD_SCK, or wake it", cmd_hx711_power},
-    {"raw",       "[samples]",           "Raw ADC readings for diagnostics",         cmd_hx711_raw},
-    {"read",      "[samples]",           "Averaged raw ADC counts, in units if calibrated", cmd_hx711_read},
-    {"tare",      "[samples]",           "Capture the zero offset with no load",     cmd_hx711_tare},
-    {"calibrate", "<known mass> [samples]", "Derive the scale from a known mass",    cmd_hx711_calibrate},
-    {"scale",     "[counts_per_unit]",   "Show or set the scale factor without measuring one", cmd_hx711_scale},
-    {"weight",    "[samples]",           "Report the load in calibrated units",      cmd_hx711_weight},
-    {"close",     "",                    "Release both pins",                        cmd_hx711_close},
+    {"init",      NULL, NULL, cmd_hx711_init},
+    {"status",    NULL, NULL, cmd_hx711_status},
+    {"gain",      NULL, NULL, cmd_hx711_gain},
+    {"input",     NULL, NULL, cmd_hx711_input},
+    {"power",     NULL, NULL, cmd_hx711_power},
+    {"raw",       NULL, NULL, cmd_hx711_raw},
+    {"read",      NULL, NULL, cmd_hx711_read},
+    {"tare",      NULL, NULL, cmd_hx711_tare},
+    {"calibrate", NULL, NULL, cmd_hx711_calibrate},
+    {"scale",     NULL, NULL, cmd_hx711_scale},
+    {"weight",    NULL, NULL, cmd_hx711_weight},
+    {"close",     NULL, NULL, cmd_hx711_close},
 };
+
+/* Parallel to loadcell_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t loadcell_text[] = {
+    {STR_LOADCELL_INIT_USAGE,       STR_LOADCELL_INIT_HELP},
+    {STR_LOADCELL_STATUS_USAGE,     STR_LOADCELL_STATUS_HELP},
+    {STR_LOADCELL_GAIN_USAGE,       STR_LOADCELL_GAIN_HELP},
+    {STR_LOADCELL_INPUT_USAGE,      STR_LOADCELL_INPUT_HELP},
+    {STR_LOADCELL_POWER_USAGE,      STR_LOADCELL_POWER_HELP},
+    {STR_LOADCELL_RAW_USAGE,        STR_LOADCELL_RAW_HELP},
+    {STR_LOADCELL_READ_USAGE,       STR_LOADCELL_READ_HELP},
+    {STR_LOADCELL_TARE_USAGE,       STR_LOADCELL_TARE_HELP},
+    {STR_LOADCELL_CALIBRATE_USAGE,  STR_LOADCELL_CALIBRATE_HELP},
+    {STR_LOADCELL_SCALE_USAGE,      STR_LOADCELL_SCALE_HELP},
+    {STR_LOADCELL_WEIGHT_USAGE,     STR_LOADCELL_WEIGHT_HELP},
+    {STR_LOADCELL_CLOSE_USAGE,      STR_LOADCELL_CLOSE_HELP},
+};
+_Static_assert(ARRAY_COUNT(loadcell_text) == ARRAY_COUNT(loadcell_commands),
+               "loadcell help ids and commands must be the same length");
 
 static const cli_group_t loadcell_group = {
     .name = "loadcell",
-    .help = "HX711 24-bit load cell ADC, bit-banged on two pins (no bus)",
     .commands = loadcell_commands,
     .command_count = ARRAY_COUNT(loadcell_commands),
+    .command_text = loadcell_text,
+    .help_id = STR_LOADCELL_GROUP_HELP,
 };
 
 /* ------------------------------------------------------------------ */

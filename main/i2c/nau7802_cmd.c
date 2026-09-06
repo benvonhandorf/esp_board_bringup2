@@ -44,7 +44,7 @@ static bool ensure_handle(void)
     };
     esp_err_t err = nau7802_create(&config, &nau);
     if (err != ESP_OK) {
-        diag_error("Allocating the NAU7802 driver: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_NAU7802_DRIVER_ALLOC_FAILED, esp_err_to_name(err));
         return false;
     }
     return true;
@@ -67,8 +67,8 @@ static bool require_device(void)
     i2c_master_dev_handle_t dev = NULL;
     esp_err_t err = i2c_device_handle(NAU7802_I2C_ADDRESS, &dev);
     if (err != ESP_OK) {
-        diag_error("Addressing device 0x%02X: %s", NAU7802_I2C_ADDRESS,
-                 esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_NAU7802_ADDRESSING_FAILED,
+                     NAU7802_I2C_ADDRESS, esp_err_to_name(err));
         return false;
     }
 
@@ -81,7 +81,7 @@ static bool require_device(void)
 static bool require_init(void)
 {
     if (!ensure_handle() || !nau7802_is_ready(nau)) {
-        diag_error("NAU7802 not initialized. Run 'i2c-nau7802 init' first.");
+        STRRES_ERROR(STR_I2C_NAU7802_NOT_INITIALIZED);
         return false;
     }
     return require_device();
@@ -97,37 +97,35 @@ static bool require_init(void)
  * rather than returning bad numbers, which is exactly what the pull-down on it
  * is for.
  */
-static void report_read_error(esp_err_t err, const char *context)
+static bool report_drdy_timeout(esp_err_t err)
 {
     const int pin = nau7802_drdy_gpio(nau);
 
     if (err == ESP_ERR_TIMEOUT && pin >= 0) {
-        diag_error("DRDY (GPIO %d) never went high. Check the wiring, or run "
-                 "'i2c-nau7802 drdy off' to poll over I2C instead.", pin);
-        return;
+        STRRES_ERROR(STR_I2C_NAU7802_DRDY_TIMEOUT, pin);
+        return true;
     }
-    diag_error("%s: %s", context, esp_err_to_name(err));
+    return false;
 }
 
 static void report_calibration_error(esp_err_t err)
 {
     if (err == ESP_ERR_NAU7802_CAL_FAILED) {
-        diag_error("Internal calibration failed (CTRL2.CAL_ERR). Check the "
-                 "bridge wiring and the reference voltage.");
+        STRRES_ERROR(STR_I2C_NAU7802_CALIBRATION_CAL_ERR);
     } else if (err == ESP_ERR_TIMEOUT) {
-        diag_error("Internal calibration did not finish: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_NAU7802_CALIBRATION_UNFINISHED, esp_err_to_name(err));
     } else {
-        diag_error("Starting internal calibration: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_NAU7802_CALIBRATION_START_FAILED, esp_err_to_name(err));
     }
 }
 
 /* Report a failed batch read, naming how far it got. */
 static void report_batch_error(esp_err_t err, const nau7802_stats_t *stats, int wanted)
 {
-    char context[64];
-    snprintf(context, sizeof(context), "Reading conversion %d of %d",
-             stats->samples + 1, wanted);
-    report_read_error(err, context);
+    if (!report_drdy_timeout(err)) {
+        STRRES_ERROR(STR_I2C_NAU7802_CONVERSION_FAILED, stats->samples + 1, wanted,
+                     esp_err_to_name(err));
+    }
 }
 
 /*
@@ -140,8 +138,7 @@ static void report_batch_error(esp_err_t err, const nau7802_stats_t *stats, int 
 static void warn_if_saturated(const nau7802_stats_t *stats)
 {
     if (stats->saturated) {
-        diag_error("ADC saturated at %.2f%% of full scale. Check the bridge "
-                 "excitation and the gain.", stats->saturation_percent);
+        STRRES_ERROR(STR_I2C_NAU7802_ADC_SATURATED, stats->saturation_percent);
     }
 }
 
@@ -166,7 +163,7 @@ static int take_batch(int samples, nau7802_stats_t *stats)
  * to hear about.
  */
 static int report_change(esp_err_t err, const nau7802_change_report_t *change,
-                         const char *what)
+                         strres_id_t what)
 {
     if (change->scale_invalidated && change->scale_was_supplied) {
         /*
@@ -174,12 +171,9 @@ static int report_change(esp_err_t err, const nau7802_change_report_t *change,
          * measured here: it came from a bench run at a different gain, and a
          * scale factor is counts per unit at one gain only.
          */
-        diag_printf("Tare and scale dropped: a supplied factor belongs to the "
-                  "gain it was measured at. Give both with "
-                  "'i2c-nau7802 init ... gain <n> scale <counts_per_unit>'.\n");
+        STRRES_PRINTF(STR_I2C_NAU7802_TARE_SCALE_DROPPED_SUPPLIED);
     } else if (change->scale_invalidated) {
-        diag_printf("Tare and scale dropped; run 'i2c-nau7802 tare' and "
-                  "'i2c-nau7802 calibrate' again.\n");
+        STRRES_PRINTF(STR_I2C_NAU7802_TARE_SCALE_DROPPED);
     }
 
     if (err != ESP_OK) {
@@ -188,20 +182,25 @@ static int report_change(esp_err_t err, const nau7802_change_report_t *change,
             report_calibration_error(err);
             break;
         case NAU7802_STAGE_START:
-            diag_error("Restarting conversions failed: %s", esp_err_to_name(err));
+            STRRES_ERROR(STR_I2C_NAU7802_CONVERSIONS_RESTART_FAILED, esp_err_to_name(err));
             break;
         case NAU7802_STAGE_SETTLE:
-            report_read_error(err, "Discarding the settling conversions");
+            if (!report_drdy_timeout(err)) {
+                STRRES_ERROR(STR_I2C_NAU7802_SETTLE_FAILED, esp_err_to_name(err));
+            }
             break;
         default:
-            /* The register write itself failed, so nothing was applied. */
-            diag_error("%s: %s", what, esp_err_to_name(err));
+            /* The register write itself failed, so nothing was applied. The id
+             * is a variable here, so this is the one call in the file the
+             * compiler cannot check; every STR_..._SET_* it is given takes
+             * exactly one %s. */
+            strres_error(what, esp_err_to_name(err));
             break;
         }
         return -1;
     }
 
-    diag_printf("Settling: discarding %d conversions\n", change->discards);
+    STRRES_PRINTF(STR_I2C_NAU7802_SETTLING, change->discards);
     return 0;
 }
 
@@ -218,7 +217,7 @@ static int take_sample_count(int argc, char **argv, int index, int *samples)
     }
     if (cli_parse_int_arg(argv[index], samples) < 0 ||
         *samples < 1 || *samples > MAX_SAMPLES) {
-        diag_error("Sample count must be 1-%d", MAX_SAMPLES);
+        STRRES_ERROR(STR_I2C_NAU7802_SAMPLE_COUNT_RANGE, MAX_SAMPLES);
         return -1;
     }
     return 0;
@@ -229,7 +228,7 @@ static int parse_gain_arg(const char *token, nau7802_gain_t *gain)
 {
     int requested = 0;
     if (cli_parse_int_arg(token, &requested) < 0) {
-        diag_error("Gain must be a number");
+        STRRES_ERROR(STR_I2C_NAU7802_GAIN_NOT_A_NUMBER);
         return -1;
     }
 
@@ -237,7 +236,7 @@ static int parse_gain_arg(const char *token, nau7802_gain_t *gain)
         return 0;
     }
 
-    diag_printf("Gain must be one of:");
+    STRRES_PRINTF(STR_I2C_NAU7802_GAIN_CHOICES);
     for (size_t i = 0; i < sizeof(nau7802_gains) / sizeof(nau7802_gains[0]); i++) {
         diag_printf(" %d", nau7802_gain_value(nau7802_gains[i]));
     }
@@ -257,11 +256,11 @@ static int parse_gain_arg(const char *token, nau7802_gain_t *gain)
 static int parse_scale_arg(const char *token, double *counts_per_unit)
 {
     if (cli_parse_double_arg(token, counts_per_unit) < 0) {
-        diag_error("Scale factor must be a number");
+        STRRES_ERROR(STR_I2C_NAU7802_SCALE_NOT_A_NUMBER);
         return -1;
     }
     if (*counts_per_unit == 0.0) {
-        diag_error("Scale factor must not be zero");
+        STRRES_ERROR(STR_I2C_NAU7802_SCALE_ZERO);
         return -1;
     }
     return 0;
@@ -272,7 +271,7 @@ static int parse_ldo_arg(const char *token, nau7802_ldo_t *ldo)
 {
     double volts = 0.0;
     if (cli_parse_double_arg(token, &volts) < 0) {
-        diag_error("LDO voltage must be a number");
+        STRRES_ERROR(STR_I2C_NAU7802_LDO_NOT_A_NUMBER);
         return -1;
     }
 
@@ -281,7 +280,7 @@ static int parse_ldo_arg(const char *token, nau7802_ldo_t *ldo)
         return 0;
     }
 
-    diag_printf("LDO voltage must be one of:");
+    STRRES_PRINTF(STR_I2C_NAU7802_LDO_CHOICES);
     for (size_t i = 0; i < sizeof(nau7802_ldos) / sizeof(nau7802_ldos[0]); i++) {
         diag_printf(" %.1f", nau7802_ldo_millivolts(nau7802_ldos[i]) / 1000.0);
     }
@@ -291,8 +290,7 @@ static int parse_ldo_arg(const char *token, nau7802_ldo_t *ldo)
 
 static void print_init_usage(void)
 {
-    diag_printf("Usage: init [ldo <volts>] [drdy <pin>] [gain <1..128>] "
-              "[scale <counts_per_unit>]\n");
+    STRRES_PRINTF(STR_I2C_NAU7802_USAGE_INIT);
 }
 
 /* ------------------------------------------------------------------ */
@@ -304,65 +302,61 @@ static void report_bringup_failure(const nau7802_bringup_report_t *report,
 {
     switch (report->failed_stage) {
     case NAU7802_STAGE_PROBE:
-        diag_error("No response from 0x%02X: %s", NAU7802_I2C_ADDRESS,
-                 esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_NAU7802_NO_RESPONSE,
+                     NAU7802_I2C_ADDRESS, esp_err_to_name(err));
         break;
     case NAU7802_STAGE_RESET:
-        diag_error("Resetting the device failed");
+        STRRES_ERROR(STR_I2C_NAU7802_RESET_FAILED);
         break;
     case NAU7802_STAGE_POWER_DIGITAL:
-        diag_error("Powering up the digital section failed");
+        STRRES_ERROR(STR_I2C_NAU7802_DIGITAL_POWER_FAILED);
         break;
     case NAU7802_STAGE_POWER_READY:
-        diag_error("Device never reported power-up ready (PU_CTRL.PUR): %s",
-                 esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_NAU7802_POWER_UP_TIMEOUT, esp_err_to_name(err));
         break;
     case NAU7802_STAGE_SET_LDO:
-        diag_error("Setting the LDO voltage failed");
+        STRRES_ERROR(STR_I2C_NAU7802_LDO_SET_FAILED);
         break;
     case NAU7802_STAGE_SET_GAIN:
-        diag_error("Setting the gain failed");
+        STRRES_ERROR(STR_I2C_NAU7802_GAIN_SET_FAILED);
         break;
     case NAU7802_STAGE_POWER_ANALOG:
-        diag_error("Powering up the analog section failed");
+        STRRES_ERROR(STR_I2C_NAU7802_ANALOG_POWER_FAILED);
         break;
     case NAU7802_STAGE_ADC_CTRL:
-        diag_error("Writing REG0x15 failed");
+        STRRES_ERROR(STR_I2C_NAU7802_REG15_WRITE_FAILED);
         break;
     case NAU7802_STAGE_CALIBRATE:
         report_calibration_error(err);
         break;
     case NAU7802_STAGE_START:
-        diag_error("Starting conversions failed");
+        STRRES_ERROR(STR_I2C_NAU7802_CONVERSIONS_START_FAILED);
         break;
     case NAU7802_STAGE_SETTLE:
-        report_read_error(err, "Discarding the settling conversions");
+        if (!report_drdy_timeout(err)) {
+            STRRES_ERROR(STR_I2C_NAU7802_SETTLE_FAILED, esp_err_to_name(err));
+        }
         break;
     default:
-        diag_error("NAU7802 bring-up failed: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_NAU7802_INIT_FAILED, esp_err_to_name(err));
         break;
     }
 }
 
 static void report_bringup_success(const nau7802_bringup_report_t *report)
 {
-    diag_printf("NAU7802 ready at 0x%02X (device revision 0x%02X)\n",
-              NAU7802_I2C_ADDRESS, report->revision);
+    STRRES_PRINTF(STR_I2C_NAU7802_READY, NAU7802_I2C_ADDRESS, report->revision);
 
     if (report->drdy_gpio >= 0) {
-        diag_printf("Conversions signalled by DRDY on GPIO %d\n", report->drdy_gpio);
+        STRRES_PRINTF(STR_I2C_NAU7802_DRDY_CONFIGURED, report->drdy_gpio);
     } else {
-        diag_printf("No DRDY pin; polling the CR bit over I2C. Wire DRDY and "
-                  "use 'i2c-nau7802 init drdy <pin>' if readings show "
-                  "outliers.\n");
+        STRRES_PRINTF(STR_I2C_NAU7802_DRDY_ABSENT);
     }
 
     if (report->ldo_enabled) {
-        diag_printf("AVDD from the internal LDO at %.1f V\n",
-                  nau7802_ldo_millivolts(report->ldo) / 1000.0);
+        STRRES_PRINTF(STR_I2C_NAU7802_AVDD_LDO, nau7802_ldo_millivolts(report->ldo) / 1000.0);
     } else {
-        diag_printf("AVDD from the pin; if the cell reads nothing this board "
-                  "may need 'i2c-nau7802 init ldo 3.0'\n");
+        STRRES_PRINTF(STR_I2C_NAU7802_AVDD_PIN);
     }
 
     /*
@@ -375,11 +369,9 @@ static void report_bringup_success(const nau7802_bringup_report_t *report)
      * `calibrate` refuse for what looks like no reason.
      */
     const int gain = nau7802_gain_value(report->gain);
-    diag_printf("PGA gain x%d\n", gain);
+    STRRES_PRINTF(STR_I2C_NAU7802_GAIN_REPORT, gain);
     if (!report->gain_was_requested && gain < 128) {
-        diag_printf("That is the reset default, not a choice: 'i2c-nau7802 init' "
-                  "returns the gain to x1, and a load cell needs "
-                  "'i2c-nau7802 gain 128'.\n");
+        STRRES_PRINTF(STR_I2C_NAU7802_GAIN_RESET_DEFAULT);
     }
 
     /* Read back like the gain above, but only the failure is worth a line:
@@ -387,8 +379,7 @@ static void report_bringup_success(const nau7802_bringup_report_t *report)
      * tells the user nothing they could act on. What it buys and why every
      * other REG_CHPS encoding is Reserved is in docs/i2c.md. */
     if (report->adc_ctrl_valid && !report->chopper_off) {
-        diag_error("REG0x15 reads 0x%02X, not 0x30 -- the write did not take",
-                 report->adc_ctrl);
+        STRRES_ERROR(STR_I2C_NAU7802_REG15_MISMATCH, report->adc_ctrl);
     }
 
     /*
@@ -399,14 +390,11 @@ static void report_bringup_success(const nau7802_bringup_report_t *report)
      */
     const nau7802_scale_t *scale = nau7802_get_scale(nau);
     if (scale->supplied) {
-        diag_printf("Offset calibration passed. Scale %.1f counts per unit "
-                  "(supplied); run 'i2c-nau7802 tare' with no load, then "
-                  "'i2c-nau7802 weight'.\n", scale->counts_per_unit);
+        STRRES_PRINTF(STR_I2C_NAU7802_OFFSET_CAL_OK_SCALE, scale->counts_per_unit);
         return;
     }
 
-    diag_printf("Offset calibration passed. Run 'i2c-nau7802 tare' with no "
-              "load, then 'i2c-nau7802 calibrate <known mass>'.\n");
+    STRRES_PRINTF(STR_I2C_NAU7802_OFFSET_CAL_OK);
 }
 
 int cmd_nau7802_init(int argc, char **argv)
@@ -429,7 +417,7 @@ int cmd_nau7802_init(int argc, char **argv)
     for (int i = 1; i < argc; i++) {
         if (strcasecmp(argv[i], "ldo") == 0) {
             if (++i >= argc) {
-                diag_error("Give the LDO voltage, e.g. 'i2c-nau7802 init ldo 3.0'");
+                STRRES_ERROR(STR_I2C_NAU7802_INIT_LDO_MISSING);
                 return -1;
             }
             if (parse_ldo_arg(argv[i], &opts.ldo) < 0) {
@@ -438,16 +426,16 @@ int cmd_nau7802_init(int argc, char **argv)
             opts.use_internal_ldo = true;
         } else if (strcasecmp(argv[i], "drdy") == 0) {
             if (++i >= argc) {
-                diag_error("Give the GPIO the DRDY pin is wired to, e.g. 'i2c-nau7802 init drdy 7'");
+                STRRES_ERROR(STR_I2C_NAU7802_INIT_DRDY_MISSING);
                 return -1;
             }
             if (cli_parse_int_arg(argv[i], &requested_drdy) < 0) {
-                diag_error("DRDY must be a GPIO number");
+                STRRES_ERROR(STR_I2C_NAU7802_DRDY_NOT_A_NUMBER);
                 return -1;
             }
         } else if (strcasecmp(argv[i], "gain") == 0) {
             if (++i >= argc) {
-                diag_error("Give the gain, e.g. 'i2c-nau7802 init gain 128'");
+                STRRES_ERROR(STR_I2C_NAU7802_INIT_GAIN_MISSING);
                 return -1;
             }
             if (parse_gain_arg(argv[i], &opts.gain) < 0) {
@@ -456,7 +444,7 @@ int cmd_nau7802_init(int argc, char **argv)
             opts.set_gain = true;
         } else if (strcasecmp(argv[i], "scale") == 0) {
             if (++i >= argc) {
-                diag_error("Give the scale factor, e.g. 'i2c-nau7802 init scale 214.7'");
+                STRRES_ERROR(STR_I2C_NAU7802_INIT_SCALE_MISSING);
                 return -1;
             }
             if (parse_scale_arg(argv[i], &opts.counts_per_unit) < 0) {
@@ -472,7 +460,7 @@ int cmd_nau7802_init(int argc, char **argv)
     /* Claim the pin before touching the device, so a bad pin number fails
      * without having half-configured the converter. */
     if (requested_drdy >= 0 && nau7802_set_drdy(nau, requested_drdy) != ESP_OK) {
-        diag_error("Configuring GPIO %d as the DRDY input failed", requested_drdy);
+        STRRES_ERROR(STR_I2C_NAU7802_DRDY_CONFIG_FAILED, requested_drdy);
         return -1;
     }
 
@@ -500,10 +488,10 @@ int cmd_nau7802_gain(int argc, char **argv)
     if (argc < 2) {
         nau7802_gain_t gain;
         if (nau7802_get_gain(nau, &gain) != ESP_OK) {
-            diag_error("Reading CTRL1 failed");
+            STRRES_ERROR(STR_I2C_NAU7802_CTRL1_READ_FAILED);
             return -1;
         }
-        diag_printf("Gain is x%d\n", nau7802_gain_value(gain));
+        STRRES_PRINTF(STR_I2C_NAU7802_GAIN_IS, nau7802_gain_value(gain));
         return 0;
     }
 
@@ -513,12 +501,11 @@ int cmd_nau7802_gain(int argc, char **argv)
     }
 
     /* Changing the analog path invalidates the offset calibration. */
-    diag_printf("Gain set to x%d; re-running internal offset calibration\n",
-              nau7802_gain_value(gain));
+    STRRES_PRINTF(STR_I2C_NAU7802_GAIN_SET, nau7802_gain_value(gain));
 
     nau7802_change_report_t change = {0};
     esp_err_t err = nau7802_set_gain(nau, gain, &change);
-    return report_change(err, &change, "Setting the gain");
+    return report_change(err, &change, STR_I2C_NAU7802_SET_GAIN_FAILED);
 }
 
 int cmd_nau7802_rate(int argc, char **argv)
@@ -530,48 +517,46 @@ int cmd_nau7802_rate(int argc, char **argv)
     if (argc < 2) {
         nau7802_rate_t rate;
         if (nau7802_get_rate(nau, &rate) != ESP_OK) {
-            diag_error("Reading CTRL2 failed");
+            STRRES_ERROR(STR_I2C_NAU7802_CTRL2_READ_FAILED);
             return -1;
         }
         const int sps = nau7802_rate_sps(rate);
         if (sps < 0) {
-            diag_printf("Sample rate register holds an undefined encoding\n");
+            STRRES_PRINTF(STR_I2C_NAU7802_RATE_UNDEFINED);
         } else {
-            diag_printf("Sample rate is %d SPS\n", sps);
+            STRRES_PRINTF(STR_I2C_NAU7802_RATE_IS, sps);
         }
         return 0;
     }
 
     int requested = 0;
     if (cli_parse_int_arg(argv[1], &requested) < 0) {
-        diag_error("Sample rate must be a number");
+        STRRES_ERROR(STR_I2C_NAU7802_RATE_NOT_A_NUMBER);
         return -1;
     }
 
     nau7802_rate_t rate;
     if (nau7802_rate_from_sps(requested, &rate) != ESP_OK) {
-        diag_printf("Sample rate must be one of: 10 20 40 80 320 SPS\n");
+        STRRES_PRINTF(STR_I2C_NAU7802_RATE_CHOICES);
         return -1;
     }
 
     /* The conversion rate changes the modulator and filter settings, so the
      * existing offset calibration no longer applies. Skipping this leaves the
      * ADC returning values that swing across most of the full-scale range. */
-    diag_printf("Sample rate set to %d SPS; re-running internal offset "
-              "calibration\n", requested);
+    STRRES_PRINTF(STR_I2C_NAU7802_RATE_SET, requested);
 
     /* Measured on the board this was developed against: 10-80 SPS are rock
      * steady, while 320 SPS returns values swinging across the whole range.
      * Likely an oscillator limitation -- 320 SPS may need an external crystal
      * (PU_CTRL.OSCS) rather than the internal RC. */
     if (requested == 320) {
-        diag_printf("Note: 320 SPS has been seen returning full-range garbage "
-                  "on the internal RC oscillator\n");
+        STRRES_PRINTF(STR_I2C_NAU7802_RATE_320_WARNING);
     }
 
     nau7802_change_report_t change = {0};
     esp_err_t err = nau7802_set_rate(nau, rate, &change);
-    return report_change(err, &change, "Setting the sample rate");
+    return report_change(err, &change, STR_I2C_NAU7802_SET_RATE_FAILED);
 }
 
 int cmd_nau7802_input(int argc, char **argv)
@@ -583,11 +568,10 @@ int cmd_nau7802_input(int argc, char **argv)
     if (argc < 2) {
         nau7802_channel_t channel;
         if (nau7802_get_channel(nau, &channel) != ESP_OK) {
-            diag_error("Reading CTRL2 failed");
+            STRRES_ERROR(STR_I2C_NAU7802_CTRL2_READ_FAILED);
             return -1;
         }
-        diag_printf("Input channel: %s\n",
-                  channel == NAU7802_CHANNEL_B ? "B" : "A");
+        STRRES_PRINTF(STR_I2C_NAU7802_INPUT_CHANNEL, channel == NAU7802_CHANNEL_B ? "B" : "A");
         return 0;
     }
 
@@ -597,17 +581,16 @@ int cmd_nau7802_input(int argc, char **argv)
     } else if (strcasecmp(argv[1], "b") == 0) {
         channel = NAU7802_CHANNEL_B;
     } else {
-        diag_error("Input must be 'a' or 'b'");
+        STRRES_ERROR(STR_I2C_NAU7802_INPUT_INVALID);
         return -1;
     }
 
     const char *name = (channel == NAU7802_CHANNEL_B) ? "B" : "A";
-    diag_printf("Input channel set to %s; re-running internal offset calibration\n",
-              name);
+    STRRES_PRINTF(STR_I2C_NAU7802_INPUT_CHANNEL_SET, name);
 
     nau7802_change_report_t change = {0};
     esp_err_t err = nau7802_set_channel(nau, channel, &change);
-    return report_change(err, &change, "Switching the input channel");
+    return report_change(err, &change, STR_I2C_NAU7802_SET_CHANNEL_FAILED);
 }
 
 /*
@@ -625,45 +608,44 @@ int cmd_nau7802_drdy(int argc, char **argv)
 
     if (argc < 2) {
         if (pin < 0) {
-            diag_printf("No DRDY pin; conversions are detected by polling the CR "
-                      "status bit over I2C\n");
+            STRRES_PRINTF(STR_I2C_NAU7802_DRDY_POLLING);
+        } else if (nau7802_drdy_level(nau)) {
+            STRRES_PRINTF(STR_I2C_NAU7802_DRDY_STATE_HIGH, pin);
         } else {
-            diag_printf("DRDY on GPIO %d, reading %s right now\n", pin,
-                      nau7802_drdy_level(nau) ? "high (a result is waiting)"
-                                              : "low (no result waiting)");
+            STRRES_PRINTF(STR_I2C_NAU7802_DRDY_STATE_LOW, pin);
         }
         return 0;
     }
 
     if (strcasecmp(argv[1], "off") == 0) {
         nau7802_set_drdy(nau, -1);
-        diag_printf("DRDY released; back to polling the CR status bit over I2C\n");
+        STRRES_PRINTF(STR_I2C_NAU7802_DRDY_RELEASED);
         return 0;
     }
 
     int requested = 0;
     if (cli_parse_int_arg(argv[1], &requested) < 0) {
-        diag_printf("Usage: drdy [<pin>|off]\n");
+        STRRES_PRINTF(STR_I2C_NAU7802_USAGE_DRDY);
         return -1;
     }
 
     esp_err_t err = nau7802_set_drdy(nau, requested);
     if (err != ESP_OK) {
         if (err == ESP_ERR_INVALID_ARG) {
-            diag_error("GPIO %d does not exist on this chip", requested);
+            STRRES_ERROR(STR_I2C_NAU7802_GPIO_ABSENT, requested);
         }
-        diag_error("Configuring GPIO %d as the DRDY input failed", requested);
+        STRRES_ERROR(STR_I2C_NAU7802_DRDY_CONFIG_FAILED, requested);
         return -1;
     }
 
-    diag_printf("DRDY on GPIO %d\n", requested);
+    STRRES_PRINTF(STR_I2C_NAU7802_DRDY_SET, requested);
 
     /*
      * A pin that is low here is the normal case -- the last result was read --
      * so silence is not evidence either way. Saying nothing at all about it
      * would leave a typo to surface later as a timeout mid-measurement.
      */
-    diag_printf("Run 'i2c-nau7802 read' to confirm; a wrong pin times out\n");
+    STRRES_PRINTF(STR_I2C_NAU7802_DRDY_CONFIRM);
     return 0;
 }
 
@@ -676,30 +658,32 @@ int cmd_nau7802_ldomode(int argc, char **argv)
     if (argc < 2) {
         bool stable = false;
         if (nau7802_get_ldomode(nau, &stable) != ESP_OK) {
-            diag_error("Reading the PGA register failed");
+            STRRES_ERROR(STR_I2C_NAU7802_PGA_READ_FAILED);
             return -1;
         }
-        diag_printf("LDOMODE %d: the AVDD capacitor %s\n", stable ? 1 : 0,
-                  stable ? "may have ESR up to 5 ohms"
-                         : "must have ESR below 1 ohm");
+        if (stable) {
+            STRRES_PRINTF(STR_I2C_NAU7802_LDOMODE_IS_TOLERANT);
+        } else {
+            STRRES_PRINTF(STR_I2C_NAU7802_LDOMODE_IS_STRICT);
+        }
         return 0;
     }
 
     int mode = 0;
     if (cli_parse_int_arg(argv[1], &mode) < 0 || (mode != 0 && mode != 1)) {
-        diag_printf("Usage: ldomode [0|1]\n");
-        diag_printf("  0  AVDD capacitor ESR below 1 ohm (chip default)\n");
-        diag_printf("  1  AVDD capacitor ESR up to 5 ohms\n");
+        STRRES_PRINTF(STR_I2C_NAU7802_USAGE_LDOMODE);
+        STRRES_PRINTF(STR_I2C_NAU7802_LDOMODE_HELP_0);
+        STRRES_PRINTF(STR_I2C_NAU7802_LDOMODE_HELP_1);
         return -1;
     }
 
     /* The two modes settle AVDD at slightly different levels, and AVDD is the
      * reference, so the existing offset calibration no longer applies. */
-    diag_printf("LDOMODE set to %d; re-running internal offset calibration\n", mode);
+    STRRES_PRINTF(STR_I2C_NAU7802_LDOMODE_SET, mode);
 
     nau7802_change_report_t change = {0};
     esp_err_t err = nau7802_set_ldomode(nau, mode != 0, &change);
-    return report_change(err, &change, "Setting LDOMODE");
+    return report_change(err, &change, STR_I2C_NAU7802_SET_LDOMODE_FAILED);
 }
 
 int cmd_nau7802_pgacap(int argc, char **argv)
@@ -711,11 +695,10 @@ int cmd_nau7802_pgacap(int argc, char **argv)
     if (argc < 2) {
         bool enabled = false;
         if (nau7802_get_pga_cap(nau, &enabled) != ESP_OK) {
-            diag_error("Reading the power control register failed");
+            STRRES_ERROR(STR_I2C_NAU7802_POWER_READ_FAILED);
             return -1;
         }
-        diag_printf("PGA output bypass capacitor: %s\n",
-                  enabled ? "enabled" : "disabled");
+        STRRES_PRINTF(STR_I2C_NAU7802_PGACAP_IS, enabled ? "enabled" : "disabled");
         return 0;
     }
 
@@ -725,7 +708,7 @@ int cmd_nau7802_pgacap(int argc, char **argv)
     } else if (strcasecmp(argv[1], "off") == 0) {
         enable = false;
     } else {
-        diag_printf("Usage: pgacap [on|off]\n");
+        STRRES_PRINTF(STR_I2C_NAU7802_USAGE_PGACAP);
         return -1;
     }
 
@@ -735,20 +718,17 @@ int cmd_nau7802_pgacap(int argc, char **argv)
          * capacitor fitted this quietly does nothing, and it takes channel 2
          * away whether or not it helps.
          */
-        diag_printf("PGA output bypass capacitor enabled; it does nothing "
-                  "unless one is fitted across VIN2P/VIN2N. Channel B now "
-                  "reads the filter node, not an input.\n");
+        STRRES_PRINTF(STR_I2C_NAU7802_PGACAP_ENABLED);
     } else {
-        diag_printf("PGA output bypass capacitor disabled; channel B is an input "
-                  "again\n");
+        STRRES_PRINTF(STR_I2C_NAU7802_PGACAP_DISABLED);
     }
 
-    diag_printf("Re-running internal offset calibration\n");
+    STRRES_PRINTF(STR_I2C_NAU7802_RECALIBRATING);
 
     nau7802_change_report_t change = {0};
     esp_err_t err = nau7802_set_pga_cap(nau, enable, &change);
     return report_change(err, &change,
-                         "Setting the PGA output bypass capacitor");
+                         STR_I2C_NAU7802_SET_PGACAP_FAILED);
 }
 
 /* ------------------------------------------------------------------ */
@@ -765,7 +745,7 @@ int cmd_nau7802_raw(int argc, char **argv)
     int samples = 1;
     if (arg_idx < argc) {
         if (cli_parse_int_arg(argv[arg_idx], &samples) < 0) {
-            diag_error("Invalid sample count: %s", argv[arg_idx]);
+            STRRES_ERROR(STR_I2C_NAU7802_SAMPLE_COUNT_INVALID, argv[arg_idx]);
             return -1;
         }
         arg_idx++;
@@ -775,7 +755,7 @@ int cmd_nau7802_raw(int argc, char **argv)
     if (arg_idx < argc) {
         if (strcasecmp(argv[arg_idx], "a") != 0 &&
             strcasecmp(argv[arg_idx], "b") != 0) {
-            diag_error("Channel must be 'a' or 'b': %s", argv[arg_idx]);
+            STRRES_ERROR(STR_I2C_NAU7802_CHANNEL_INVALID, argv[arg_idx]);
             return -1;
         }
         channel = argv[arg_idx];
@@ -796,35 +776,34 @@ int cmd_nau7802_raw(int argc, char **argv)
 
     nau7802_channel_t current;
     if (nau7802_get_channel(nau, &current) != ESP_OK) {
-        diag_error("Reading CTRL2 failed");
+        STRRES_ERROR(STR_I2C_NAU7802_CTRL2_READ_FAILED);
         return -1;
     }
 
     if (want != current) {
-        diag_printf("Input channel set to %s; re-running internal offset "
-                  "calibration\n", want == NAU7802_CHANNEL_B ? "B" : "A");
+        STRRES_PRINTF(STR_I2C_NAU7802_INPUT_CHANNEL_SET, want == NAU7802_CHANNEL_B ? "B" : "A");
 
         nau7802_change_report_t change = {0};
         esp_err_t err = nau7802_set_channel(nau, want, &change);
-        if (report_change(err, &change, "Switching the input channel") < 0) {
+        if (report_change(err, &change, STR_I2C_NAU7802_SET_CHANNEL_FAILED) < 0) {
             return -1;
         }
     }
 
-    diag_printf("Raw ADC readings (channel %s):\n", channel);
+    STRRES_PRINTF(STR_I2C_NAU7802_RAW_HEADER, channel);
 
     for (int i = 0; i < samples; i++) {
         int32_t value = 0;
         esp_err_t err = nau7802_read_raw(nau, &value);
         if (err != ESP_OK) {
-            char context[48];
-            snprintf(context, sizeof(context), "Reading sample %d", i + 1);
-            report_read_error(err, context);
+            if (!report_drdy_timeout(err)) {
+                STRRES_ERROR(STR_I2C_NAU7802_SAMPLE_FAILED, i + 1, esp_err_to_name(err));
+            }
             return -1;
         }
 
         const double percent = value * 100.0 / NAU7802_FULL_SCALE;
-        diag_printf("  %8ld  (%.4f%% of full scale)\n", (long)value, percent);
+        STRRES_PRINTF(STR_I2C_NAU7802_RAW_ROW, (long)value, percent);
     }
 
     return 0;
@@ -848,15 +827,14 @@ int cmd_nau7802_read(int argc, char **argv)
 
     /* Percent of full scale is wiring-independent; an absolute voltage would
      * depend on REFP-REFN, which this driver has no way to know. */
-    diag_printf("Raw %10.1f counts  (%d samples, spread %ld, %.4f%% of full scale)\n",
-              stats.mean, samples, (long)(stats.max - stats.min),
-              stats.mean * 100.0 / NAU7802_FULL_SCALE);
+    STRRES_PRINTF(STR_I2C_NAU7802_READ_RAW,
+                  stats.mean, samples, (long)(stats.max - stats.min),
+                  stats.mean * 100.0 / NAU7802_FULL_SCALE);
 
     const nau7802_scale_t *scale = nau7802_get_scale(nau);
 
     if (scale->tare_samples > 0) {
-        diag_printf("     %10.1f counts net of tare\n",
-                  stats.mean - scale->tare_counts);
+        STRRES_PRINTF(STR_I2C_NAU7802_READ_NET, stats.mean - scale->tare_counts);
     }
 
     /*
@@ -873,12 +851,11 @@ int cmd_nau7802_read(int argc, char **argv)
         if (samples < 2) {
             /* One conversion has no spread, so quote no error bar rather than
              * a zero one. */
-            diag_printf("     %10.4f units\n", net / scale->counts_per_unit);
+            STRRES_PRINTF(STR_I2C_NAU7802_READ_UNITS, net / scale->counts_per_unit);
         } else {
-            diag_printf("     %10.4f units  (+/-%.4f)\n",
-                      net / scale->counts_per_unit,
-                      hypot(stats.stderr_mean, scale->tare_stderr) /
-                          fabs(scale->counts_per_unit));
+            STRRES_PRINTF(STR_I2C_NAU7802_READ_UNITS_PM,
+                          net / scale->counts_per_unit,
+                          hypot(stats.stderr_mean, scale->tare_stderr) / fabs(scale->counts_per_unit));
         }
     }
 
@@ -915,14 +892,30 @@ static void print_scale_for_consumer(double counts_per_unit, nau7802_gain_t gain
                                      bool gain_valid, double precision_percent,
                                      bool precision_valid)
 {
-    diag_printf("    scale factor for the consumer:  %.17g  /*", counts_per_unit);
+    STRRES_PRINTF(STR_I2C_NAU7802_SCALE_FACTOR_COMMENT, counts_per_unit);
     if (precision_valid) {
         diag_printf(" +/-%.2f%%,", precision_percent);
     }
     if (gain_valid) {
         diag_printf(" gain x%d,", nau7802_gain_value(gain));
     }
-    diag_printf(" counts per unit */\n");
+    STRRES_PRINTF(STR_I2C_NAU7802_SCALE_FACTOR_COMMENT_END);
+}
+
+/*
+ * Report a scale factor and where it came from.
+ *
+ * Two whole sentences rather than one with a "%s" for the provenance: the
+ * clause is prose, and prose passed as an argument stays in the image while the
+ * sentence around it does not.
+ */
+static void print_scale_provenance(double counts_per_unit, bool supplied)
+{
+    if (supplied) {
+        STRRES_PRINTF(STR_I2C_NAU7802_SCALE_IS_SUPPLIED, counts_per_unit);
+    } else {
+        STRRES_PRINTF(STR_I2C_NAU7802_SCALE_IS_MEASURED, counts_per_unit);
+    }
 }
 
 int cmd_nau7802_tare(int argc, char **argv)
@@ -944,9 +937,8 @@ int cmd_nau7802_tare(int argc, char **argv)
     }
     warn_if_saturated(&stats);
 
-    diag_printf("Tare set to %ld counts (%d samples, spread %ld, mean known to "
-              "+/-%.1f)\n", (long)stats.mean, samples,
-              (long)(stats.max - stats.min), stats.stderr_mean);
+    STRRES_PRINTF(STR_I2C_NAU7802_TARE_SET,
+                  (long)stats.mean, samples, (long)(stats.max - stats.min), stats.stderr_mean);
     return 0;
 }
 
@@ -957,15 +949,14 @@ int cmd_nau7802_calibrate(int argc, char **argv)
     }
 
     if (argc < 2) {
-        diag_printf("Usage: calibrate <known mass>\n");
-        diag_printf("Run 'i2c-nau7802 tare' with the scale empty first, then place a known "
-                  "mass and run this. The unit is whatever you use here.\n");
+        STRRES_PRINTF(STR_I2C_NAU7802_USAGE_CALIBRATE);
+        STRRES_PRINTF(STR_I2C_NAU7802_CALIBRATE_HOW);
         return -1;
     }
 
     double known = 0.0;
     if (cli_parse_double_arg(argv[1], &known) < 0 || known == 0.0) {
-        diag_error("The known mass must be a non-zero number");
+        STRRES_ERROR(STR_I2C_NAU7802_MASS_INVALID);
         return -1;
     }
 
@@ -992,18 +983,12 @@ int cmd_nau7802_calibrate(int argc, char **argv)
      * checked.
      */
     if (err == ESP_ERR_NAU7802_TOO_FEW_SAMPLES) {
-        diag_error("'i2c-nau7802 tare' and 'i2c-nau7802 calibrate' need at "
-                 "least two samples. Re-run as 'i2c-nau7802 tare 10' and "
-                 "'i2c-nau7802 calibrate %g 10'.", known);
+        STRRES_ERROR(STR_I2C_NAU7802_NEED_TWO_SAMPLES, known);
         return -1;
     }
 
     if (err == ESP_ERR_NAU7802_WITHIN_NOISE) {
-        diag_error("Moved %.1f counts from the tare, within the +/-%.1f the "
-                 "two averages are known to. Is the mass on the cell, and was "
-                 "'i2c-nau7802 tare' run empty? Or average harder: "
-                 "'i2c-nau7802 tare 100' then 'i2c-nau7802 calibrate %g 100'.",
-                 result.net_counts, result.uncertainty, known);
+        STRRES_ERROR(STR_I2C_NAU7802_TARE_DRIFT, result.net_counts, result.uncertainty, known);
 
         /*
          * Averaging is the wrong advice when the signal is small because the
@@ -1014,9 +999,7 @@ int cmd_nau7802_calibrate(int argc, char **argv)
         if (result.gain_valid) {
             const int gain = nau7802_gain_value(result.gain);
             if (gain > 0 && gain < 128) {
-                diag_printf("The PGA is at gain x%d: 'i2c-nau7802 gain 128' "
-                          "would make the signal %dx larger, which averaging "
-                          "cannot.\n", gain, 128 / gain);
+                STRRES_PRINTF(STR_I2C_NAU7802_GAIN_HEADROOM, gain, 128 / gain);
             }
         }
         return -1;
@@ -1028,14 +1011,12 @@ int cmd_nau7802_calibrate(int argc, char **argv)
      * the relative error of that difference -- and every weight from here
      * inherits it.
      */
-    diag_printf("Calibrated: %.1f counts per unit (%.1f counts for %.4f units)\n",
-              result.counts_per_unit, result.net_counts, known);
-    diag_printf("Scale good to +/-%.2f%% (%.1f counts of uncertainty)\n",
-              result.precision_percent, result.uncertainty);
+    STRRES_PRINTF(STR_I2C_NAU7802_CALIBRATED, result.counts_per_unit, result.net_counts, known);
+    STRRES_PRINTF(STR_I2C_NAU7802_CALIBRATE_PRECISION,
+                  result.precision_percent, result.uncertainty);
     if (result.precision_percent > 1.0) {
-        diag_printf("For about %.2f%%, run 'i2c-nau7802 tare 100' and "
-                  "'i2c-nau7802 calibrate %g 100'\n",
-                  result.precision_percent / sqrt(100.0 / samples), known);
+        STRRES_PRINTF(STR_I2C_NAU7802_CALIBRATE_MORE_SAMPLES,
+                      result.precision_percent / sqrt(100.0 / samples), known);
     }
     print_scale_for_consumer(result.counts_per_unit, result.gain, result.gain_valid,
                              result.precision_percent, true);
@@ -1060,14 +1041,10 @@ int cmd_nau7802_scale(int argc, char **argv)
 
     if (argc < 2) {
         if (!scale->calibrated) {
-            diag_printf("No scale factor. Run 'i2c-nau7802 tare' then "
-                      "'i2c-nau7802 calibrate <known mass>', or set one with "
-                      "'i2c-nau7802 scale <counts_per_unit>'.\n");
+            STRRES_PRINTF(STR_I2C_NAU7802_NO_SCALE);
             return 0;
         }
-        diag_printf("Scale %.1f counts per unit (%s)\n", scale->counts_per_unit,
-                  scale->supplied ? "supplied, not measured this session"
-                                  : "measured this session");
+        print_scale_provenance(scale->counts_per_unit, scale->supplied);
         /* The gain is half of what a factor means, so the pasteable line is
          * worth little without it. Read it back rather than assuming. */
         nau7802_gain_t gain = NAU7802_GAIN_1;
@@ -1084,12 +1061,11 @@ int cmd_nau7802_scale(int argc, char **argv)
 
     esp_err_t err = nau7802_set_scale(nau, counts_per_unit);
     if (err != ESP_OK) {
-        diag_error("Setting the scale factor failed: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_NAU7802_SCALE_SET_FAILED, esp_err_to_name(err));
         return -1;
     }
 
-    diag_printf("Scale set to %.1f counts per unit (supplied, not measured)\n",
-              counts_per_unit);
+    STRRES_PRINTF(STR_I2C_NAU7802_SCALE_SET, counts_per_unit);
 
     /*
      * The factor says nothing about where zero is, and the two are separate
@@ -1097,8 +1073,7 @@ int cmd_nau7802_scale(int argc, char **argv)
      * be the first to mention it.
      */
     if (scale->tare_samples == 0) {
-        diag_printf("No tare yet; run 'i2c-nau7802 tare' with the cell empty "
-                  "before weighing\n");
+        STRRES_PRINTF(STR_I2C_NAU7802_NO_TARE);
     }
 
     /*
@@ -1106,9 +1081,7 @@ int cmd_nau7802_scale(int argc, char **argv)
      * the analog path drops it -- including 'i2c-nau7802 init'. Worth saying at the moment
      * someone has just typed a number in by hand.
      */
-    diag_printf("This factor belongs to the gain now in force, and any change "
-              "to the analog path drops it. To survive bring-up, give it as "
-              "'i2c-nau7802 init ... scale %.17g'.\n", counts_per_unit);
+    STRRES_PRINTF(STR_I2C_NAU7802_SCALE_SUPPLIED_NOTE, counts_per_unit);
     return 0;
 }
 
@@ -1120,8 +1093,7 @@ int cmd_nau7802_weight(int argc, char **argv)
 
     const nau7802_scale_t *scale = nau7802_get_scale(nau);
     if (!scale->calibrated) {
-        diag_error("Not calibrated. Run 'i2c-nau7802 tare' with no load, then "
-                 "'i2c-nau7802 calibrate <known mass>'.");
+        STRRES_ERROR(STR_I2C_NAU7802_NOT_CALIBRATED);
         return -1;
     }
 
@@ -1134,9 +1106,7 @@ int cmd_nau7802_weight(int argc, char **argv)
      * conversions.
      */
     if (scale->tare_samples == 0) {
-        diag_error("A scale factor is set but no tare has been taken, so every "
-                 "weight would be the bridge's own offset reported as load. "
-                 "Run 'i2c-nau7802 tare' with the cell empty.");
+        STRRES_ERROR(STR_I2C_NAU7802_TARE_MISSING);
         return -1;
     }
 
@@ -1170,14 +1140,13 @@ int cmd_nau7802_weight(int argc, char **argv)
     if (samples < 2) {
         /* No spread from one conversion, so quote no error bar rather than a
          * zero one. */
-        diag_printf("Weight %12.4f units  (1 sample, no noise estimate, "
-                  "%.1f raw counts)\n", weight.units, weight.net_counts);
+        STRRES_PRINTF(STR_I2C_NAU7802_WEIGHT_ONE_SAMPLE, weight.units, weight.net_counts);
         return 0;
     }
 
-    diag_printf("Weight %12.4f units  (+/-%.4f over %d samples, spread %.4f, "
-              "%.1f raw counts)\n", weight.units, weight.uncertainty_units,
-              samples, weight.spread_units, weight.net_counts);
+    STRRES_PRINTF(STR_I2C_NAU7802_WEIGHT,
+                  weight.units, weight.uncertainty_units, samples, weight.spread_units,
+                  weight.net_counts);
     return 0;
 }
 
@@ -1196,27 +1165,25 @@ int cmd_nau7802_status(int argc, char **argv)
 
     nau7802_status_t status;
     if (nau7802_get_status(nau, &status) != ESP_OK) {
-        diag_error("No response from 0x%02X", NAU7802_I2C_ADDRESS);
+        STRRES_ERROR(STR_I2C_NAU7802_NO_RESPONSE_SHORT, NAU7802_I2C_ADDRESS);
         return -1;
     }
 
-    diag_printf("Device revision 0x%02X at 0x%02X\n", status.revision,
-              NAU7802_I2C_ADDRESS);
-    diag_printf("PU_CTRL 0x%02X  digital %s, analog %s, ready %s, data %s\n",
-              status.pu_ctrl,
-              status.digital_up ? "up" : "down",
-              status.analog_up ? "up" : "down",
-              status.power_ready ? "yes" : "no",
-              status.data_ready ? "ready" : "pending");
-    diag_printf("AVDD source: %s\n",
-              status.internal_ldo ? "internal LDO" : "AVDD pin");
-    diag_printf("CTRL1   0x%02X  gain x%d, LDO %.1f V\n", status.ctrl1,
-              nau7802_gain_value(status.gain),
-              nau7802_ldo_millivolts(status.ldo) / 1000.0);
-    diag_printf("CTRL2   0x%02X  %d SPS, calibration %s\n", status.ctrl2,
-              status.rate_sps, status.cal_error ? "ERROR" : "ok");
-    diag_printf("Input channel: %s\n",
-              status.channel == NAU7802_CHANNEL_B ? "B" : "A");
+    STRRES_PRINTF(STR_I2C_NAU7802_STATUS_REVISION,
+                  status.revision, NAU7802_I2C_ADDRESS);
+    STRRES_PRINTF(STR_I2C_NAU7802_STATUS_PU_CTRL,
+                  status.pu_ctrl, status.digital_up ? "up" : "down",
+                  status.analog_up ? "up" : "down", status.power_ready ? "yes" : "no",
+                  status.data_ready ? "ready" : "pending");
+    STRRES_PRINTF(STR_I2C_NAU7802_STATUS_AVDD,
+                  status.internal_ldo ? "internal LDO" : "AVDD pin");
+    STRRES_PRINTF(STR_I2C_NAU7802_STATUS_CTRL1,
+                  status.ctrl1, nau7802_gain_value(status.gain),
+                  nau7802_ldo_millivolts(status.ldo) / 1000.0);
+    STRRES_PRINTF(STR_I2C_NAU7802_STATUS_CTRL2,
+                  status.ctrl2, status.rate_sps, status.cal_error ? "ERROR" : "ok");
+    STRRES_PRINTF(STR_I2C_NAU7802_INPUT_CHANNEL,
+                  status.channel == NAU7802_CHANNEL_B ? "B" : "A");
 
     /*
      * CAL_ERR is one bit, and it only says the device gave up. The offset it
@@ -1226,28 +1193,26 @@ int cmd_nau7802_status(int argc, char **argv)
      * go. Note that OCAL is sign-magnitude; the driver decodes it.
      */
     if (status.cal_regs_valid) {
-        diag_printf("Channel %c calibration: OCAL 0x%06lX (%ld counts), "
-                  "GCAL 0x%08lX (x%.6f)\n",
-                  status.channel == NAU7802_CHANNEL_B ? 'B' : 'A',
-                  (unsigned long)status.ocal_raw, (long)status.ocal_counts,
-                  (unsigned long)status.gcal_raw, status.gcal_ratio);
+        STRRES_PRINTF(STR_I2C_NAU7802_STATUS_CHANNEL_CAL,
+                      status.channel == NAU7802_CHANNEL_B ? 'B' : 'A',
+                      (unsigned long)status.ocal_raw, (long)status.ocal_counts,
+                      (unsigned long)status.gcal_raw, status.gcal_ratio);
     } else {
-        diag_printf("Calibration registers: <error reading>\n");
+        STRRES_PRINTF(STR_I2C_NAU7802_STATUS_CAL_ERROR);
     }
 
     if (status.drdy_gpio >= 0) {
-        diag_printf("Data ready: DRDY on GPIO %d, now %s\n", status.drdy_gpio,
-                  status.drdy_level ? "high" : "low");
+        STRRES_PRINTF(STR_I2C_NAU7802_STATUS_DRDY,
+                      status.drdy_gpio, status.drdy_level ? "high" : "low");
     } else {
-        diag_printf("Data ready: no DRDY pin, polling the CR bit over I2C\n");
+        STRRES_PRINTF(STR_I2C_NAU7802_STATUS_DRDY_POLLING);
     }
 
     if (status.pga_valid) {
-        diag_printf("PGA     0x%02X  LDOMODE %d (AVDD capacitor ESR up to %s)\n",
-                  status.pga, status.ldomode ? 1 : 0,
-                  status.ldomode ? "5 ohms" : "1 ohm");
-        diag_printf("POWER   0x%02X  PGA output bypass capacitor %s\n", status.power,
-                  status.pga_cap ? "enabled" : "disabled");
+        STRRES_PRINTF(STR_I2C_NAU7802_STATUS_PGA,
+                      status.pga, status.ldomode ? 1 : 0, status.ldomode ? "5 ohms" : "1 ohm");
+        STRRES_PRINTF(STR_I2C_NAU7802_STATUS_POWER,
+                      status.power, status.pga_cap ? "enabled" : "disabled");
     }
 
     /*
@@ -1257,19 +1222,21 @@ int cmd_nau7802_status(int argc, char **argv)
      * to do is say when the value is not the one `init` writes.
      */
     if (status.adc_ctrl_valid) {
-        diag_printf("ADC     0x%02X  REG_CHPS %u%s\n", status.adc_ctrl,
-                  status.chps, status.chopper_off
-                      ? "" : "  -- expected 3, run 'i2c-nau7802 init'");
+        if (status.chopper_off) {
+            STRRES_PRINTF(STR_I2C_NAU7802_STATUS_ADC, status.adc_ctrl, status.chps);
+        } else {
+            STRRES_PRINTF(STR_I2C_NAU7802_STATUS_ADC_UNEXPECTED,
+                          status.adc_ctrl, status.chps);
+        }
     }
 
     if (status.brought_up) {
-        diag_printf("Tare %ld counts; %s\n", (long)status.scale.tare_counts,
-                  status.scale.calibrated ? "calibrated" : "not calibrated");
+        STRRES_PRINTF(STR_I2C_NAU7802_STATUS_TARE,
+                      (long)status.scale.tare_counts,
+                      status.scale.calibrated ? "calibrated" : "not calibrated");
         if (status.scale.calibrated) {
-            diag_printf("Scale %.1f counts per unit (%s)\n",
-                      status.scale.counts_per_unit,
-                      status.scale.supplied ? "supplied, not measured this session"
-                                            : "measured this session");
+            print_scale_provenance(status.scale.counts_per_unit,
+                                   status.scale.supplied);
             print_scale_for_consumer(status.scale.counts_per_unit, status.gain,
                                      true, 0.0, false);
             /*
@@ -1279,16 +1246,14 @@ int cmd_nau7802_status(int argc, char **argv)
              * mislead most; docs/i2c.md carries the rest of the reasoning.
              */
             if (status.scale.supplied) {
-                diag_printf("The +/- on a weight is repeatability, not the "
-                          "accuracy of a supplied factor\n");
+                STRRES_PRINTF(STR_I2C_NAU7802_WEIGHT_PRECISION_NOTE);
             }
             if (status.scale.tare_samples == 0) {
-                diag_printf("No tare yet; run 'i2c-nau7802 tare' with the cell "
-                          "empty before weighing\n");
+                STRRES_PRINTF(STR_I2C_NAU7802_NO_TARE);
             }
         }
     } else {
-        diag_printf("Not initialized by this session; run 'i2c-nau7802 init'\n");
+        STRRES_PRINTF(STR_I2C_NAU7802_NOT_THIS_SESSION);
     }
 
     return 0;
@@ -1303,7 +1268,7 @@ int cmd_nau7802_registers(int argc, char **argv)
         return -1;
     }
 
-    diag_printf("Register dump for NAU7802 at 0x%02X:\n", NAU7802_I2C_ADDRESS);
+    STRRES_PRINTF(STR_I2C_NAU7802_DUMP_HEADER, NAU7802_I2C_ADDRESS);
 
     size_t count = 0;
     const nau7802_register_info_t *map = nau7802_register_map(&count);
@@ -1311,9 +1276,9 @@ int cmd_nau7802_registers(int argc, char **argv)
     for (size_t i = 0; i < count; i++) {
         uint8_t value = 0;
         if (nau7802_read_register(nau, map[i].reg, &value) == ESP_OK) {
-            diag_printf("  REG%02X %-10s 0x%02X\n", map[i].reg, map[i].name, value);
+            STRRES_PRINTF(STR_I2C_NAU7802_DUMP_ROW, map[i].reg, map[i].name, value);
         } else {
-            diag_printf("  REG%02X %-10s <error reading>\n", map[i].reg, map[i].name);
+            STRRES_PRINTF(STR_I2C_NAU7802_DUMP_ROW_ERROR, map[i].reg, map[i].name);
         }
     }
 
