@@ -27,19 +27,24 @@ dependencies:
   cli_web:
     git: https://github.com/benvonhandorf/esp_components.git
     path: cli_web
-    version: cli_web-v0.1.0
+    version: cli_web-v0.2.0
   config_store:
     git: https://github.com/benvonhandorf/esp_components.git
     path: config_store
     version: config_store-v0.1.0
+  # NOTE: this asks for v0.1.1 and the build resolves v0.1.0. cli, cli_web and
+  # mqtt_manager each pin diag-v0.1.0 themselves, and the solver takes those over
+  # the direct pin here without reporting a conflict -- check `dependencies.lock`,
+  # not this line, for what was actually fetched. Nothing is lost by it: v0.1.1
+  # changes only a comment in diag.h. It takes effect once those three are retagged.
   diag:
     git: https://github.com/benvonhandorf/esp_components.git
     path: diag
-    version: diag-v0.1.0
+    version: diag-v0.1.1
   http_server:
     git: https://github.com/benvonhandorf/esp_components.git
     path: http_server
-    version: http_server-v0.1.0
+    version: http_server-v0.2.0
   js2c:
     git: https://github.com/benvonhandorf/esp_components.git
     path: js2c
@@ -59,7 +64,7 @@ dependencies:
   ntp_manager:
     git: https://github.com/benvonhandorf/esp_components.git
     path: ntp_manager
-    version: ntp_manager-v0.1.0
+    version: ntp_manager-v0.1.1
   ota:
     git: https://github.com/benvonhandorf/esp_components.git
     path: ota
