@@ -72,7 +72,18 @@ static esp_err_t parse(app_config_full_t *out, const char *json, size_t len,
  * proves it, at boot, on the path a freshly flashed unit takes.
  */
 static const char DEFAULT_CONFIG[] =
-    "{\"config_version\":1,\"wifi\":{},\"mqtt\":{},\"ntp\":{},\"http\":{}}";
+    "{\"config_version\":1,"
+    "\"wifi\":{},"
+    /*
+     * Spelled out rather than left empty, and mqtt_manager's schema is right to
+     * require these two: a broker with no address is a misconfiguration, not a
+     * default, and a config file that omits them should be rejected. This
+     * document is not a config file, though -- it is the absence of one, and
+     * empty strings are how the application already spells "no broker".
+     * main.c skips mqtt_manager_start() on an empty uri and says so.
+     */
+    "\"mqtt\":{\"uri\":\"\",\"topic_prefix\":\"\"},"
+    "\"ntp\":{},\"http\":{}}";
 
 static esp_err_t parse_defaults(app_config_full_t *out)
 {

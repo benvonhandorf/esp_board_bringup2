@@ -320,7 +320,7 @@ dependencies:
       type: git
     version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
   wifi_manager:
-    component_hash: a0111a15572c6948a5664a4115e38912144493e5b699c5280758d89640c9d65b
+    component_hash: 29e0cb1fb9b452d585d697e3ae850fa99cc2c6e7276bda57d031f02fd89a9207
     dependencies:
     - name: idf
       version: '>=5.0'
@@ -336,7 +336,7 @@ dependencies:
       git: https://github.com/benvonhandorf/esp_components.git
       path: wifi_manager
       type: git
-    version: 0a21ed6de344d6fe7589ae316f19cf63bfca8f35
+    version: d317dc0811f5d0da001255ecc03a7fd17fc19721
 direct_dependencies:
 - aw9523b
 - cli
@@ -363,6 +363,6 @@ direct_dependencies:
 - rx8130ce
 - sht4x
 - wifi_manager
-manifest_hash: e8ae115da9919965416fe970492c9b72f405c1f3937ec943f96c8801b6d99b32
+manifest_hash: 162bd99caebc39c431f6bfda22da0786c1a39a3cbb228b63f5eb5bea2cb16e4d
 target: esp32c3
 version: 3.0.0
