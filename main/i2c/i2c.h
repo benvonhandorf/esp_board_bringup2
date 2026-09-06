@@ -8,6 +8,7 @@
 int cmd_i2c_bus(int argc, char** argv);
 int cmd_i2c_scan(int argc, char** argv);
 int cmd_i2c_read(int argc, char** argv);
+int cmd_i2c_identify(int argc, char** argv);
 
 /*
  * Bus access shared with device-specific drivers (see ina237_cmd.c).

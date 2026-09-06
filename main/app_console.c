@@ -271,6 +271,7 @@ static const cli_command_t i2c_commands[] = {
     {"bus",  "<scl> <sda>",         "Initialize the I2C bus on the given pins", cmd_i2c_bus},
     {"scan", "",                    "Probe the bus and tabulate responding devices", cmd_i2c_scan},
     {"read", "<address> [bytes]",   "Read bytes from a device",                 cmd_i2c_read},
+    {"identify", "[address]",       "Name the parts this firmware drives at an address", cmd_i2c_identify},
 };
 
 static const cli_group_t i2c_group = {

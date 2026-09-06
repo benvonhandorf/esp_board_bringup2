@@ -39,6 +39,7 @@ idf_component_register(
                  "gpio/gpio.c"
                  "gpio/pwm.c"
                  "i2c/i2c.c"
+                 "i2c/i2c_parts.c"
                  "i2c/aw9523b_cmd.c"
                  "i2c/ina219_cmd.c"
                  "i2c/ina226_cmd.c"

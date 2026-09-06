@@ -222,14 +222,62 @@ Two independent refusals agreeing with the third succeeding is the identificatio
 working, and it is the reason all three parts have groups rather than one
 standing in for the others.
 
+### The scan now says what might be there
+
+`i2c scan` follows its table with a row per responding address naming the parts
+this firmware can drive there and the command that would drive each one, and
+`i2c identify [address]` does the same lookup without touching the bus. Only
+parts with a driver here are named — an address no group claims says so and
+offers `i2c read`.
+
+Exercised on a **second ESP32-C3 sensor board** (MAC 7c:df:a1:a3:99:70, a
+different unit from the one in the table above) on 2026-09-05. The same three
+addresses answered, and the grid is unchanged:
+
+```
+3 devices found
+
+ADDRESS   PART          WHAT                                      TRY
+0x2a      NAU7802       24-bit bridge ADC, load cell front end    i2c-nau7802 init
+0x44      PI4IOE5V6408  8-bit I/O expander, 5 V tolerant          i2c-pi4ioe init 0x44
+0x44      SHT4x         humidity/temperature; A/B/C = 0x44/45/46  i2c-sht4x read 0x44
+0x44      INA219        current/voltage/power monitor             i2c-ina219 read 0x44
+0x44      INA226        current/voltage/power monitor             i2c-ina226 read 0x44
+0x44      INA237        current/voltage/power monitor             i2c-ina237 read 0x44
+0x46      SHT4x         humidity/temperature; A/B/C = 0x44/45/46  i2c-sht4x read 0x46
+0x46      INA219        current/voltage/power monitor             i2c-ina219 read 0x46
+0x46      INA226        current/voltage/power monitor             i2c-ina226 read 0x46
+0x46      INA237        current/voltage/power monitor             i2c-ina237 read 0x46
+```
+
+**The suggestion is a lead and the driver is what settles it**, which is the
+same point the 0x46 section above makes and which was re-run here from the
+suggestions themselves: `i2c-sht4x read 0x44` gave 23.75 °C / 36.28 %RH,
+`i2c-ina237 read 0x46` gave bus 4.309 V and die 24.1 °C, and
+`i2c-ina226 read 0x46` refused with *manufacturer 0x5449, die 0x2381* as
+before. Four candidates at 0x46, and the ID checks pick one.
+
+Candidates are ordered tightest address range first: at 0x44 a PI4IOE5V6408 has
+two addresses to choose from and an SHT4x three, against sixteen for an INA, so
+the narrower parts lead. It is the only ranking available without touching the
+bus.
+
+`i2c identify` reads a table compiled into the firmware, so it deliberately does
+not require `i2c bus`. Confirmed after a `sys restart`, where `i2c scan` refuses
+with *I2C not initialized* and `i2c identify 0x40` still returns the three INA
+rows. `i2c identify` with no address prints the whole catalogue with the range
+each part occupies.
+
 ### Not verified
 
 - **The NAU7802's analog path.** It powers up and calibrates, but raw reads peg
   at negative full scale — an open bridge input, which is the board's state, not
   a firmware result. Tare, calibrate and weight are unexercised here.
 - **The second INA237.** The silkscreen says two; `i2c scan` finds one. Either
-  the second is unpopulated on this unit or it is at an address outside
-  0x40–0x4f.
+  the second is unpopulated or it is at an address outside 0x40–0x4f. Two
+  separate units have now been scanned and both report the same three
+  addresses, so this is the population of the design rather than one bad
+  board.
 - **The sensor board's SD slot.** The pinout in `main/board/board.c` lists GPIO
   38–44, which do not exist on an ESP32-C3 (0–21). Those rows look copied from
   the minstro entry and should be treated as unknown until someone reads the

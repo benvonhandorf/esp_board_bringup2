@@ -12,9 +12,56 @@ Scans the I2C bus enumerates the found devices in a table with the hexadecimal l
 
 If any errors are present that prevent the bus from being properly scanned, such as missing pull up resistors, print the state of the bus that prevents scanning.
 
+Below the table, every address that answered is listed again with the parts
+this firmware can drive there and the command that would drive each one:
+
+```
+3 devices found
+
+ADDRESS   PART          WHAT                                      TRY
+0x2a      NAU7802       24-bit bridge ADC, load cell front end    i2c-nau7802 init
+0x44      PI4IOE5V6408  8-bit I/O expander, 5 V tolerant          i2c-pi4ioe init 0x44
+0x44      SHT4x         humidity/temperature; A/B/C = 0x44/45/46  i2c-sht4x read 0x44
+0x44      INA219        current/voltage/power monitor             i2c-ina219 read 0x44
+0x44      INA226        current/voltage/power monitor             i2c-ina226 read 0x44
+0x44      INA237        current/voltage/power monitor             i2c-ina237 read 0x44
+0x46      SHT4x         humidity/temperature; A/B/C = 0x44/45/46  i2c-sht4x read 0x46
+```
+
+**This is a suggestion, not an identification.** Nothing about an address
+distinguishes one part from another, and the overlaps are large — the three
+current monitors share the whole of 0x40–0x4f, and 0x44 is an SHT4x-A, a
+PI4IOE5V6408 with ADDR high, or any of them. So every candidate is listed, and
+the command beside it is what settles the question: each driver reads the
+part's own ID and refuses an address that answers with the wrong one. Pointing
+all three monitor groups at 0x46 and watching two refuse is exactly how the
+part on the sensor board was identified.
+
+Candidates are ordered tightest address range first, because that is the only
+ranking available without touching the bus: a part with two possible addresses
+is a stronger guess at one of them than a part with sixteen.
+
+Only parts with a driver here are named. An address no group claims gets a row
+saying so, and `i2c read` as the one thing left to try:
+
+```
+0x68      -             no driver in this firmware claims it      i2c read 0x68
+```
+
 ## `read <address> <bytes=1>`
 
 Reads the specified number of bytes from the specified address on the bus.  If the number of bytes are not specified, one byte is read.
+
+## `identify [address]`
+
+The same lookup as the table under `scan`, for one address, or — with no
+address — the whole catalogue of parts this firmware can drive over I2C, with
+the range each one occupies.
+
+This does not touch the bus and does not need `i2c bus` to have been run: it
+reads a table compiled into the firmware, so it answers while the wiring is
+still being decided. Whether anything is actually *at* the address is what
+`scan` is for.
 
 ## INA237
 

@@ -1,5 +1,6 @@
 #include "app_bringup.h"
 #include "i2c.h"
+#include "i2c_parts.h"
 
 #include "driver/gpio.h"
 
@@ -221,7 +222,10 @@ int cmd_i2c_scan(int argc, char **argv)
 
     diag_printf("     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f\n");
 
+    /* Every address in the scanned range could answer at once. */
+    uint8_t responded[I2C_ADDR_LAST - I2C_ADDR_FIRST + 1];
     int found = 0;
+
     for (int row = 0; row <= 0x70; row += 0x10) {
         diag_printf("%02x:", row);
         for (int col = 0; col < 16; col++) {
@@ -235,7 +239,7 @@ int cmd_i2c_scan(int argc, char **argv)
             esp_err_t err = i2c_master_probe(bus_handle, address, I2C_PROBE_TIMEOUT_MS);
             if (err == ESP_OK) {
                 diag_printf(" %02x", address);
-                found++;
+                responded[found++] = address;
             } else {
                 /* docs/i2c.md: leave the intersection blank when nothing answers. */
                 diag_printf("   ");
@@ -245,6 +249,42 @@ int cmd_i2c_scan(int argc, char **argv)
     }
 
     diag_printf("%d device%s found\n", found, found == 1 ? "" : "s");
+
+    /*
+     * What might be there. Address alone cannot identify a part -- three
+     * current monitors share 0x40-0x4f -- so every candidate is listed with
+     * the command that would settle it, and the driver's own ID check does the
+     * settling. See i2c_parts.c.
+     */
+    if (found > 0) {
+        diag_printf("\n");
+        i2c_parts_print_header();
+        for (int i = 0; i < found; i++) {
+            i2c_parts_print_address(responded[i]);
+        }
+    }
+
+    return 0;
+}
+
+int cmd_i2c_identify(int argc, char **argv)
+{
+    /* No i2c_require_bus() on purpose: this is a lookup in a static table, not
+     * a probe, so it answers while the wiring is still being decided. */
+    if (argc < 2) {
+        i2c_parts_print_header();
+        i2c_parts_print_all();
+        return 0;
+    }
+
+    int address = 0;
+    if (cli_parse_num_arg(argv[1], &address) < 0 || address < 0 || address > 0x7F) {
+        diag_error("Address must be 0x00-0x7F");
+        return -1;
+    }
+
+    i2c_parts_print_header();
+    i2c_parts_print_address((uint8_t)address);
     return 0;
 }
 
