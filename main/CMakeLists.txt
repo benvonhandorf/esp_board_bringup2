@@ -9,6 +9,15 @@ if(NOT CMAKE_BUILD_EARLY_EXPANSION)
     js2c_generate_sections("${CMAKE_CURRENT_LIST_DIR}/../config/config_schema.json"
                            BASENAME app_config OUT_C GEN_C)
     get_filename_component(GEN_DIR "${GEN_C}" DIRECTORY)
+
+    # User-visible text lives on the `res` partition, not in the image. This
+    # writes the ids C refers to strings by under BUILD_DIR, and the .sr blobs
+    # into fs/str/, which is where littlefs_create_partition_image() in the root
+    # CMakeLists.txt will find them when it packs fs/ -- so the strings a build
+    # produces and the firmware that reads them always ship together.
+    strres_generate("${CMAKE_CURRENT_LIST_DIR}/../strings"
+                    IMAGE_DIR "${CMAKE_CURRENT_LIST_DIR}/../fs/str"
+                    OUT_C STRRES_C OUT_INCLUDE_DIR STRRES_DIR)
 endif()
 
 # No REQUIRES, deliberately: project.cmake grants main an implicit dependency on
@@ -57,6 +66,7 @@ idf_component_register(
                  "uart/uart.c"
                  "wifi/wifi.c"
                  "${GEN_C}"
+                 "${STRRES_C}"
     INCLUDE_DIRS "."
                  "audio"
                  "board"
@@ -69,7 +79,8 @@ idf_component_register(
                  "touch"
                  "uart"
                  "wifi"
-                 "${GEN_DIR}")
+                 "${GEN_DIR}"
+                 "${STRRES_DIR}")
 
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wall -Wextra -Werror)
 

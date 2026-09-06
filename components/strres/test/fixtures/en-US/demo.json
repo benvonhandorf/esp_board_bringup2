@@ -1,0 +1,10 @@
+{
+  "section": "demo",
+  "strings": {
+    "plain":      "a plain string with no arguments",
+    "one_arg":    "GPIO %d does not exist on this chip",
+    "two_args":   "%d device%s responding",
+    "pinned":     { "text": "pinned and always resident", "pin": true },
+    "empty_ok":   "x"
+  }
+}

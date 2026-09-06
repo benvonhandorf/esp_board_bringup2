@@ -1,11 +1,14 @@
 #include "config_reader.h"
 
+#include <inttypes.h>
 #include <string.h>
 
 #include "config_store.h"
 #include "esp_littlefs.h"
 #include "esp_log.h"
 #include "js2c_error_capture.h"
+#include "strres.h"
+#include "strres_ids.h"
 
 static const char *TAG = "config";
 
@@ -77,9 +80,32 @@ static esp_err_t mount_filesystem(void)
     return err;
 }
 
+/*
+ * The user-visible strings live on the partition just mounted, so this is the
+ * earliest point they can be read -- and it is before the shell starts, which
+ * is the first thing that prints any.
+ *
+ * A failure here is reported and not fatal. Every lookup then misses and prints
+ * its id, which is legible enough to diagnose from, and the alternative -- a
+ * device that will not boot because its text is missing -- is worse. The
+ * messages on this path stay C literals for the same reason.
+ */
+static void load_strings(void)
+{
+    esp_err_t err = strres_init(NULL, &strres_generated_catalog);
+    if (err == ESP_ERR_STRRES_CATALOG_SKEW) {
+        ESP_LOGE(TAG, "string resources are from a different build "
+                      "(firmware catalog %08" PRIX32 "); reflash the res partition",
+                 strres_catalog_hash());
+    } else if (err != ESP_OK) {
+        ESP_LOGE(TAG, "loading strings from %s: %s", FS_MOUNT, esp_err_to_name(err));
+    }
+}
+
 esp_err_t config_reader_load(app_config_full_t *out, char *err, size_t err_len)
 {
     mount_filesystem();
+    load_strings();
 
     /*
      * An SD card overrides the built-in copy, so a unit can be reconfigured

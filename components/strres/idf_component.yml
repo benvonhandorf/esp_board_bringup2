@@ -1,0 +1,26 @@
+version: "0.1.0"
+description: >-
+  User-visible strings kept on a filesystem instead of in the application image,
+  so prose costs one copy of a data partition rather than a copy of each OTA
+  slot. Strings are authored as JSON, compiled to compact indexed blobs at build
+  time, and referenced from C by generated uint16 ids that keep the call site
+  readable without putting the words back in the binary. Returns strings rather
+  than formatting them, so the caller decides how to report them.
+url: https://github.com/benvonhandorf/esp_components/tree/main/strres
+repository: https://github.com/benvonhandorf/esp_components.git
+issues: https://github.com/benvonhandorf/esp_components/issues
+tags:
+  - strings
+  - i18n
+  - localization
+  - codegen
+  - flash
+dependencies:
+  # project_include.cmake uses idf_build_get_property(... BUILD_DIR/PYTHON) and
+  # cmake_parse_arguments; 5.0 is the floor this has been verified against.
+  idf: ">=5.0"
+  # the output fan-out every printed string goes through
+  diag:
+    git: https://github.com/benvonhandorf/esp_components.git
+    path: diag
+    version: diag-v0.1.0

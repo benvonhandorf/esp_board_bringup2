@@ -346,6 +346,7 @@ direct_dependencies:
 - espressif/iperf-cmd
 - http_server
 - hx711
+- idf
 - ina219
 - ina226
 - ina237
@@ -362,6 +363,6 @@ direct_dependencies:
 - rx8130ce
 - sht4x
 - wifi_manager
-manifest_hash: 8da73deb4d278d860586b01157cc8943d6b50e145163c4453f42b6b92e0359c2
+manifest_hash: b3ca14ecd2678f1aeddbeaa0ff1d44220a556b5110d9aeac0f05e8509cbcbb66
 target: esp32c3
 version: 3.0.0

@@ -69,7 +69,7 @@ esp_err_t i2c_device_handle(uint8_t address, i2c_master_dev_handle_t *out)
 bool i2c_require_bus(void)
 {
     if (!bus_handle) {
-        diag_error("I2C not initialized. Run 'i2c bus <scl> <sda>' first.");
+        STRRES_ERROR(STR_I2C_NO_BUS);
         return false;
     }
     return true;
@@ -114,33 +114,33 @@ static esp_err_t create_bus(int scl, int sda)
 int cmd_i2c_bus(int argc, char **argv)
 {
     if (argc < 3) {
-        diag_printf("Usage: bus <scl> <sda>\n");
+        STRRES_PRINTF(STR_I2C_USAGE_BUS);
         return -1;
     }
 
     int scl = 0;
     int sda = 0;
     if (cli_parse_int_arg(argv[1], &scl) < 0 || cli_parse_int_arg(argv[2], &sda) < 0) {
-        diag_error("SCL and SDA must be pin numbers");
+        STRRES_ERROR(STR_I2C_PINS_NUMERIC);
         return -1;
     }
 
     if (!GPIO_IS_VALID_OUTPUT_GPIO(scl) || !GPIO_IS_VALID_OUTPUT_GPIO(sda)) {
-        diag_error("SCL and SDA must both be output-capable GPIOs");
+        STRRES_ERROR(STR_I2C_PINS_OUTPUT_CAPABLE);
         return -1;
     }
     if (scl == sda) {
-        diag_error("SCL and SDA cannot be the same pin");
+        STRRES_ERROR(STR_I2C_PINS_DISTINCT);
         return -1;
     }
 
     esp_err_t err = create_bus(scl, sda);
     if (err != ESP_OK) {
-        diag_error("Creating I2C bus: %s", esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_CREATE_FAILED, esp_err_to_name(err));
         return -1;
     }
 
-    diag_printf("I2C bus initialized on SCL=%d, SDA=%d\n", scl, sda);
+    STRRES_PRINTF(STR_I2C_INITIALIZED, scl, sda);
     return 0;
 }
 
@@ -176,21 +176,17 @@ static bool bus_lines_idle_high(void)
         return true;
     }
 
-    diag_error("I2C bus is not idle: SCL=%d SDA=%d (both should read 1)", scl, sda);
+    STRRES_ERROR(STR_I2C_NOT_IDLE, scl, sda);
 
     if (!scl && !sda) {
-        diag_printf("Both lines are held low: no pull-ups fitted, the bus is "
-                  "not powered, or SCL/SDA are shorted to ground.\n");
+        STRRES_PRINTF(STR_I2C_BOTH_LOW);
     } else if (!sda) {
-        diag_printf("SDA is held low, so a device is probably stuck "
-                  "mid-transfer; power-cycle it or clock SCL to free it.\n");
+        STRRES_PRINTF(STR_I2C_SDA_LOW);
     } else {
-        diag_printf("SCL is held low: a device is holding the clock, or SCL "
-                  "is shorted to ground.\n");
+        STRRES_PRINTF(STR_I2C_SCL_LOW);
     }
 
-    diag_printf("Internal pull-ups are weak; most buses need external "
-              "2.2k-10k resistors to 3V3.\n");
+    STRRES_PRINTF(STR_I2C_WEAK_PULLUPS);
     return false;
 }
 
@@ -208,8 +204,7 @@ int cmd_i2c_scan(int argc, char **argv)
     /* The check borrowed the pins as plain GPIOs; give them back to I2C. */
     esp_err_t err = create_bus(bus_scl_pin, bus_sda_pin);
     if (err != ESP_OK) {
-        diag_error("Restoring the I2C bus after the line check: %s",
-                 esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_RESTORE_FAILED, esp_err_to_name(err));
         return -1;
     }
 
@@ -217,10 +212,10 @@ int cmd_i2c_scan(int argc, char **argv)
         return -1;
     }
 
-    diag_printf("Scanning 0x%02X-0x%02X on SCL=%d, SDA=%d\n",
+    STRRES_PRINTF(STR_I2C_SCANNING,
            I2C_ADDR_FIRST, I2C_ADDR_LAST, bus_scl_pin, bus_sda_pin);
 
-    diag_printf("     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f\n");
+    STRRES_PRINTF(STR_I2C_SCAN_HEADER);
 
     /* Every address in the scanned range could answer at once. */
     uint8_t responded[I2C_ADDR_LAST - I2C_ADDR_FIRST + 1];
@@ -248,7 +243,7 @@ int cmd_i2c_scan(int argc, char **argv)
         diag_printf("\n");
     }
 
-    diag_printf("%d device%s found\n", found, found == 1 ? "" : "s");
+    STRRES_PRINTF(STR_I2C_SCAN_FOUND, found, found == 1 ? "" : "s");
 
     /*
      * What might be there. Address alone cannot identify a part -- three
@@ -279,7 +274,7 @@ int cmd_i2c_identify(int argc, char **argv)
 
     int address = 0;
     if (cli_parse_num_arg(argv[1], &address) < 0 || address < 0 || address > 0x7F) {
-        diag_error("Address must be 0x00-0x7F");
+        STRRES_ERROR(STR_I2C_ADDRESS_RANGE);
         return -1;
     }
 
@@ -295,38 +290,38 @@ int cmd_i2c_read(int argc, char **argv)
     }
 
     if (argc < 2) {
-        diag_printf("Usage: read <address> [bytes]\n");
+        STRRES_PRINTF(STR_I2C_USAGE_READ);
         return -1;
     }
 
     int address = 0;
     if (cli_parse_num_arg(argv[1], &address) < 0 || address < 0 || address > 0x7F) {
-        diag_error("Address must be 0x00-0x7F");
+        STRRES_ERROR(STR_I2C_ADDRESS_RANGE);
         return -1;
     }
 
     int bytes = 1;
     if (argc > 2 && (cli_parse_int_arg(argv[2], &bytes) < 0 || bytes < 1 || bytes > 255)) {
-        diag_error("Byte count must be 1-255");
+        STRRES_ERROR(STR_I2C_BYTE_COUNT_RANGE);
         return -1;
     }
 
     i2c_master_dev_handle_t dev = NULL;
     esp_err_t err = i2c_device_handle((uint8_t)address, &dev);
     if (err != ESP_OK) {
-        diag_error("Addressing device 0x%02X: %s", address, esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_ADDRESSING_FAILED, address, esp_err_to_name(err));
         return -1;
     }
 
     uint8_t *data = malloc((size_t)bytes);
     if (!data) {
-        diag_error("Out of memory");
+        STRRES_ERROR(STR_I2C_OUT_OF_MEMORY);
         return -1;
     }
 
     err = i2c_master_receive(dev, data, (size_t)bytes, I2C_XFER_TIMEOUT_MS);
     if (err != ESP_OK) {
-        diag_error("Reading from 0x%02X: %s", address, esp_err_to_name(err));
+        STRRES_ERROR(STR_I2C_READ_FAILED, address, esp_err_to_name(err));
         free(data);
         return -1;
     }

@@ -29,8 +29,12 @@ Targets built against: **ESP32-C3** (the sensor board on the bench) and
 ## Layout
 
 ```
+components/strres/          string resources: the reader, and the JSON->blob
+                            compiler the build runs (headed for esp_components)
 config/config_schema.json   the ONE description of this device's configuration
-fs/                         LittleFS image contents; config.json is gitignored
+strings/<locale>/           user-visible prose, one JSON file per command group
+fs/                         LittleFS image contents; config.json and the
+                            compiled str/ are gitignored
 main/
   main.c                    app_main: bring-up order, and the reasons for it
   app_console.c             THE wiring point: every group and command is here
@@ -55,6 +59,8 @@ main/
   uart/uart.c               auxiliary UART, separate from the console
   wifi/wifi.c               the bring-up half of WiFi, layered on wifi_manager
 partitions/                 A/B OTA layouts for 4/8/16 MB
+patches/                    shared-component changes this project needs but
+                            that are not tagged in esp_components yet
 tools/                      flashing, OTA upload, status, MQTT tail, console
                             driver (bringup.py), docs check (check_docs.py)
 ```
@@ -87,6 +93,14 @@ module's `.c`, declare it in the module's `.h`, add a `cli_command_t` row to the
 group in `app_console.c`, and document it under a matching heading in
 `docs/<group>.md`. `./tools/check_docs.py` fails if you skip the last step.
 
+**A user-visible string.** Add it to `strings/en-US/<group>.json` and print it
+with `STRRES_PRINTF(STR_<GROUP>_<KEY>)`. The id is generated, so a rebuild is
+enough — but it is a *re-configure*, and `idf.py build` does that on its own
+because the JSON is a configure dependency. A group whose help text has moved
+also needs a `cli_command_text_t` array parallel to its command table; the
+`_Static_assert` beside `i2c_text[]` is the pattern, and it catches the rows
+drifting out of step.
+
 **A group.** A `cli_command_t[]` and a `cli_group_t` in `app_console.c`, a row in
 the `groups[]` array, and an entry in `PAGE` in `tools/check_docs.py` naming the
 docs page that covers it.
@@ -109,6 +123,15 @@ anything that exposes credentials or changes the device.
 
 - **Never `printf()`.** Use `diag_printf()`, or output never reaches the web
   console. `ESP_LOGx` is already routed through the same fan-out.
+- **Prose belongs in `strings/`, not in a literal.** A sentence a user reads is
+  authored in `strings/en-US/<group>.json`, compiled to the `res` partition, and
+  printed with `STRRES_PRINTF()` / `STRRES_ERROR()` naming a generated
+  `STR_<GROUP>_<KEY>` id. The words then cost one copy of a data partition
+  instead of a copy of each OTA slot. Arguments are still checked at compile
+  time — see `components/strres/README.md` for how, and for the `[str:04F2]`
+  that a missing string prints. Short layout fragments (a column separator, a
+  lone `"\n"`) stay literals: a two-byte id plus a lookup costs more than they
+  do. So does anything printed before `strres_init()` succeeds.
 - **Report failures with `diag_error()`** — it prefixes `ERR:` so a host script
   can detect failure without parsing prose — and return `-1`; return `0` on
   success. Usage complaints are printed as `Usage: ...`.
@@ -158,6 +181,11 @@ anything that exposes credentials or changes the device.
 - **The image is on trial after an OTA.** `app_main()` confirms it at the very
   end, so firmware that crashes during start-up rolls back on the next reset. Do
   not move that call earlier.
+- **`main` does not build against `cli-v0.1.0` right now.** `app_console.c`'s
+  `i2c` group carries its help text as ids, which needs a `cli` change that is
+  not tagged yet: `patches/cli-text-resolver.patch`. Apply it to an
+  `esp_components` checkout and build with `-DESP_COMPONENTS_DIR`, or tag and
+  push it and bump the pin. `patches/README.md` has both.
 - **A shared component is pinned to a git tag, not a version range.** To work on a
   component and this project together, build with
   `-DESP_COMPONENTS_DIR=/abs/path` — use an **absolute** path, since CMake
@@ -175,16 +203,24 @@ anything that exposes credentials or changes the device.
   outranks everything else. Build from a plain shell to avoid a cache mismatch.
 - **Flash is getting tight.** The image is ~1.5 MB against a 1.69 MB OTA slot on
   4 MB parts. Adding another large subsystem may need the 512 kB `res` partition
-  shrunk, or an 8 MB layout.
+  shrunk, or an 8 MB layout. The lever being pulled first is `strings/`: `main/`
+  still holds ~70 kB of literals, and each group moved to the `res` partition
+  leaves the slot and stops being duplicated across both of them. `res` is
+  511 kB empty, so the space is there.
 
 ## Verifying a change
 
 ```sh
 idf.py build                       # -Werror is on for main
 ./tools/check_docs.py              # commands and the manual agree
-./tools/flash_a.py -p /dev/ttyACM0
+make -C components/strres/test     # the string blob format and its reader
+./tools/flash_a.py -p /dev/ttyACM0 # writes res as well as ota_0
 ./tools/bringup.py "sys info" "i2c scan"
 ```
+
+`idf.py flash` writes `res`, so a build whose strings changed must be flashed,
+not OTA'd, or every migrated line comes out as `[str:XXXX]`. That is the
+catalogue check doing its job rather than a bug — see `components/strres/README.md`.
 
 There is no test suite here; the components carry host tests for the arithmetic
 that fails silently (`make -C ../esp_components/js2c/test`). Verification of this

@@ -88,4 +88,9 @@ reference/
 # extracted from committed theirs.
 fs/config.json
 
+# Compiled string catalogues. Authored under strings/, which is committed; these
+# are built into fs/ because that is the directory the LittleFS image is packed
+# from, not because they are source.
+fs/str/
+
 # Generated config parsers live in the build tree only.

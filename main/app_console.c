@@ -54,6 +54,8 @@
 #include "sd.h"
 #include "sht4x_cmd.h"
 #include "spi.h"
+#include "strres.h"
+#include "strres_ids.h"
 #include "sys_hw.h"
 #include "touch.h"
 #include "uart.h"
@@ -267,18 +269,37 @@ static const cli_group_t pwm_group = {
 /* i2c                                                                 */
 /* ------------------------------------------------------------------ */
 
+/*
+ * The first group whose help text lives on the `res` partition rather than in
+ * the image: .usage and .help are left NULL and the ids beside them name the
+ * strings, which app_console_register() teaches cli to resolve. The command
+ * names stay here -- they are what the user types and what completion matches,
+ * not prose.
+ */
 static const cli_command_t i2c_commands[] = {
-    {"bus",  "<scl> <sda>",         "Initialize the I2C bus on the given pins", cmd_i2c_bus},
-    {"scan", "",                    "Probe the bus and tabulate responding devices", cmd_i2c_scan},
-    {"read", "<address> [bytes]",   "Read bytes from a device",                 cmd_i2c_read},
-    {"identify", "[address]",       "Name the parts this firmware drives at an address", cmd_i2c_identify},
+    {"bus",      NULL, NULL, cmd_i2c_bus},
+    {"scan",     NULL, NULL, cmd_i2c_scan},
+    {"read",     NULL, NULL, cmd_i2c_read},
+    {"identify", NULL, NULL, cmd_i2c_identify},
 };
+
+/* Parallel to i2c_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t i2c_text[] = {
+    {STR_I2C_BUS_USAGE,      STR_I2C_BUS_HELP},
+    {STR_I2C_SCAN_USAGE,     STR_I2C_SCAN_HELP},
+    {STR_I2C_READ_USAGE,     STR_I2C_READ_HELP},
+    {STR_I2C_IDENTIFY_USAGE, STR_I2C_IDENTIFY_HELP},
+};
+_Static_assert(ARRAY_COUNT(i2c_text) == ARRAY_COUNT(i2c_commands),
+               "i2c help ids and commands must be the same length");
 
 static const cli_group_t i2c_group = {
     .name = "i2c",
-    .help = "I2C master",
     .commands = i2c_commands,
     .command_count = ARRAY_COUNT(i2c_commands),
+    .command_text = i2c_text,
+    .help_id = STR_I2C_GROUP_HELP,
 };
 
 /* ------------------------------------------------------------------ */
@@ -714,8 +735,21 @@ static const cli_group_t *const groups[] = {
     &board_core_basic_group,
 };
 
+/*
+ * How cli turns a help id back into words.
+ *
+ * cli has no idea where the text lives -- that is the point of the callback --
+ * so this is the one place the shell and the string catalogue meet.
+ */
+static const char *resolve_help_text(uint16_t id, char *buf, size_t buflen)
+{
+    return strres_copy((strres_id_t)id, buf, buflen) < 0 ? NULL : buf;
+}
+
 esp_err_t app_console_register(void)
 {
+    cli_set_text_resolver(resolve_help_text);
+
     for (size_t i = 0; i < ARRAY_COUNT(groups); i++) {
         esp_err_t err = cli_register_group(groups[i]);
         if (err != ESP_OK) {

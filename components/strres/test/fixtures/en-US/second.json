@@ -1,0 +1,7 @@
+{
+  "section": "second",
+  "strings": {
+    "alpha": "the first string of the second section",
+    "beta":  "the second string of the second section"
+  }
+}

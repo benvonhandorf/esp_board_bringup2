@@ -1,0 +1,60 @@
+menu "strres: user-visible strings on a filesystem"
+
+    config STRRES_CACHE_SECTIONS
+        int "Cached sections"
+        default 3
+        range 1 16
+        help
+            How many string sections are kept in memory at once, over and above
+            the pinned section, which is always resident.
+
+            Each slot holds one whole section file in one allocation -- a few
+            kilobytes -- so this is the component's main memory cost. A section
+            is roughly one command group, and printing that group's help touches
+            it once, so even 1 works; 3 keeps a couple of neighbouring groups
+            warm without measurable cost.
+
+            Nothing grows past this: a lookup that would need a slot while every
+            slot is held fails and prints its id, rather than allocating.
+
+    config STRRES_FORMAT_BUF_SIZE
+        int "Format buffer for strres_error(), bytes"
+        default 256
+        range 64 1024
+        help
+            diag has no verror(), so an error string is formatted here before
+            being emitted in one call -- splitting the "ERR: " prefix from the
+            text would let another task's line land between them.
+
+            On the stack of the calling task, not static. A longer message is
+            truncated, not split.
+
+    config STRRES_BASE_DIR
+        string "Directory holding the locale subdirectories"
+        default "/res/str"
+        help
+            One subdirectory per locale beneath this, each holding the .sr files
+            for that language. The application mounts the filesystem; this
+            component only opens paths under it.
+
+    config STRRES_DEFAULT_LOCALE
+        string "Default locale"
+        default "en-US"
+        help
+            Used when none is configured, and as the fallback when the requested
+            locale has no files on the partition.
+
+    config STRRES_DEBUG_NAMES
+        bool "Name missing strings instead of numbering them"
+        default n
+        help
+            A string that cannot be found normally prints as "[str:04F2]",
+            because a table mapping ids to names would put strings back into the
+            image -- which is what this component exists to avoid. Decode one
+            with the strres_ids.txt the build emits.
+
+            Turning this on emits that table anyway and prints
+            "[str:i2c/scan.help]" directly. Convenient while migrating strings,
+            and worth several kilobytes of flash, so leave it off in a release.
+
+endmenu

@@ -1,0 +1,280 @@
+diff -ruN '--exclude=.component_hash' '--exclude=test_cli' '--exclude=*.o' /home/benvh/projects/esp_components/cli/CHANGELOG.md managed_components/cli/CHANGELOG.md
+--- a/cli/CHANGELOG.md	2026-09-04 07:54:40.605330751 -0400
++++ b/cli/CHANGELOG.md	2026-09-06 07:00:20.948138070 -0400
+@@ -3,6 +3,22 @@
+ All notable changes to this component are documented here.
+ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+ 
++## [Unreleased]
++
++### Added
++
++- Help and usage text may be supplied as ids instead of pointers, for a project
++  that keeps its prose on a filesystem rather than in the image. A group carries
++  an optional `command_text` array parallel to `commands[]`, plus its own
++  `help_id`, and `cli_set_text_resolver()` says how an id becomes words.
++
++  The ids live in a parallel array rather than in `cli_command_t` deliberately:
++  those rows are written as positional initialisers, and appending to the struct
++  would make every existing one a `-Wmissing-field-initializers` error under
++  `-Wextra -Werror`. Existing tables are untouched, and with no resolver
++  registered the ids are ignored, so a project without a string catalogue behaves
++  exactly as before.
++
+ ## [0.1.0] - 2026-09-04
+ 
+ ### Added
+diff -ruN '--exclude=.component_hash' '--exclude=test_cli' '--exclude=*.o' /home/benvh/projects/esp_components/cli/include/cli.h managed_components/cli/include/cli.h
+--- a/cli/include/cli.h	2026-09-04 07:48:57.845195746 -0400
++++ b/cli/include/cli.h	2026-09-06 06:56:14.183575775 -0400
+@@ -3,6 +3,7 @@
+ 
+ #include <stdbool.h>
+ #include <stddef.h>
++#include <stdint.h>
+ 
+ #include "esp_err.h"
+ 
+@@ -46,13 +47,48 @@
+     cli_command_fn fn;
+ } cli_command_t;
+ 
++/*
++ * Where a command's help text lives when it is not a literal.
++ *
++ * A project that keeps its prose on a filesystem rather than in the image
++ * leaves .usage and .help NULL and supplies one of these per command, so the
++ * table carries two bytes instead of two strings. Resolution goes through
++ * cli_set_text_resolver(); without a resolver these are ignored and the
++ * pointers are all that matter.
++ *
++ * It is a parallel array rather than two more fields in cli_command_t
++ * deliberately: those rows are written as positional initialisers all over the
++ * place, and appending to the struct would make every one of them a
++ * -Wmissing-field-initializers error under -Wextra -Werror. This way an
++ * existing table is untouched, and so is every project that has one.
++ */
++typedef struct {
++    uint16_t usage_id; /* 0 for none */
++    uint16_t help_id;  /* 0 for none */
++} cli_command_text_t;
++
+ typedef struct {
+     const char *name;  /* "gpio", "i2c-nau7802" */
+     const char *help;  /* one line */
+     const cli_command_t *commands;
+     size_t command_count;
++    /* NULL, or command_count entries parallel to commands[]. */
++    const cli_command_text_t *command_text;
++    uint16_t help_id;  /* used when help is NULL; 0 for none */
+ } cli_group_t;
+ 
++/*
++ * Resolve a text id into caller-supplied storage, returning buf, or NULL if the
++ * id names nothing. Registering one is what makes the ids above mean anything.
++ *
++ * Deliberately a callback rather than a dependency: the same reasoning that
++ * keeps diag's sinks with their transports keeps the string catalogue out of
++ * this component, so cli still builds in a project that has no such thing.
++ */
++typedef const char *(*cli_text_resolver_fn)(uint16_t id, char *buf, size_t buflen);
++
++void cli_set_text_resolver(cli_text_resolver_fn fn);
++
+ typedef struct {
+     /* Printed once a terminal attaches. NULL for a default naming the chip. */
+     const char *banner;
+diff -ruN '--exclude=.component_hash' '--exclude=test_cli' '--exclude=*.o' /home/benvh/projects/esp_components/cli/src/cli_dispatch.c managed_components/cli/src/cli_dispatch.c
+--- a/cli/src/cli_dispatch.c	2026-09-04 07:49:24.561284207 -0400
++++ b/cli/src/cli_dispatch.c	2026-09-06 06:56:22.717630592 -0400
+@@ -63,21 +63,53 @@
+     return ESP_OK;
+ }
+ 
++static cli_text_resolver_fn text_resolver;
++
++void cli_set_text_resolver(cli_text_resolver_fn fn)
++{
++    text_resolver = fn;
++}
++
++/*
++ * The text for a help or usage field: the pointer if there is one, otherwise
++ * the id through the resolver, otherwise nothing.
++ *
++ * Resolving into the caller's buffer rather than returning an owned string is
++ * what keeps the column alignment below working on a plain char*, and leaves
++ * the lifetime question with the caller's stack frame.
++ */
++static const char *text_of(const char *literal, uint16_t id, char *buf, size_t buflen)
++{
++    if (literal) {
++        return literal;
++    }
++    if (id != 0 && text_resolver) {
++        const char *s = text_resolver(id, buf, buflen);
++        if (s) {
++            return s;
++        }
++    }
++    return "";
++}
++
+ void cli_print_help(const cli_group_t *group)
+ {
++    char text[96];
++
+     if (!group) {
+         diag_printf("\nCommand groups (type a group name to list its commands):\n\n");
+         for (size_t i = 0; i < group_count; i++) {
+             diag_printf("  %-*s %s\n", HELP_SYNTAX_WIDTH, groups[i]->name,
+-                        groups[i]->help ? groups[i]->help : "");
++                        text_of(groups[i]->help, groups[i]->help_id, text, sizeof(text)));
+         }
+         diag_printf("\nEvery command is '<group> <command>', e.g. 'gpio set 19 true'.\n");
+         diag_printf("'help <group>' describes one group.\n\n");
+         return;
+     }
+ 
+-    if (group->help) {
+-        diag_printf("\n%s\n", group->help);
++    const char *group_help = text_of(group->help, group->help_id, text, sizeof(text));
++    if (group_help[0]) {
++        diag_printf("\n%s\n", group_help);
+     }
+ 
+     if (group->command_count == 0) {
+@@ -88,12 +120,19 @@
+     diag_printf("\nCommands:\n");
+     for (size_t i = 0; i < group->command_count; i++) {
+         const cli_command_t *cmd = &group->commands[i];
++        const cli_command_text_t *ids = group->command_text ? &group->command_text[i] : NULL;
++
++        /* Two lookups, two buffers: the second would otherwise overwrite the
++         * first before the line is printed. */
++        char usage_buf[64];
++        const char *usage = text_of(cmd->usage, ids ? ids->usage_id : 0,
++                                    usage_buf, sizeof(usage_buf));
++
+         char syntax[80];
+         snprintf(syntax, sizeof(syntax), "%s %s%s%s", group->name, cmd->name,
+-                 cmd->usage && cmd->usage[0] ? " " : "",
+-                 cmd->usage ? cmd->usage : "");
++                 usage[0] ? " " : "", usage);
+         diag_printf("  %-*s %s\n", HELP_SYNTAX_WIDTH, syntax,
+-                    cmd->help ? cmd->help : "");
++                    text_of(cmd->help, ids ? ids->help_id : 0, text, sizeof(text)));
+     }
+     diag_printf("\n");
+ }
+diff -ruN '--exclude=.component_hash' '--exclude=test_cli' '--exclude=*.o' /home/benvh/projects/esp_components/cli/test/test_cli.c managed_components/cli/test/test_cli.c
+--- a/cli/test/test_cli.c	2026-09-04 07:51:43.064742833 -0400
++++ b/cli/test/test_cli.c	2026-09-06 06:59:25.270791965 -0400
+@@ -52,8 +52,8 @@
+     {"blink", NULL,           "Blink a pin",  cmd_fail},
+ };
+ static const cli_group_t gpio_group = {
+-    "gpio", "Digital pin access", gpio_cmds,
+-    sizeof(gpio_cmds) / sizeof(gpio_cmds[0]),
++    .name = "gpio", .help = "Digital pin access", .commands = gpio_cmds,
++    .command_count = sizeof(gpio_cmds) / sizeof(gpio_cmds[0]),
+ };
+ 
+ static const cli_command_t nau_cmds[] = {
+@@ -62,15 +62,16 @@
+ };
+ /* A hyphenated group: this is what a submenu becomes. */
+ static const cli_group_t nau_group = {
+-    "i2c-nau7802", "NAU7802 bridge ADC", nau_cmds,
+-    sizeof(nau_cmds) / sizeof(nau_cmds[0]),
++    .name = "i2c-nau7802", .help = "NAU7802 bridge ADC", .commands = nau_cmds,
++    .command_count = sizeof(nau_cmds) / sizeof(nau_cmds[0]),
+ };
+ 
+ static const cli_command_t i2c_cmds[] = {
+     {"scan", NULL, "Scan the bus", cmd_record},
+ };
+ static const cli_group_t i2c_group = {
+-    "i2c", "I2C master", i2c_cmds, sizeof(i2c_cmds) / sizeof(i2c_cmds[0]),
++    .name = "i2c", .help = "I2C master", .commands = i2c_cmds,
++    .command_count = sizeof(i2c_cmds) / sizeof(i2c_cmds[0]),
+ };
+ 
+ /* --- helpers --------------------------------------------------------------- */
+@@ -221,6 +222,68 @@
+     expect(cli_parse_pin_list("bad", &pins, &count) == -1, "non-numeric pin list refused");
+ }
+ 
++/* --- help text supplied as ids rather than pointers ------------------------ */
++
++static const cli_command_t res_cmds[] = {
++    {"go", NULL, NULL, cmd_record},
++};
++static const cli_command_text_t res_text[] = {
++    {101, 102},
++};
++static const cli_group_t res_group = {
++    .name = "res",
++    .commands = res_cmds,
++    .command_count = sizeof(res_cmds) / sizeof(res_cmds[0]),
++    .command_text = res_text,
++    .help_id = 100,
++};
++
++static const char *fake_resolver(uint16_t id, char *buf, size_t buflen)
++{
++    switch (id) {
++    case 100: snprintf(buf, buflen, "a group whose help is elsewhere"); return buf;
++    case 101: snprintf(buf, buflen, "<arg>"); return buf;
++    case 102: snprintf(buf, buflen, "a command whose help is elsewhere"); return buf;
++    default:  return NULL;
++    }
++}
++
++static void test_text_resolver(void)
++{
++    expect(cli_register_group(&res_group) == ESP_OK, "register a group with text ids");
++
++    /* Without a resolver the ids mean nothing and the help is simply blank --
++     * a project that has no string catalogue must still print a usable table. */
++    run("help res");
++    expect(strstr(diag_capture_text(), "res go") != NULL,
++           "an unresolved group still lists its commands");
++    expect(strstr(diag_capture_text(), "elsewhere") == NULL,
++           "and prints no help text it cannot resolve");
++
++    cli_set_text_resolver(fake_resolver);
++
++    run("help res");
++    expect_contains(diag_capture_text(), "a group whose help is elsewhere",
++                    "group help comes from the resolver");
++    expect_contains(diag_capture_text(), "res go <arg>",
++                    "usage comes from the resolver and still forms the syntax line");
++    expect_contains(diag_capture_text(), "a command whose help is elsewhere",
++                    "command help comes from the resolver");
++
++    /* The two lookups per row must not share a buffer. */
++    const char *t = diag_capture_text();
++    const char *syntax = strstr(t, "res go <arg>");
++    expect(syntax && strstr(syntax, "a command whose help is elsewhere") != NULL,
++           "usage and help resolve into separate buffers on one line");
++
++    /* A literal still wins over an id, so a mixed table behaves. */
++    run("help gpio");
++    expect_contains(diag_capture_text(), "Drive a pin",
++                    "a literal is still used when one is given");
++
++    cli_set_text_resolver(NULL);
++}
++
+ int main(void)
+ {
+     test_registration();
+@@ -228,6 +291,7 @@
+     test_errors_name_the_fix();
+     test_help_and_bare_group();
+     test_completion();
++    test_text_resolver();
+     test_arg_parsers();
+ 
+     printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "PASSED",
