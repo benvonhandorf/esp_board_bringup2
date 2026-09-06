@@ -9,42 +9,45 @@ implies: *"Anything changed that way has to be committed and tagged in `esp_comp
 **and pushed**, before a plain `idf.py build` resolves it."* A patch here is that change,
 parked where it can be reviewed with the code that depends on it.
 
-Delete a patch once its component is tagged and `main/idf_component.yml` names the new
-tag.
+**Nothing is pending.** The directory is kept for the next such change, and for the two
+notes below, both of which cost real time to find.
 
-## cli-text-resolver.patch
+## Retagging a component is not enough on its own
 
-**`main` does not build against `cli-v0.1.0` without this.** `app_console.c`'s `i2c`
-group carries its help text as ids rather than literals, which needs
-`cli_command_text_t` and `cli_set_text_resolver()`.
+A component's own manifest pins its siblings, and the component manager takes that
+transitive pin over this project's direct one **without reporting a conflict**.
 
-Apply, test and tag:
+`cli-v0.2.0` was tagged and `main/idf_component.yml` asked for it, and the build still
+resolved `cli-v0.1.0` — because `cli_web-v0.2.0` pinned `cli-v0.1.0`. The symptom was
+`app_console.c` failing on `unknown type name 'cli_command_text_t'` while the manifest
+plainly named the tag that defines it. Fixing it meant tagging `cli_web-v0.2.1` too.
+
+The same trap is noted for `diag` in `main/idf_component.yml`, where the direct pin asks
+for `diag-v0.1.1` and the build resolves `v0.1.0`. So:
+
+- **`main/idf_component.yml` states an intention. `dependencies.lock` states the fact.**
+  When they disagree, the lock is right.
+- Better still, check the extracted source, which is the only thing the compiler sees:
+
+  ```sh
+  grep -c cli_command_text_t managed_components/cli/include/cli.h
+  ```
+
+- When a bump does not seem to take, `rm dependencies.lock` and the affected
+  `managed_components/<name>` directories, then `idf.py reconfigure`. A stale lock is
+  sticky: the solver will report `Dependency "cli": <old> -> <new>` and still leave the
+  old one in place.
+
+## Push tags by name, not with `--follow-tags`
+
+`--follow-tags` only pushes *annotated* tags. `git tag <name>` creates a lightweight one,
+so the commit goes up and the tag silently stays local — and every build keeps resolving
+the previous version with nothing in any manifest to show why.
 
 ```sh
-cd ../esp_components
-git apply /path/to/esp_board_bringup2/patches/cli-text-resolver.patch
-make -C cli/test
-git commit -am "Let a group carry help text as ids instead of pointers"
-git tag cli-v0.2.0 && git push --follow-tags
+git push origin main
+git push origin <tag>          # explicitly
+git ls-remote --tags origin    # the only real confirmation
 ```
 
-Then point `main/idf_component.yml` at `cli-v0.2.0` and delete this patch.
-
-Until then, build against the checkout:
-
-```sh
-idf.py -DESP_COMPONENTS_DIR=/abs/path/to/esp_components build
-```
-
-That rewrites `dependencies.lock` with local paths — `idf.py reconfigure` puts the pins
-back, and `git diff` before committing is worth the habit.
-
-### What it changes
-
-The ids go in a `cli_command_text_t` array hanging off `cli_group_t`, parallel to
-`commands[]`, rather than in two more fields on `cli_command_t`. `cli_command_t` rows are
-written as positional initialisers throughout this project and others, and appending to
-that struct makes every one of them a `-Wmissing-field-initializers` error under
-`-Wextra -Werror`. This way existing tables compile untouched, and with no resolver
-registered the ids are ignored — so a project with no string catalogue behaves exactly as
-it did.
+Or create tags with `git tag -a`, in which case `--follow-tags` does cover them.

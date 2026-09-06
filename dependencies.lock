@@ -10,7 +10,7 @@ dependencies:
       type: git
     version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
   cli:
-    component_hash: a5f0abd92fdf174fa47cb5aba3918e7bc252bf7b33a9bbbefdd03e6fbe4d6122
+    component_hash: fc095719558e45ba4f3fdacab5c4b6a64d9053bf3feafe8c2abbad0b1f39a314
     dependencies:
     - name: idf
       version: '>=5.0'
@@ -22,16 +22,16 @@ dependencies:
       git: https://github.com/benvonhandorf/esp_components.git
       path: cli
       type: git
-    version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
+    version: c6127f64c68c5ae888d8292c707327186a668d7d
   cli_web:
-    component_hash: 7fb09f1f670021476a87530dd40ab21c64ee8caba33da8c93645b81b543d0d81
+    component_hash: be14693f5f056e49c66881dd42f5e867aa2d0efd5dcadfdac796376f318673d8
     dependencies:
     - name: idf
       version: '>=5.0'
     - git: https://github.com/benvonhandorf/esp_components.git
       name: cli
       path: cli
-      version: cli-v0.1.0
+      version: cli-v0.2.0
     - git: https://github.com/benvonhandorf/esp_components.git
       name: diag
       path: diag
@@ -40,7 +40,7 @@ dependencies:
       git: https://github.com/benvonhandorf/esp_components.git
       path: cli_web
       type: git
-    version: a15317400dd931e6dac7c2cdfe005be5c9105e37
+    version: 6d15b4fe72f3b4340ebd357d5849aa9f6883c5df
   config_store:
     component_hash: ea578a7d14204ada91876d51ef1c701e0e3eecb134268bd0aba129b4305ee8ea
     dependencies:
@@ -363,6 +363,6 @@ direct_dependencies:
 - rx8130ce
 - sht4x
 - wifi_manager
-manifest_hash: b3ca14ecd2678f1aeddbeaa0ff1d44220a556b5110d9aeac0f05e8509cbcbb66
+manifest_hash: e8ae115da9919965416fe970492c9b72f405c1f3937ec943f96c8801b6d99b32
 target: esp32c3
 version: 3.0.0

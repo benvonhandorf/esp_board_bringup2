@@ -23,11 +23,11 @@ dependencies:
   cli:
     git: https://github.com/benvonhandorf/esp_components.git
     path: cli
-    version: cli-v0.1.0
+    version: cli-v0.2.0
   cli_web:
     git: https://github.com/benvonhandorf/esp_components.git
     path: cli_web
-    version: cli_web-v0.2.0
+    version: cli_web-v0.2.1
   config_store:
     git: https://github.com/benvonhandorf/esp_components.git
     path: config_store

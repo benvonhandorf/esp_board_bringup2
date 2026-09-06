@@ -181,11 +181,18 @@ anything that exposes credentials or changes the device.
 - **The image is on trial after an OTA.** `app_main()` confirms it at the very
   end, so firmware that crashes during start-up rolls back on the next reset. Do
   not move that call earlier.
-- **`main` does not build against `cli-v0.1.0` right now.** `app_console.c`'s
-  `i2c` group carries its help text as ids, which needs a `cli` change that is
-  not tagged yet: `patches/cli-text-resolver.patch`. Apply it to an
-  `esp_components` checkout and build with `-DESP_COMPONENTS_DIR`, or tag and
-  push it and bump the pin. `patches/README.md` has both.
+- **A component's own pins outrank this project's.** `cli_web` names the `cli`
+  tag it wants, and the solver takes that over the direct pin here **without
+  reporting a conflict** — so bumping `cli` alone resolved the old version and
+  the build failed on a type the requested tag plainly defines. Retagging a
+  component means retagging every sibling that pins it. `main/idf_component.yml`
+  states an intention; `dependencies.lock` states the fact, and the extracted
+  source under `managed_components/` is the only thing the compiler sees. When a
+  bump will not take, delete `dependencies.lock` and the affected
+  `managed_components/<name>`, then `idf.py reconfigure` — a stale lock is
+  sticky enough to report a change it then does not make. See
+  `patches/README.md`, which also covers why `git push --follow-tags` silently
+  fails to push a tag made with plain `git tag`.
 - **A shared component is pinned to a git tag, not a version range.** To work on a
   component and this project together, build with
   `-DESP_COMPONENTS_DIR=/abs/path` — use an **absolute** path, since CMake
