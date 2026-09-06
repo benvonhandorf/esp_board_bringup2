@@ -77,9 +77,9 @@ int cmd_rx8130ce_time(int argc, char **argv)
          * that as a time would let a dead backup cell pass for a device that
          * believes it is the year 2000.
          */
-        diag_error("The clock does not know the time. It is answering, but its "
-                   "registers do not decode to a date -- a drained backup cell, "
-                   "or a part that has never been set. Run 'i2c-rx8130ce set'.");
+        diag_error("The clock is answering but its registers do not decode to "
+                   "a date -- a drained backup cell, or never set. Run "
+                   "'i2c-rx8130ce set'.");
         return -1;
     }
     if (err != ESP_OK) {
@@ -101,9 +101,9 @@ int cmd_rx8130ce_time(int argc, char **argv)
     }
 
     if (rx8130ce_power_was_lost(rtc)) {
-        diag_printf("Power:    the part reports having lost power since it was "
-                    "last set, so the time above may be wrong even though it "
-                    "decodes. 'i2c-rx8130ce set' clears the flag.\n");
+        diag_printf("Power:    lost since the clock was last set, so the time "
+                    "above may be wrong. 'i2c-rx8130ce set' clears the "
+                    "flag.\n");
     }
     return 0;
 }
@@ -121,8 +121,7 @@ int cmd_rx8130ce_set(int argc, char **argv)
     gettimeofday(&now, NULL);
     if (now.tv_sec < 1000000000) {
         diag_error("The system clock is not set, so there is nothing to copy "
-                   "into the RTC. Join a network and let NTP set it -- "
-                   "'net status' says whether there is a link.");
+                   "into the RTC. Check 'net status' and let NTP set it.");
         return -1;
     }
 
@@ -138,7 +137,6 @@ int cmd_rx8130ce_set(int argc, char **argv)
     }
 
     print_time(&now, "RTC set:");
-    diag_printf("The power-lost flag is cleared, so a clock that has been set "
-                "stops reporting itself unreliable.\n");
+    diag_printf("The power-lost flag is cleared\n");
     return 0;
 }

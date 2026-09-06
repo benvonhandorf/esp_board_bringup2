@@ -159,8 +159,7 @@ int cmd_aw9523b_init(int argc, char **argv)
                 push_pull ? "push-pull" : "open-drain (add 'pushpull' to drive high)");
     diag_printf("Port 1: inputs 0x%02X, outputs preset to 0x%02X, push-pull\n",
                 inputs[1], initial[1]);
-    diag_printf("Levels were established before any pin became an output, so "
-                "nothing glitched to whatever the register held.\n");
+    diag_printf("Levels were established before any pin became an output\n");
     return 0;
 }
 

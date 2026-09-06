@@ -77,15 +77,13 @@ static void report_stage(uint8_t address, const ina219_report_t *report,
     case INA219_STAGE_NONE:
         return;
     case INA219_STAGE_RANGE:
-        diag_error("0x%02X: that shunt and range cannot be represented. The "
-                   "shunt drop at full scale must be between about 20 mV and "
-                   "320 mV, which the PGA is the limit of.", address);
+        diag_error("0x%02X: that shunt and range need a full-scale drop "
+                   "outside the PGA's 20-320 mV.", address);
         return;
     case INA219_STAGE_IDENTIFY:
         diag_error("0x%02X does not behave like an INA219: the calibration "
-                   "register did not read back what was written. The part has "
-                   "no ID register, so this is the only identification there "
-                   "is -- something else answers at this address.", address);
+                   "register did not read back what was written, so something "
+                   "else answers here.", address);
         return;
     default:
         diag_error("0x%02X: %s failed: %s", address,
@@ -180,9 +178,8 @@ static int configure_device(uint8_t address, double shunt_ohms,
         diag_printf("0x%02X configured: shunt %.4f ohm, %.4f mA/LSB, range +/-%.3f A\n",
                     address, shunt_ohms, entry->report.current_lsb_a * 1000.0,
                     entry->report.full_scale_a);
-        diag_printf("      CALIBRATION 0x%04X. The register's low bit is void, so "
-                    "an odd value cannot be written and the resolution above is "
-                    "what the part actually has, not what was asked for.\n",
+        diag_printf("      CALIBRATION 0x%04X, so the resolution above is "
+                    "what the part has, not what was asked for.\n",
                     entry->report.calibration);
     }
 

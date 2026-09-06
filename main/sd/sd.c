@@ -519,28 +519,13 @@ static void explain_init_timeout(esp_err_t err)
     if (err != ESP_ERR_TIMEOUT) {
         return;
     }
-    diag_printf("      Timed out initializing. Check the log lines above for where:\n");
-    diag_printf("      - 'clock_update_command' or 'failed to set clk' means the host\n");
-    diag_printf("        never even got its clock running. It waits for the data bus to\n");
-    diag_printf("        go idle before accepting that command, so a CMD or D0 line held\n");
-    diag_printf("        low stalls it here. That is wiring, not the card: check the\n");
-    diag_printf("        pins with 'gpio short' and 'gpio rc'.\n");
-    diag_printf("      - 'sdmmc_init_ocr ... send_op_cond' is ACMD41, and reaching it\n");
-    diag_printf("        means the card already answered CMD0 and CMD8 correctly, CRC\n");
-    diag_printf("        included. So the clock and command wiring work; what failed is\n");
-    diag_printf("        the card's own power-up ramp, which it reports as 'still busy'\n");
-    diag_printf("        for the full three seconds of retries. Three things do that:\n");
-    diag_printf("          * The card is latched in SPI mode from an earlier 'sd spi'.\n");
-    diag_printf("            It leaves SPI mode only when its power is removed, which a\n");
-    diag_printf("            board reset does not do -- unplug and replug the board.\n");
-    diag_printf("          * Its supply cannot carry the power-up current. Talking takes\n");
-    diag_printf("            a milliamp and ramping takes a hundred, so a weak or\n");
-    diag_printf("            missing VDD looks exactly like this. Measure VDD at the\n");
-    diag_printf("            socket during the attempt, not just at idle.\n");
-    diag_printf("          * The card is failing. Try a known-good one.\n");
-    diag_printf("        Retrying over the other interface separates card from wiring:\n");
-    diag_printf("        SD mode and SPI mode share almost no logic, so a card that\n");
-    diag_printf("        stops here on both has a supply or a card problem.\n");
+    diag_printf("      Timed out. Which log line above it stopped on says where:\n");
+    diag_printf("      - 'clock_update_command' or 'failed to set clk': wiring, not\n");
+    diag_printf("        the card. Check with 'gpio short' and 'gpio rc'.\n");
+    diag_printf("      - 'send_op_cond': the wiring works and the card's power-up\n");
+    diag_printf("        failed. Power-cycle the board (a reset will not do), measure\n");
+    diag_printf("        VDD at the socket during the attempt, and try another card.\n");
+    diag_printf("      See docs/sd.md for what each one rules out.\n");
 }
 
 /*
@@ -568,10 +553,8 @@ static void warn_if_bus_held_low(const int *pins, int count, const char *const *
             continue;
         }
         if (gpio_get_level(pins[i]) == 0) {
-            diag_printf("Warning: %s (GPIO %d) reads low with a pull-up enabled, so it is\n"
-                      "         being held down. The host waits for an idle bus before it\n"
-                      "         will start its clock, so this alone can stall init.\n",
-                      names[i], pins[i]);
+            diag_printf("Warning: %s (GPIO %d) is held low, which alone can "
+                      "stall init\n", names[i], pins[i]);
         }
     }
 
@@ -599,9 +582,8 @@ static void warn_if_bus_held_low(const int *pins, int count, const char *const *
 
     for (int i = 1; i < count; i++) {
         if (gpio_get_level(pins[i]) == 0) {
-            diag_printf("Warning: %s (GPIO %d) follows %s (GPIO %d) low, so those two are\n"
-                      "         shorted together. The host cannot start its clock while a\n"
-                      "         data line is tied to it -- this must be fixed in hardware.\n",
+            diag_printf("Warning: %s (GPIO %d) is shorted to %s (GPIO %d); the "
+                      "host cannot clock past this\n",
                       names[i], pins[i], names[0], pins[0]);
         }
     }
@@ -821,8 +803,8 @@ static bool mount_fat(bool quiet)
         if (quiet) {
             /* nothing: the caller reports it in its own terms */
         } else if (res == FR_NO_FILESYSTEM) {
-            diag_error("The card has no FAT filesystem. 'sd info' and 'sd raw' still "
-                     "work, but anything needing files does not.");
+            diag_error("The card has no FAT filesystem; 'sd info' and 'sd raw' "
+                     "still work.");
         } else {
             diag_error("Mounting FAT: FatFs error %d", res);
         }
@@ -1226,8 +1208,8 @@ int cmd_sd_bench(int argc, char **argv)
          * the CPU, not to the card. */
         fill_pattern(pattern, block_bytes, i);
         if (memcmp(pattern, readback, block_bytes) != 0) {
-            diag_error("Block %u read back different from what was written; the "
-                     "throughput numbers above cannot be trusted.", (unsigned)i);
+            diag_error("Block %u read back wrong; the throughput above cannot be "
+                     "trusted.", (unsigned)i);
             fclose(f);
             goto cleanup_file;
         }
@@ -1509,10 +1491,9 @@ int cmd_sd_sweep(int argc, char **argv)
         uint32_t again = 0;
         err = read_crc(buffer, block_bytes, blocks, sectors_per_block, &again, NULL);
         if (err == ESP_OK && again != reference_crc) {
-            diag_error("The card returned different data for the same sectors at the "
-                     "in-spec %d kHz reference rate. It is not reliable enough to "
-                     "sweep; nothing above this can be trusted either.",
-                     SWEEP_BASELINE_KHZ);
+            diag_error("The card read back differently at the in-spec %d kHz "
+                     "reference rate, so nothing above it can be trusted "
+                     "either.", SWEEP_BASELINE_KHZ);
             goto done;
         }
     }

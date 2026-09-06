@@ -179,18 +179,18 @@ static bool bus_lines_idle_high(void)
     diag_error("I2C bus is not idle: SCL=%d SDA=%d (both should read 1)", scl, sda);
 
     if (!scl && !sda) {
-        diag_printf("Both lines are held low. Likely causes: no pull-up resistors\n"
-                  "fitted, the bus is not powered, or SCL/SDA are shorted to ground.\n");
+        diag_printf("Both lines are held low: no pull-ups fitted, the bus is "
+                  "not powered, or SCL/SDA are shorted to ground.\n");
     } else if (!sda) {
-        diag_printf("SDA is held low. A device is probably mid-transfer and stuck;\n"
-                  "power-cycle the peripheral, or clock SCL manually to free it.\n");
+        diag_printf("SDA is held low, so a device is probably stuck "
+                  "mid-transfer; power-cycle it or clock SCL to free it.\n");
     } else {
-        diag_printf("SCL is held low. A device is holding the clock, or SCL is\n"
-                  "shorted to ground.\n");
+        diag_printf("SCL is held low: a device is holding the clock, or SCL "
+                  "is shorted to ground.\n");
     }
 
-    diag_printf("Internal pull-ups are weak (tens of kOhm); most buses need\n"
-              "external 2.2k-10k resistors to 3V3.\n");
+    diag_printf("Internal pull-ups are weak; most buses need external "
+              "2.2k-10k resistors to 3V3.\n");
     return false;
 }
 

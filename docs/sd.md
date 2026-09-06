@@ -49,6 +49,39 @@ Note that a card put into SPI mode by `sd spi` **stays** in SPI mode until its
 power is removed; that is the card's behaviour, not this tool's. A board reset
 does not do it. Test SD mode first, or physically power-cycle in between.
 
+### When `mmc` or `spi` times out
+
+`init` failing with a timeout has two very different causes, and the error code
+does not separate them. The log line it stopped on does, so the command prints
+the fork and this page carries the reasoning.
+
+**`clock_update_command`, or `failed to set clk`.** The host never got its clock
+running at all. It waits for the data bus to be idle before it accepts that
+command, so a CMD or D0 line held low stalls it here — which makes this wiring,
+not the card. `sd spi` and `sd mmc` already probe for the two shapes of that
+before handing the pins over, warning about a line that reads low against a
+pull-up and about a data line shorted to CLK; `gpio short` and `gpio rc` are the
+commands that go further.
+
+**`sdmmc_init_ocr … send_op_cond`.** That is ACMD41, and reaching it means the
+card has already answered CMD0 and CMD8 correctly, CRC included — so the clock
+and command wiring work. What failed is the card's own power-up ramp, which it
+reports as "still busy" for the full three seconds of retries. Three things do
+that:
+
+- **The card is latched in SPI mode** by an earlier `sd spi`. It leaves SPI mode
+  only when its power is removed, and a board reset does not do that — unplug
+  and replug the board.
+- **The supply cannot carry the power-up current.** Talking to a card takes
+  about a milliamp and ramping one takes a hundred, so a weak or missing VDD
+  looks exactly like this. Measure VDD at the socket *during* the attempt, not
+  at idle.
+- **The card is failing.** Try a known-good one.
+
+Retrying over the other interface separates the card from the wiring: SD mode
+and SPI mode share almost no logic, so a card that stops here on both has a
+supply or a card problem rather than a wiring one.
+
 ## `info`
 
 Reports the detected card: the interface and pins in use, card type, product

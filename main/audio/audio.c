@@ -260,9 +260,8 @@ static void print_input(void)
          * like a dead microphone. Saying so here is cheaper than debugging it.
          */
         if (pdm_hz && (pdm_hz < 1000000 || pdm_hz > 3250000)) {
-            diag_printf("         That is outside the 1-3.25 MHz most MEMS "
-                      "microphones specify; try a different rate if the part "
-                      "reads silent.\n");
+            diag_printf("         Outside the 1-3.25 MHz most MEMS microphones "
+                      "specify; try another rate if it reads silent.\n");
         }
         break;
     }
@@ -369,9 +368,8 @@ int cmd_audio_bus(int argc, char **argv)
     print_format();
     diag_printf("Transmitting silence, so the clocks are live for the codec.\n");
     if (internal) {
-        diag_printf("DIN and DOUT are the same pin, so the receiver is fed by "
-                  "the transmitter through the pad. Nothing outside the chip "
-                  "is involved in what 'audio record' sees.\n");
+        diag_printf("DIN and DOUT are the same pin, so 'audio record' sees the "
+                  "transmitter through the pad and nothing external.\n");
     }
     if (had_pdm) {
         diag_printf("The PDM microphone was released; re-run 'audio pdm' to "
@@ -691,10 +689,9 @@ static bool pdm_pins_free(int clk, int din)
 
         diag_error("GPIO %d is already the I2S %s, so it cannot also be the "
                  "microphone's %s", used[i], names[i], role);
-        diag_printf("The two share a pin on this board, so the microphone and "
-                  "the speaker cannot run at the same time. Run 'audio close' "
-                  "to give up the speaker, or 'audio pdm' on the pins the "
-                  "microphone actually uses.\n");
+        diag_printf("They share a pin here, so the microphone and the speaker "
+                  "cannot both run. Run 'audio close', or 'audio pdm' on the "
+                  "microphone's own pins.\n");
         return false;
     }
 
@@ -763,9 +760,8 @@ int cmd_audio_pdm(int argc, char **argv)
         if (existing && (uint32_t)rate != existing->rate_hz) {
             diag_error("The I2S bus is already running at %lu Hz",
                      (unsigned long)existing->rate_hz);
-            diag_printf("Capture and playback share one rate so that a loopback "
-                      "measurement means something. Re-run 'audio bus ... rate "
-                      "%d' to change both.\n", rate);
+            diag_printf("Capture and playback share one rate; re-run "
+                      "'audio bus ... rate %d' to change both.\n", rate);
             return -1;
         }
         fmt.rate_hz = (uint32_t)rate;
@@ -1178,16 +1174,15 @@ int cmd_audio_loopback(int argc, char **argv)
         diag_printf("Heard it: %.0f Hz rose %.1f dB in the %s slot when the "
                   "output started.\n", hz, delta, slot ? "right" : "left");
         if (audio_bus_rx_internal()) {
-            diag_printf("This was the chip's internal loopback, so it proves the "
-                      "transmit and capture paths and nothing outside them.\n");
+            diag_printf("Internal loopback, so this proves the transmit and "
+                      "capture paths and nothing outside them.\n");
         }
         return 0;
     }
 
     if (delta >= LOOPBACK_MARGINAL_DB) {
-        diag_printf("Marginal: %.0f Hz rose only %.1f dB. Something is getting "
-                  "through, but not enough to call it a working path.\n",
-                  hz, delta);
+        diag_printf("Marginal: %.0f Hz rose only %.1f dB -- something is "
+                  "getting through, but not a working path.\n", hz, delta);
     } else {
         diag_printf("Not heard: %.0f Hz did not rise when the output started.\n",
                   hz);
@@ -1195,11 +1190,8 @@ int cmd_audio_loopback(int argc, char **argv)
 
     /* The useful part of a negative result is knowing which half to suspect,
      * and these are the questions in the order they are cheapest to answer. */
-    diag_printf("Check in this order: that the output is audible on its own "
-              "('audio tone %.0f 3'), that the input is alive ('audio record'), "
-              "and that the two are pointed at each other. Turning the level "
-              "up ('audio loopback %.0f level 80') is worth one try.\n",
-              hz, hz);
+    diag_printf("Try in order: 'audio tone %.0f 3', 'audio record', then "
+              "'audio loopback %.0f level 80'.\n", hz, hz);
     return -1;
 }
 

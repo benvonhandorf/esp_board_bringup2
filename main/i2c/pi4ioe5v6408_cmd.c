@@ -165,7 +165,7 @@ int cmd_pi4ioe_init(int argc, char **argv)
     print_bits("pull up:", pull_up);
     print_bits("interrupt:", interrupt_on);
     diag_printf("Levels were established before any pin became an output. A "
-                "switch to ground with no external pull-up needs its bit set in "
+                "switch to ground with no external pull-up needs its bit in "
                 "both 'pull' and 'pullup'.\n");
     return 0;
 }
@@ -187,9 +187,8 @@ int cmd_pi4ioe_read(int argc, char **argv)
     }
 
     print_bits("pins:", value);
-    diag_printf("These are pin levels, not the output register. On an output "
-                "pin the level can differ from what was driven if something "
-                "else is holding it.\n");
+    diag_printf("These are pin levels, not the output register, so an output "
+                "being held elsewhere reads as it is.\n");
     return 0;
 }
 

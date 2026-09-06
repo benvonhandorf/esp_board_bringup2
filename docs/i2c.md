@@ -216,9 +216,7 @@ NAU7802 ready at 0x2A (device revision 0x0F)
 Conversions signalled by DRDY on GPIO 7
 AVDD from the internal LDO at 3.0 V
 PGA gain x1
-That is the chip's power-up default, not a choice this command made: 'init'
-resets the registers, which returns the gain to x1 whatever it was set to
-before. ...
+That is the reset default, not a choice: 'i2c-nau7802 init' returns the gain to x1, and a load cell needs 'i2c-nau7802 gain 128'.
 ```
 
 Pass `gain 128` to set it in the same breath and skip the warning. `calibrate`
@@ -257,10 +255,12 @@ the noise still tracked the sample rate (60.1 / 81.3 / 114.6 / 198.7 RMS at
 
 The write goes in with the rest of the configuration, before the settle delay
 and the calibration, because the calibration has to measure the path the device
-will actually convert with. `init` reads it back and says so, and
-[`status`](#status) decodes it on every call — a chopper left at `00` is
-otherwise invisible, since the converter still works and the numbers still look
-plausible.
+will actually convert with. `init` reads it back but says nothing when it took —
+there is no argument to get wrong, so a confirmation line would be six bits of
+theory the reader cannot act on. It reports a *failed* write, and
+[`status`](#status) prints `REG_CHPS` on every call and flags it when it is not
+`3`. That matters because a chopper left at `00` is otherwise invisible: the
+converter still works and the numbers still look plausible.
 
 **Why this took so long to find.** The register was deliberately left alone for
 most of this driver's life, because writing `0x30` railed the converter at
@@ -629,12 +629,12 @@ re-derive it every time it powers on.
 ```
 > i2c-nau7802 calibrate 100 100
 Calibrated: 214.7 counts per unit (21470.0 counts for 100.0000 units)
-Scale is good to +/-0.08%, from 17.2 counts of uncertainty in the tare and this measurement together
+Scale good to +/-0.08% (17.2 counts of uncertainty)
     scale factor for the consumer:  214.7  /* +/-0.08%, gain x128, counts per unit */
 
 > i2c-nau7802 scale 214.7
 Scale set to 214.7 counts per unit (supplied, not measured)
-No tare yet. Run 'tare' with the cell empty before weighing; a factor fixes the span, not the zero.
+No tare yet; run 'i2c-nau7802 tare' with the cell empty before weighing
 ```
 
 **Only the factor, never the tare.** A scale factor is a property of the cell

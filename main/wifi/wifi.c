@@ -271,8 +271,8 @@ int cmd_wifi_connect(int argc, char **argv)
         }
     }
 
-    diag_error("'%s' did not come up within %d s; state is %s. The manager keeps "
-               "retrying -- 'wifi status' says where it got to.",
+    diag_error("'%s' did not come up within %d s; state is %s. The manager is "
+               "still retrying -- see 'wifi status'.",
                ssid, CONNECT_TIMEOUT_MS / 1000,
                state_name(wifi_manager_get_state()));
     return -1;

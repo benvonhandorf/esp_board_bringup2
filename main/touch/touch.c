@@ -220,9 +220,9 @@ int cmd_touch_watch(int argc, char **argv)
         diag_printf("  GPIO%-2d %6.0f (+/-%.0f)", pads[i].pin, pads[i].baseline,
                   pads[i].noise);
     }
-    diag_printf("\n\nWatching for %.0f s. Touch any pad -- all pads are reported "
-              "every tick, so a neighbour reacting is as visible as the one "
-              "you touched.\n", seconds);
+    diag_printf("\n\nWatching for %.0f s. Every pad is reported each tick, so "
+              "a reacting neighbour is as visible as the one you touch.\n",
+              seconds);
 
     int ticks = (int)(seconds / TICK_SECONDS);
     for (int t = 0; t < ticks; t++) {

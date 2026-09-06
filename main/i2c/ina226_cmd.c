@@ -97,9 +97,9 @@ static void report_stage(uint8_t address, const ina226_report_t *report,
     case INA226_STAGE_NONE:
         return;
     case INA226_STAGE_RANGE:
-        diag_error("0x%02X: that shunt and range cannot be represented. The "
-                   "shunt drop at full scale must be between about 5.12 mV and "
-                   "81.92 mV; there is no PGA on this part to widen it.", address);
+        diag_error("0x%02X: that shunt and range need a full-scale drop "
+                   "outside 5.12-81.92 mV, and this part has no PGA.",
+                   address);
         return;
     case INA226_STAGE_IDENTIFY:
         diag_error("0x%02X is not an INA226: manufacturer 0x%04X, die 0x%04X; "

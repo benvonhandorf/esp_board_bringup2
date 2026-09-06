@@ -72,11 +72,8 @@ static esp_err_t sph0645_configure(const audio_format_t *fmt)
 
     if (fmt->bits == 16) {
         diag_error("The SPH0645 needs 32-bit slots and the bus is set to 16");
-        diag_printf("Its oversampling ratio is fixed at 64, so the frame must be "
-                  "64 bit clocks: two 32-bit slots. At 16 bits the part sees "
-                  "word-select at twice the rate it expects and returns "
-                  "rubbish rather than silence. Re-run 'audio bus ... bits "
-                  "32'.\n");
+        diag_printf("Its oversampling ratio is fixed at 64, so the frame must "
+                  "be two 32-bit slots. Re-run 'audio bus ... bits 32'.\n");
         return ESP_ERR_NOT_SUPPORTED;
     }
 
@@ -88,9 +85,9 @@ static esp_err_t sph0645_configure(const audio_format_t *fmt)
     if (bclk < BCLK_SLEEP_HZ) {
         diag_error("Bit clock is %.3f MHz, below the 0.9 MHz at which the "
                  "SPH0645 goes to sleep", bclk / 1e6);
-        diag_printf("A sleeping part tri-states its data pin, so this reads as a "
-                  "dead microphone. It needs %d-%d Hz; that is 'audio bus ... "
-                  "rate 48000 bits 32'.\n",
+        diag_printf("Below %d Hz the part sleeps and reads as a dead "
+                  "microphone; it needs %d-%d Hz. Re-run 'audio bus ... rate "
+                  "48000 bits 32'.\n", BCLK_MIN_HZ / BCLK_PER_FRAME,
                   BCLK_MIN_HZ / BCLK_PER_FRAME, BCLK_MAX_HZ / BCLK_PER_FRAME);
         return ESP_ERR_NOT_SUPPORTED;
     }
@@ -98,9 +95,8 @@ static esp_err_t sph0645_configure(const audio_format_t *fmt)
     if (bclk < BCLK_MIN_HZ || bclk > BCLK_MAX_HZ) {
         diag_error("Bit clock is %.3f MHz, outside the SPH0645's %.3f-%.3f MHz",
                  bclk / 1e6, BCLK_MIN_HZ / 1e6, BCLK_MAX_HZ / 1e6);
-        diag_printf("With 64 clocks to a frame that is a sample rate of %d-%d "
-                  "Hz. The part may still respond, but nothing it reports is "
-                  "to specification.\n",
+        diag_printf("In spec is %d-%d Hz; the part may still respond, but "
+                  "out of specification.\n",
                   BCLK_MIN_HZ / BCLK_PER_FRAME, BCLK_MAX_HZ / BCLK_PER_FRAME);
         return ESP_ERR_NOT_SUPPORTED;
     }
@@ -140,11 +136,11 @@ static void sph0645_status(void)
               "really an SPH0645\n");
 
     if (slot == AUDIO_CHANNEL_LEFT) {
-        diag_printf("         The right slot should read near silence; if it "
-                  "mirrors the left, the data line has no pull-down\n");
+        diag_printf("         The right slot should be near silence; mirroring "
+                  "means no pull-down on the data line\n");
     } else {
-        diag_printf("         The left slot should read near silence; if it "
-                  "mirrors the right, the data line has no pull-down\n");
+        diag_printf("         The left slot should be near silence; mirroring "
+                  "means no pull-down on the data line\n");
     }
 }
 

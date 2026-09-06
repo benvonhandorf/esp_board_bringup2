@@ -475,11 +475,8 @@ int cmd_gpio_short(int argc, char **argv)
         return -1;
     }
 
-    diag_printf("Short scan across %d pins. Each is driven low in turn while the others\n"
-              "are read with pull-ups, so a pin that follows shares a net with it.\n"
-              "A short is only reported when both pins pull each other down.\n", count);
-    diag_printf("Note: this briefly drives every pin listed. Do not run it on a bus\n"
-              "      another device may be driving at the same time.\n\n");
+    diag_printf("Short scan across %d pins. Each is driven low in turn, so do "
+              "not run this\non a bus another device may be driving.\n\n", count);
 
     park_as_observers(pins, count);
 
@@ -1068,17 +1065,16 @@ int cmd_gpio_survey(int argc, char **argv)
         diag_printf("\nMore than a pair, so this may be several buses, or a "
                   "reset or interrupt line. 'i2c scan' each likely pair.\n");
     } else if (bus_count == 1) {
-        diag_printf("GPIO %d has a pull-up but nothing else does, so it is more "
-                  "likely a reset, interrupt or enable line than a bus.\n",
-                  bus_pins[0]);
+        diag_printf("GPIO %d alone has a pull-up, so more likely a reset, "
+                  "interrupt or enable line than a bus.\n", bus_pins[0]);
     } else {
         diag_printf("No pin carries a bus-strength pull-up, so there is probably "
                   "no I2C device wired to this board.\n");
     }
 
     if (driven_count) {
-        diag_printf("%d pin%s held low. That is a part driving its output, so it "
-                  "is worth identifying before assuming a pin is free.\n",
+        diag_printf("%d pin%s held low by something driving an output; worth "
+                  "identifying before assuming a pin is free.\n",
                   driven_count, driven_count == 1 ? " is" : "s are");
     }
     if (skipped_count) {
@@ -1090,10 +1086,9 @@ int cmd_gpio_survey(int argc, char **argv)
      * Said plainly because the temptation is real and the cost of yielding to
      * it was a wasted search on a board where the answer was in front of me.
      */
-    diag_printf("\nCapacitance separates a bare pad from a routed net and does "
-              "nothing more. It will not tell you which pins carry a clock or "
-              "data: those are driven, not pulled, and look like any other "
-              "idle input from in here. For those, read the schematic.\n");
+    diag_printf("\nCapacitance separates a bare pad from a routed net and "
+              "nothing more; a clock or data line is driven, not pulled, and "
+              "looks like any other idle input from here.\n");
 
     free(nets);
     return 0;
@@ -1123,22 +1118,16 @@ int cmd_gpio_rc(int argc, char **argv)
     }
     const bool calibrated = (r_int != RC_R_INTERNAL);
 
-    diag_printf("Pull-up strength and net capacitance, from how long each pin\n"
-              "takes to rise after being released from a driven low. Measured\n"
-              "twice, the second time with the internal pull-up added, which\n"
-              "gives the reference needed to solve for both values.\n"
-              "Nothing else may be driving these pins.\n\n");
+    diag_printf("Pull-up strength and net capacitance. Nothing else may be "
+              "driving these pins.\n");
 
     if (calibrated) {
-        diag_printf("Internal pull-up measured as %.1fk against the %s reference\n"
-                  "on GPIO %s. Results below use that.\n\n",
-                  r_int / 1000.0, argv[4], argv[3]);
+        diag_printf("Internal pull-up measured as %.1fk against the %s reference "
+                  "on GPIO %s\n\n", r_int / 1000.0, argv[4], argv[3]);
     } else {
-        diag_printf("Internal pull-up assumed to be %.0fk, its nominal value. It is\n"
-                  "not a precision part, and every result scales with it, so treat\n"
-                  "these as good to a factor of two. Ratios between pins are exact.\n"
-                  "Pass 'ref <pin> <kohms>' naming a pin whose pull-up you know to\n"
-                  "measure the internal one instead.\n\n",
+        diag_printf("Internal pull-up assumed to be %.0fk, so absolute values are "
+                  "good to a factor\nof two and ratios between pins are exact. "
+                  "'ref <pin> <kohms>' measures it.\n\n",
                   RC_R_INTERNAL / 1000.0);
     }
 

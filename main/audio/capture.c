@@ -586,10 +586,9 @@ void audio_capture_report(const audio_capture_t *cap)
      */
     for (int ch = 0; ch < 2; ch++) {
         if (cap->stdev[ch] == 0.0 && cap->frames > 0) {
-            diag_printf("The %s slot never changed -- every one of %llu samples "
-                      "read %ld. Nothing is modulating this input: check that "
-                      "the part is clocked and that the data pin is the right "
-                      "one.\n", ch == 0 ? "left" : "right",
+            diag_printf("The %s slot never changed -- all %llu samples read "
+                      "%ld. Check the part is clocked and the data pin is the "
+                      "right one.\n", ch == 0 ? "left" : "right",
                       (unsigned long long)cap->frames, (long)cap->min[ch]);
         }
     }

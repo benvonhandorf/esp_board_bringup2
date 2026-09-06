@@ -134,13 +134,12 @@ A real run, on a bridge with no load, at gain 128:
 ```
 > loadcell init 10 3
 Waiting for the first conversion...
-Settling: discarding 5 conversions (Table 2 allows 400 ms at 10 SPS or 50 ms at 80 SPS after a change, which is four output periods either way)
+Settling: discarding 5 conversions
 HX711 responding on DOUT GPIO 10, PD_SCK GPIO 3
 Channel A, gain 128 (25 clock pulses)
 Rate 11.6 SPS -- RATE strap low (10 SPS nominal), period 86 ms
-     Input noise 50 nV rms at gain 128 (Table 2)
-     RATE is pin 15, strapped in hardware and not settable from firmware. ...
 Idle reading -103504.8 counts (5 samples, spread 76)
+Run 'loadcell tare' with no load, then 'loadcell calibrate <known mass>'
 ```
 
 With a factor from an earlier bench run, `init` reports it and points at the one
@@ -150,7 +149,8 @@ measurement still outstanding:
 > loadcell init 10 3 gain 128 scale 1074.3
 ...
 Idle reading -103504.8 counts (5 samples, spread 76)
-Scale 1074.3 counts per unit (supplied, not measured). A factor fixes the span, not the zero: run 'tare' with no load before weighing.
+Scale 1074.3 counts per unit (supplied, not measured)
+Run 'loadcell tare' with no load, then 'loadcell weight'
 ```
 
 The input range line is worth reading. It is ±0.5 × AVDD/gain, so it scales
@@ -239,12 +239,13 @@ and `weight` refusing when a factor is set but no tare has been taken.
 ```
 > loadcell calibrate 100 50
 Calibrated: 1074.3 counts per unit (107430.0 counts for 100.0000 units)
-Scale is good to +/-0.05%, from 53.7 counts of uncertainty in the tare and this measurement together
+Scale good to +/-0.05% (53.7 counts of uncertainty)
     scale factor for the consumer:  1074.3  /* +/-0.05%, channel A gain 128, counts per unit */
 
 > loadcell init 10 3 gain 128 scale 1074.3
 ...
-Scale 1074.3 counts per unit (supplied, not measured). A factor fixes the span, not the zero: run 'tare' with no load before weighing.
+Scale 1074.3 counts per unit (supplied, not measured)
+Run 'loadcell tare' with no load, then 'loadcell weight'
 ```
 
 Gain and channel are one setting on this part, so `gain` and `input` both drop a

@@ -678,8 +678,8 @@ int cmd_nau8822_init(int argc, char **argv)
     if (readback_works) {
         diag_printf("0x%02x device ID 0x%03x\n", address, device_id_seen);
     } else {
-        diag_printf("0x%02x acknowledges writes but does not read back, so the "
-                  "part cannot be identified beyond that.\n", address);
+        diag_printf("0x%02x acknowledges writes but does not read back, so it "
+                  "cannot be identified further.\n", address);
     }
 
     if (nau8822_reset() != ESP_OK) {
@@ -963,8 +963,8 @@ int cmd_nau8822_input(int argc, char **argv)
              * leave the user believing in gain that is not there. */
             diag_error("'boost' is the +20 dB stage on the microphone path; the "
                      "line input does not pass through it");
-            diag_printf("Use 'audio-nau8822 input line' and then 'audio-nau8822 gain <db>' for up to +3 dB, "
-                      "or 'audio-nau8822 input mic boost' if the part really is a "
+            diag_printf("Use 'audio-nau8822 input line' then 'audio-nau8822 gain "
+                      "<db>', or 'audio-nau8822 input mic boost' for a real "
                       "microphone.\n");
             return -1;
         }
