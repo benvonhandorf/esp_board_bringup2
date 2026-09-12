@@ -1,4 +1,5 @@
 #include "app_bringup.h"
+#include "display.h"
 #include "sd.h"
 #include "spi.h"
 
@@ -82,6 +83,10 @@ int cmd_spi_bus(int argc, char **argv)
      */
     if (sd_owns_spi_host()) {
         STRRES_ERROR(STR_SPI_SD_HOLDS_HOST);
+        return -1;
+    }
+    if (display_owns_spi_host(SPI_HOST_ID)) {
+        STRRES_ERROR(STR_SPI_DISPLAY_HOLDS_HOST);
         return -1;
     }
 

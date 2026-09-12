@@ -109,6 +109,7 @@
     "spi.help": "Bring a card up over SPI",
     "spi.usage": "<clk> <mosi> <miso> <cs> [cd <pin>] [khz <freq>]",
     "spi_host_busy": "The 'spi' group holds the SPI host. Release it with 'spi free' first.",
+    "spi_host_display": "The display holds the SPI host. Release it with 'display close' first.",
     "spi_init_failed": "Initializing the card over SPI at %d kHz: %s",
     "spi_up": "Card up over SPI at %.3f MHz\n",
     "start_sector_invalid": "Start sector must be a non-negative sector number",

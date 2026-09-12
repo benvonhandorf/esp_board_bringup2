@@ -161,17 +161,54 @@ nothing provoked them — a live bridge dithers and the timing held.
 For displays, run a test pattern over he displays showing different colors and drawing a grid over the display area.
 Provide tooling to help determine offsets and orientation settings.
 
+**Implemented:** see [docs/display.md](docs/display.md).
+
 ### ILI9488 IPS Display
+
+- Available on the Minstro board
+  - Resolution 320x480
+  - Display DC - 13
+  - Display SCL - 14
+  - Display SDA - 17
+  - Display RST - 18
+  - Display Backlight - 33
+  - Display CS - 21
+
+Not yet driven. The connector and pins are the same ones the ST7789 preset
+below uses; adding this panel is a new `panel_ili9488.c` (RGB666, 320x480
+controller RAM), a row in the registry, an `display-ili9488` group, and a
+Minstro ILI9488 preset — see "Adding a panel" in
+[docs/display.md](docs/display.md#adding-a-panel).
 
 ### ST7789
 
+- Available on the Minstro board
+  - Resolution 240x280
+  - Display DC - 13
+  - Display SCL - 14
+  - Display SDA - 17
+  - Display RST - 18
+  - Display Backlight - 33
+  - Display CS - 21
+
+Driven by `display-st7789`, with a `board-minstro display` preset. Pins above
+are from the schematic and not yet confirmed on hardware.
+
 ### ST7789V2 - M5Stack Cardputer
+
+Same controller as the ST7789 above, driven by the same `display-st7789`
+group, with a `board-cardputer display` preset. Not yet confirmed on
+hardware.
 
 ## Input Accessories
 
 ### FT6236 Touch controller
 
 Report when touch data is detected and X/Y coordinates of touches
+
+- Available on the Minstro board
+  - Touch Screen Controller INT - 15
+  - Touch Screen Controller RST - 16
 
 ### M5Stack Cardputer Keyboard Matrix
 

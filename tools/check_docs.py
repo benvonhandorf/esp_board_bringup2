@@ -25,6 +25,7 @@ PAGE = {
     "i2c-sht4x": "i2c", "i2c-nau7802": "i2c", "i2c-lm75bdp": "i2c",
     "i2c-rx8130ce": "i2c", "i2c-aw9523b": "i2c", "i2c-pi4ioe": "i2c",
     "uart": "uart", "spi": "spi", "sd": "sd",
+    "display": "display", "display-st7789": "display",
     "audio": "audio", "audio-nau8822": "audio", "audio-ns4168": "audio",
     "audio-sph0645": "audio",
     "touch": "touch", "loadcell": "loadcell",

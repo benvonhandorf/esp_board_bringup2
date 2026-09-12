@@ -46,6 +46,8 @@ main/
                             capture.c (input statistics, FFT, tone detection),
                             audio.c (the group + codec registry), codec_*.c
   board/board.c             named pinouts and per-subsystem setup presets
+  display/                  display.c (SPI transport, panel registry, test
+                            patterns), panel_st7789.c
   gpio/                     gpio.c (set/read/aread/blink/short/rc/survey), pwm.c
   i2c/                      i2c.c (bus/scan/read) plus the console half of each
                             part: ina219_cmd.c, ina226_cmd.c, ina237_cmd.c,
@@ -169,10 +171,15 @@ anything that exposes credentials or changes the device.
   access points while the manager's log names three. Use `wifi_manager_scan()`.
   The same reasoning covers the rest of the radio: ask the manager to change
   state, do not reach around it.
-- **One SPI host.** `BP_SPI_HOST_ID` (`SPI2_HOST`) is shared by the `spi` and
-  `sd` groups; on the C3 it is the only general-purpose host. Each refuses rather
-  than stealing it, via the mirrored `spi_group_owns_host()` and
-  `sd_owns_spi_host()`.
+- **One SPI host, except for the display.** `BP_SPI_HOST_ID` (`SPI2_HOST`) is
+  shared by the `spi` and `sd` groups; on the C3 it is the only general-purpose
+  host. Each refuses rather than stealing it, via the mirrored
+  `spi_group_owns_host()` and `sd_owns_spi_host()`. `display` uses
+  `BP_DISPLAY_SPI_HOST`, which is `SPI3_HOST` on chips that have a third host
+  (ESP32, S3) — so a display and an SD card can run together there. The C3 has
+  no SPI3, so `BP_DISPLAY_SPI_HOST` falls back to `SPI2_HOST` and `display`
+  joins the same three-way refusal via `display_owns_spi_host()`; on chips with
+  SPI3 that check never fires, which is intended.
 - **SD host peripheral is chip-dependent.** `sd mmc` is behind
   `SOC_SDMMC_HOST_SUPPORTED`; it exists on the S3 and not on the C3.
 - **SD bring-up is deliberately two-stage.** `sd spi` / `sd mmc` init the host and

@@ -14,6 +14,7 @@
  * card, and FAT is only mounted when `sd bench` actually needs a filesystem.
  */
 #include "app_bringup.h"
+#include "display.h"
 #include "sd.h"
 #include "spi.h"
 #include "sys_hw.h"
@@ -640,6 +641,10 @@ int cmd_sd_spi(int argc, char **argv)
 
     if (spi_group_owns_host()) {
         STRRES_ERROR(STR_SD_SPI_HOST_BUSY);
+        return -1;
+    }
+    if (display_owns_spi_host(BP_SPI_HOST_ID)) {
+        STRRES_ERROR(STR_SD_SPI_HOST_DISPLAY);
         return -1;
     }
 

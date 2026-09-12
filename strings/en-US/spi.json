@@ -10,6 +10,7 @@
     "cs_not_a_number": "CS must be a pin number",
     "cs_not_output_capable": "CS must be an output-capable GPIO",
     "device_add_failed": "Adding SPI device: %s",
+    "display_holds_host": "The display holds the SPI host. Release it with 'display close' first.",
     "free.help": "Release the SPI host so another module can use it",
     "free.usage": "",
     "group.help": "SPI master",

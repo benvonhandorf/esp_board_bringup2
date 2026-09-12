@@ -71,6 +71,13 @@ static const board_pin_t cardputer_pins[] = {
     {"Speaker SD/enable", -1, STR_BOARD_NOTE_NOT_BROKEN_OUT_THE},
     {"Mic PDM CLK", 43, STR_BOARD_NOTE_ALSO_THE_SPEAKER_WS},
     {"Mic PDM DATA", 46, STR_BOARD_NOTE_BOTH_SLOTS_CARRY_THE},
+
+    {"Display MOSI", 35, STR_BOARD_NOTE_FROM_THE_SCHEMATIC_NOT},
+    {"Display SCK", 36, STR_BOARD_NOTE_FROM_THE_SCHEMATIC_NOT},
+    {"Display CS", 37, STR_BOARD_NOTE_FROM_THE_SCHEMATIC_NOT},
+    {"Display DC", 34, STR_BOARD_NOTE_FROM_THE_SCHEMATIC_NOT},
+    {"Display RST", 33, STR_BOARD_NOTE_FROM_THE_SCHEMATIC_NOT},
+    {"Display BL", 38, STR_BOARD_NOTE_FROM_THE_SCHEMATIC_NOT},
 };
 
 static const board_t cardputer = {
@@ -140,6 +147,19 @@ static const board_pin_t minstro_pins[] = {
     {"I2S DIN", 10, STR_BOARD_NOTE_I2S_DIN},
     {"I2S BCLK", 11, STR_BOARD_NOTE_I2S_BCLK},
     {"I2S FS", 12, STR_BOARD_NOTE_I2S_FS},
+
+    /*
+     * Same connector and pins for either a 240x280 ST7789 or a 320x480
+     * ILI9488 -- which one is fitted is a board decision, not something these
+     * pins say. Only the ST7789 preset exists so far; see
+     * cmd_board_minstro_display() below.
+     */
+    {"Display DC", 13, STR_BOARD_NOTE_FROM_THE_SCHEMATIC_NOT},
+    {"Display SCL", 14, STR_BOARD_NOTE_FROM_THE_SCHEMATIC_NOT},
+    {"Display SDA", 17, STR_BOARD_NOTE_FROM_THE_SCHEMATIC_NOT},
+    {"Display RST", 18, STR_BOARD_NOTE_FROM_THE_SCHEMATIC_NOT},
+    {"Display BL", 33, STR_BOARD_NOTE_FROM_THE_SCHEMATIC_NOT},
+    {"Display CS", 21, STR_BOARD_NOTE_FROM_THE_SCHEMATIC_NOT},
 };
 
 static const board_t minstro = {
@@ -256,6 +276,23 @@ int cmd_board_minstro_sd(int argc, char **argv)
 
     static const char *const lines[] = {
         "sd mmc 40 41 39 38 44 43",
+    };
+    return apply(&minstro, lines, ARRAY_COUNT(lines));
+}
+
+int cmd_board_minstro_display(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+
+    /*
+     * The connector also carries a 320x480 ILI9488; this preset drives the
+     * ST7789 only. 240x280 centred in the controller's 240x320 RAM, so a
+     * 20 px gap on Y and none on X.
+     */
+    static const char *const lines[] = {
+        "display bus 14 17 21 13 rst 18 bl 33",
+        "display-st7789 init 240 280 gap 0 20",
     };
     return apply(&minstro, lines, ARRAY_COUNT(lines));
 }
@@ -424,6 +461,23 @@ int cmd_board_cardputer_sd(int argc, char **argv)
 
     static const char *const lines[] = {
         "sd spi 40 14 39 12",
+    };
+    return apply(&cardputer, lines, ARRAY_COUNT(lines));
+}
+
+int cmd_board_cardputer_display(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+
+    /*
+     * Portrait, the controller's native orientation: 135x240 centred in the
+     * 240x320 RAM. Landscape is `display orient 1 0 1` with the gap swapped
+     * (`display gap 40 53`), which `display edges` confirms either way.
+     */
+    static const char *const lines[] = {
+        "display bus 36 35 37 34 rst 33 bl 38",
+        "display-st7789 init 135 240 gap 52 40",
     };
     return apply(&cardputer, lines, ARRAY_COUNT(lines));
 }

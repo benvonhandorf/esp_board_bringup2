@@ -36,6 +36,7 @@
 #include "codec_sph0645.h"
 #include "config_reader.h"
 #include "diag.h"
+#include "display.h"
 #include "esp_app_desc.h"
 #include "esp_system.h"
 #include "gpio.h"
@@ -48,6 +49,7 @@
 #include "mqtt_manager.h"
 #include "nau7802_cmd.h"
 #include "ota.h"
+#include "panel_st7789.h"
 #include "pi4ioe5v6408_cmd.h"
 #include "pwm.h"
 #include "rx8130ce_cmd.h"
@@ -886,6 +888,76 @@ static const cli_group_t sd_group = {
 };
 
 /* ------------------------------------------------------------------ */
+/* display, display-<part>                                             */
+/*                                                                     */
+/* A capability group, not a bus group: it owns SPI and delegates the  */
+/* panel to a driver. Adding a part is a new panel_*.c, a row in the   */
+/* registry in display.c, and a group here.                           */
+/* ------------------------------------------------------------------ */
+
+static const cli_command_t display_commands[] = {
+    {"bus",       NULL, NULL, cmd_display_bus},
+    {"panels",    NULL, NULL, cmd_display_panels},
+    {"info",      NULL, NULL, cmd_display_info},
+    {"fill",      NULL, NULL, cmd_display_fill},
+    {"bars",      NULL, NULL, cmd_display_bars},
+    {"grid",      NULL, NULL, cmd_display_grid},
+    {"edges",     NULL, NULL, cmd_display_edges},
+    {"gap",       NULL, NULL, cmd_display_gap},
+    {"orient",    NULL, NULL, cmd_display_orient},
+    {"invert",    NULL, NULL, cmd_display_invert},
+    {"backlight", NULL, NULL, cmd_display_backlight},
+    {"close",     NULL, NULL, cmd_display_close},
+};
+
+/* Parallel to display_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t display_text[] = {
+    {STR_DISPLAY_BUS_USAGE,       STR_DISPLAY_BUS_HELP},
+    {STR_DISPLAY_PANELS_USAGE,    STR_DISPLAY_PANELS_HELP},
+    {STR_DISPLAY_INFO_USAGE,      STR_DISPLAY_INFO_HELP},
+    {STR_DISPLAY_FILL_USAGE,      STR_DISPLAY_FILL_HELP},
+    {STR_DISPLAY_BARS_USAGE,      STR_DISPLAY_BARS_HELP},
+    {STR_DISPLAY_GRID_USAGE,      STR_DISPLAY_GRID_HELP},
+    {STR_DISPLAY_EDGES_USAGE,     STR_DISPLAY_EDGES_HELP},
+    {STR_DISPLAY_GAP_USAGE,       STR_DISPLAY_GAP_HELP},
+    {STR_DISPLAY_ORIENT_USAGE,    STR_DISPLAY_ORIENT_HELP},
+    {STR_DISPLAY_INVERT_USAGE,    STR_DISPLAY_INVERT_HELP},
+    {STR_DISPLAY_BACKLIGHT_USAGE, STR_DISPLAY_BACKLIGHT_HELP},
+    {STR_DISPLAY_CLOSE_USAGE,     STR_DISPLAY_CLOSE_HELP},
+};
+_Static_assert(ARRAY_COUNT(display_text) == ARRAY_COUNT(display_commands),
+               "display help ids and commands must be the same length");
+
+static const cli_group_t display_group = {
+    .name = "display",
+    .commands = display_commands,
+    .command_count = ARRAY_COUNT(display_commands),
+    .command_text = display_text,
+    .help_id = STR_DISPLAY_GROUP_HELP,
+};
+
+static const cli_command_t st7789_commands[] = {
+    {"init", NULL, NULL, cmd_st7789_init},
+};
+
+/* Parallel to st7789_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t st7789_text[] = {
+    {STR_DISPLAY_ST7789_INIT_USAGE, STR_DISPLAY_ST7789_INIT_HELP},
+};
+_Static_assert(ARRAY_COUNT(st7789_text) == ARRAY_COUNT(st7789_commands),
+               "display-st7789 help ids and commands must be the same length");
+
+static const cli_group_t st7789_group = {
+    .name = "display-st7789",
+    .commands = st7789_commands,
+    .command_count = ARRAY_COUNT(st7789_commands),
+    .command_text = st7789_text,
+    .help_id = STR_DISPLAY_ST7789_GROUP_HELP,
+};
+
+/* ------------------------------------------------------------------ */
 /* touch                                                               */
 /* ------------------------------------------------------------------ */
 
@@ -938,19 +1010,21 @@ static const cli_group_t board_group = {
 };
 
 static const cli_command_t board_cardputer_commands[] = {
-    {"pins",  NULL, NULL, cmd_board_cardputer_pins},
-    {"audio", NULL, NULL, cmd_board_cardputer_audio},
-    {"mic",   NULL, NULL, cmd_board_cardputer_mic},
-    {"sd",    NULL, NULL, cmd_board_cardputer_sd},
+    {"pins",    NULL, NULL, cmd_board_cardputer_pins},
+    {"audio",   NULL, NULL, cmd_board_cardputer_audio},
+    {"mic",     NULL, NULL, cmd_board_cardputer_mic},
+    {"sd",      NULL, NULL, cmd_board_cardputer_sd},
+    {"display", NULL, NULL, cmd_board_cardputer_display},
 };
 
 /* Parallel to board_cardputer_commands[]. A row here and a row there must stay in step;
  * the count is checked below. */
 static const cli_command_text_t board_cardputer_text[] = {
-    {STR_BOARD_CARDPUTER_PINS_USAGE,   STR_BOARD_CARDPUTER_PINS_HELP},
-    {STR_BOARD_CARDPUTER_AUDIO_USAGE,  STR_BOARD_CARDPUTER_AUDIO_HELP},
-    {STR_BOARD_CARDPUTER_MIC_USAGE,    STR_BOARD_CARDPUTER_MIC_HELP},
-    {STR_BOARD_CARDPUTER_SD_USAGE,     STR_BOARD_CARDPUTER_SD_HELP},
+    {STR_BOARD_CARDPUTER_PINS_USAGE,    STR_BOARD_CARDPUTER_PINS_HELP},
+    {STR_BOARD_CARDPUTER_AUDIO_USAGE,   STR_BOARD_CARDPUTER_AUDIO_HELP},
+    {STR_BOARD_CARDPUTER_MIC_USAGE,     STR_BOARD_CARDPUTER_MIC_HELP},
+    {STR_BOARD_CARDPUTER_SD_USAGE,      STR_BOARD_CARDPUTER_SD_HELP},
+    {STR_BOARD_CARDPUTER_DISPLAY_USAGE, STR_BOARD_CARDPUTER_DISPLAY_HELP},
 };
 _Static_assert(ARRAY_COUNT(board_cardputer_text) == ARRAY_COUNT(board_cardputer_commands),
                "board-cardputer help ids and commands must be the same length");
@@ -1010,19 +1084,21 @@ static const cli_group_t board_sensor_group = {
 };
 
 static const cli_command_t board_minstro_commands[] = {
-    {"pins",  NULL, NULL, cmd_board_minstro_pins},
-    {"audio", NULL, NULL, cmd_board_minstro_audio},
-    {"i2c",   NULL, NULL, cmd_board_minstro_i2c},
-    {"sd",    NULL, NULL, cmd_board_minstro_sd},
+    {"pins",    NULL, NULL, cmd_board_minstro_pins},
+    {"audio",   NULL, NULL, cmd_board_minstro_audio},
+    {"i2c",     NULL, NULL, cmd_board_minstro_i2c},
+    {"sd",      NULL, NULL, cmd_board_minstro_sd},
+    {"display", NULL, NULL, cmd_board_minstro_display},
 };
 
 /* Parallel to board_minstro_commands[]. A row here and a row there must stay in step;
  * the count is checked below. */
 static const cli_command_text_t board_minstro_text[] = {
-    {STR_BOARD_MINSTRO_PINS_USAGE,   STR_BOARD_MINSTRO_PINS_HELP},
-    {STR_BOARD_MINSTRO_AUDIO_USAGE,  STR_BOARD_MINSTRO_AUDIO_HELP},
-    {STR_BOARD_MINSTRO_I2C_USAGE,    STR_BOARD_MINSTRO_I2C_HELP},
-    {STR_BOARD_MINSTRO_SD_USAGE,     STR_BOARD_MINSTRO_SD_HELP},
+    {STR_BOARD_MINSTRO_PINS_USAGE,    STR_BOARD_MINSTRO_PINS_HELP},
+    {STR_BOARD_MINSTRO_AUDIO_USAGE,   STR_BOARD_MINSTRO_AUDIO_HELP},
+    {STR_BOARD_MINSTRO_I2C_USAGE,     STR_BOARD_MINSTRO_I2C_HELP},
+    {STR_BOARD_MINSTRO_SD_USAGE,      STR_BOARD_MINSTRO_SD_HELP},
+    {STR_BOARD_MINSTRO_DISPLAY_USAGE, STR_BOARD_MINSTRO_DISPLAY_HELP},
 };
 _Static_assert(ARRAY_COUNT(board_minstro_text) == ARRAY_COUNT(board_minstro_commands),
                "board-minstro help ids and commands must be the same length");
@@ -1089,6 +1165,8 @@ static const cli_group_t *const groups[] = {
     &uart_group,
     &spi_group,
     &sd_group,
+    &display_group,
+    &st7789_group,
     &touch_group,
     &board_group,
     &board_cardputer_group,

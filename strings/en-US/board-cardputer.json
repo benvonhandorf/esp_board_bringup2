@@ -3,6 +3,8 @@
   "strings": {
     "audio.help": "Set up I2S and the NS4168 speaker amplifier",
     "audio.usage": "",
+    "display.help": "Open the ST7789V2 display over SPI and draw edges",
+    "display.usage": "",
     "group.help": "M5Stack Cardputer (esp32s3)",
     "mic.help": "Open the SPM1423 PDM microphone (releases the speaker)",
     "mic.usage": "",

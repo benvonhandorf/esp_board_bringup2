@@ -17,6 +17,7 @@ conventions that apply everywhere (how commands are addressed, case folding,
 | [spi](spi.md) | SPI master | |
 | [sd](sd.md) | SD/MMC cards over SPI, 1-bit or 4-bit SD, with speed testing | |
 | [audio](audio.md) | Audio over I2S: tone, sweep, microphone capture and loopback | `audio-nau8822`, `audio-ns4168`, `audio-sph0645` |
+| [display](display.md) | SPI displays: test patterns and an orientation/offset tool | `display-st7789` |
 | [touch](touch.md) | Capacitive touch pads: calibrate a set and watch them live | |
 | [loadcell](loadcell.md) | HX711 24-bit load cell ADC, bit-banged on two pins (no bus) | |
 | [board](board.md) | Known board pinouts and per-subsystem setup presets | `board-<name>` |

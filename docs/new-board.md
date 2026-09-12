@@ -350,6 +350,28 @@ quietly steal the pad from the first. Check your own pinout for the same trap
 before blaming a part. And note `audio pdm` is unavailable on the ESP32-C3,
 which can clock a PDM microphone but has no filter to decode it.
 
+### Displays
+
+1. **[`display bus <clk> <mosi> <cs> <dc> ...`](display.md#bus-clk-mosi-cs-dc-rst-pin-bl-pin-miso-pin-khz-n)**
+   then **[`display-st7789 init <width> <height>`](display.md#init-width-height-gap-x-y-bgr-invert-onoff)**
+   — a successful init draws [`edges`](display.md#edges) immediately, so a
+   blank screen at this point is the bus or the panel, not yet the pattern.
+2. **[`display bars`](display.md#bars)** for colour order: red and blue
+   swapped means add `bgr` to `init`; white and black ends swapped means
+   `invert off` (or `on`, if the board needed the other default).
+3. **[`display edges`](display.md#edges)** for orientation and offset — the
+   tool this firmware has for exactly that question. A missing coloured side
+   means [`display gap`](display.md#gap-x-y) is off on that axis; noise on one
+   side means the gap is too large. Work out the four rotations with
+   [`display orient`](display.md#orient-swap_xy-mirror_x-mirror_y).
+4. **[`display grid`](display.md#grid-step)** to confirm the whole area scans
+   correctly once the above look right — dead rows or columns and edge
+   clipping show up here that a border alone would not.
+
+If the picture is noisy rather than simply wrong, lower `khz` on
+[`display bus`](display.md#bus-clk-mosi-cs-dc-rst-pin-bl-pin-miso-pin-khz-n)
+before suspecting the panel.
+
 ### SPI, UART, and the radio
 
 - **[`spi bus <clk> <mosi> <miso> [cs]`](spi.md#bus-clk-mosi-miso-cs)** then
@@ -429,6 +451,9 @@ which can clock a PDM microphone but has no filter to decode it.
 | Amplifier silent on one channel | [`audio tone 1000 3 left`](audio.md#tone-hz-secondscontinuous-level-pct-leftrightboth), then `right` |
 | Codec configures but is silent | No MCLK, or the input path was never selected |
 | Board resets under load | [`wifi iperf`](wifi.md#iperf-serverport) and a scope on the rail |
+| Display stays blank | [`display bus`](display.md#bus-clk-mosi-cs-dc-rst-pin-bl-pin-miso-pin-khz-n) then `init` — `edges` draws on a successful init, so blank after that means backlight or the `bl` pin |
+| Display colours swapped | [`display bars`](display.md#bars) — red/blue swapped needs `bgr`, black/white ends swapped needs `invert` |
+| Display image shifted or noise band | [`display edges`](display.md#edges) then [`gap`](display.md#gap-x-y); noise band specifically means lower `khz` on `display bus` |
 
 ## Two habits worth keeping
 

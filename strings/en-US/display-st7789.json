@@ -1,0 +1,16 @@
+{
+  "section": "display-st7789",
+  "strings": {
+    "attach_failed": "Attaching ST7789: %s",
+    "attached": "ST7789 attached, %dx%d\n",
+    "dimensions_invalid": "Width and height must be positive numbers",
+    "gap_needs_two": "'gap' needs an x and a y value",
+    "group.help": "ST7789 SPI TFT panel (also the ST7789V2)",
+    "init.help": "Attach an ST7789 panel and draw edges",
+    "init.usage": "<width> <height> [gap <x> <y>] [bgr] [invert on|off]",
+    "invert_invalid": "Invert must be 'on' or 'off', not '%s'",
+    "invert_needs_value": "'invert' needs a value",
+    "unexpected_argument": "Unexpected argument '%s'",
+    "usage_init": "Usage: init <width> <height> [gap <x> <y>] [bgr] [invert on|off]\n"
+  }
+}

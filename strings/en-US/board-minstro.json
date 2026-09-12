@@ -3,6 +3,8 @@
   "strings": {
     "audio.help": "Initialize I2S with the NAU8822 codec",
     "audio.usage": "",
+    "display.help": "Open the ST7789 display over SPI and draw edges",
+    "display.usage": "",
     "group.help": "Minstro ESP32-S3 board (esp32s3)",
     "i2c.help": "Initialize the I2C bus",
     "i2c.usage": "",

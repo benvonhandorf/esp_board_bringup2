@@ -47,7 +47,7 @@ predecessor did not work.
 
 ### board-cardputer
 
-M5Stack Cardputer, ESP32-S3. `pins`, `audio`, `mic`, `sd`.
+M5Stack Cardputer, ESP32-S3. `pins`, `audio`, `mic`, `sd`, `display`.
 
 **The Cardputer cannot record its own speaker.** GPIO 43 carries the speaker's
 word-select *and* the microphone's clock, so only one of the two can have the pad
@@ -73,8 +73,13 @@ board needs before its parts answer.
 
 ### board-minstro
 
-Minstro ESP32-S3 board — I2C, NAU8822 codec, 4-bit SD. `pins`, `audio`, `i2c`,
-`sd`.
+Minstro ESP32-S3 board — I2C, NAU8822 codec, 4-bit SD, ST7789 or ILI9488
+display. `pins`, `audio`, `i2c`, `sd`, `display`.
+
+**The display connector takes either a 240×280 ST7789 or a 320×480 ILI9488**,
+on the same pins. Only the ST7789 preset exists so far; `board-minstro display`
+drives that one. Fit the ILI9488 instead and it needs its own preset once that
+driver exists — see [display.md](display.md#adding-a-panel).
 
 ### board-core-basic
 
