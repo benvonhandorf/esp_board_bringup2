@@ -155,7 +155,7 @@ PDM-to-PCM filter, so what arrives is the raw one-bit stream; every statistic
 below would be measuring the modulator rather than the sound, and would look
 like plausible numbers while meaning nothing.
 
-## `pdmultra <clk> <data> [maxhz <hz>] [fast]`
+## `pdmultra <clk> <data> [maxhz <hz>] [sinc6]`
 
 Opens an ultrasonic-capable PDM microphone (written for the Knowles
 SPH0641LU4H-1) and decimates it in software. The chip's hardware filter divides
@@ -166,14 +166,16 @@ The part must not start in ultrasonic mode, so the command clocks it at
 2.048 MHz first, waits 100 ms, then raises the clock to 4.8 MHz on the same
 open channel (the pins are never released).
 
-`fast` selects the two-stage decimator in place of the sinc^6 x16 one (a
-different filter, always 300 kHz, `maxhz` then only limits the spectrum); see
-[`pdmbench`](#pdmbench-frames) for what it costs and how it compares.
+The default decimator is the two-stage one (sinc^4 over bytes, then a 24-tap
+FIR on the S3's PIE unit): always 4.8 MHz to 300 kHz, about 17% of a core.
+`sinc6` selects the original sixth-order sinc instead, about 33%, whose ratio
+follows `maxhz` (so `maxhz 40000` gives 150 kHz PCM and a lower load). The two
+are different filters; see [`pdmbench`](#pdmbench-frames-channels) for the numbers.
 
 `maxhz` is the highest frequency you care about, 80000 by default (the part's
-specified limit). It picks the decimation ratio — the largest whose Nyquist is
-at least 1.5 x `maxhz`, so 80 kHz gives 300 kHz PCM — and limits the spectrum
-that [`record`](#record-seconds) reports, so bands above it are not shown. It
+specified limit). With `sinc6` it picks the decimation ratio — the largest whose
+Nyquist is at least 1.5 x `maxhz`, so 80 kHz gives 300 kHz PCM — and in either
+mode it limits the spectrum that [`record`](#record-seconds) reports, so bands above it are not shown. It
 may not exceed 100000.
 
 **It needs the CPU at 240 MHz.** At 300 kHz the receiver delivers 1.2 MB/s
@@ -206,10 +208,13 @@ it yet (`record`, `level`, `loopback` and `capture` refuse it); use
 bit clock is 32 times `rate`, and `rate` is accepted up to 640 kHz (20 MHz),
 well past what `pdm`'s filter can take.
 
-## `pdmbench [frames]`
+## `pdmbench [frames [channels]]`
 
 Times the software decimators and the capture statistics against each other
-and cross-checks them, with no microphone. It modulates two tones (10 and
+and cross-checks them, with no microphone. `channels` (2, 4, 6 or 8, default 2)
+models that many microphones on a shared clock, so the cost of a larger array
+can be measured before it is wired; the statistics are stereo and are run once
+per channel pair and summed. It modulates two tones (10 and
 50 kHz) into a synthetic 4.8 MHz PDM stream, then reports cycles per output
 frame for the sinc^6 x16 decimator, the two-stage filter in plain C, and the
 same filter on the S3's PIE vector unit; then cycles per frame for the capture

@@ -124,6 +124,27 @@ double-precision software floating point. The two-stage filter is worth about
 15 points of one core. Stage 1 is still table lookups, so SIMD cannot help
 there; that is what bounds the decimator at about 160 cycles per frame.
 
+## Channel scaling (`audio pdmbench 1024 <channels>`, 240 MHz, 300 kHz PCM)
+
+Decimator cycles per frame, and share of one core at 300 kHz in the bench
+(the bench's cold-cache figures run about 15% above the on-device ones):
+
+| channels | sinc6 x16 | two-stage PIE | statistics PIE | PIE output matches plain C |
+|----------|-----------|---------------|----------------|----------------------------|
+| 2 | 302 (37.7%) | 160 (20.0%) | 14 (1.7%) | yes |
+| 4 | 534 (66.7%) | 319 (39.8%) | 23 (2.9%) | yes |
+| 6 | 766 (95.7%) | 477 (59.6%) | 34 (4.2%) | yes |
+| 8 | 998 (124.7%) | 635 (79.4%) | 44 (5.5%) | yes |
+
+The two-stage decimator is linear in channels (about 80 cycles per channel);
+sinc^6 has a fixed part and costs about 116 per channel. Adding the measured
+2-channel overhead of the capture task (I2S read copy and bookkeeping, about
+15 points, assumed to scale with bandwidth), a single capture task would be
+about 34% (2 ch), 68% (4 ch), 100% (6 ch) and 135% (8 ch) of one core at
+240 MHz with the default filter. Six or more channels need the work split
+across both cores. Whether the I2S driver delivers more than two raw slots
+correctly is unverified.
+
 ## Corrections
 
 - The first ultrasonic results (-50 dBFS RMS, floor rising ~1.3 dB per

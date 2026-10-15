@@ -1027,10 +1027,10 @@ int cmd_audio_pdm_ultra(int argc, char **argv)
     }
 
     int max_hz = 80000;
-    bool fast = false;
+    bool fast = true;
     for (int index = 3; index < argc;) {
-        if (strcasecmp(argv[index], "fast") == 0) {
-            fast = true;
+        if (strcasecmp(argv[index], "sinc6") == 0) {
+            fast = false;
             index++;
             continue;
         }

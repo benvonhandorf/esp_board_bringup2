@@ -41,14 +41,16 @@ static void modulate(uint16_t *raw, size_t frames, int channels)
     }
 }
 
-/* Amplitude (dBFS, full-scale sine = 0) of one tone in a slot of a stereo buffer. */
-static double tone_dbfs(const int16_t *pcm, size_t frames, int slot, double hz, double fs)
+/* Amplitude (dBFS, full-scale sine = 0) of one tone in one channel of an
+ * interleaved buffer. */
+static double tone_dbfs(const int16_t *pcm, size_t frames, int channels, int slot,
+                        double hz, double fs)
 {
     double re = 0.0, im = 0.0;
     size_t n = 0;
     for (size_t i = SKIP; i < frames; i++, n++) {
         double a = 2.0 * M_PI * hz * (double)i / fs;
-        double v = pcm[2 * i + slot];
+        double v = pcm[(size_t)channels * i + (size_t)slot];
         re += v * cos(a);
         im += v * sin(a);
     }
@@ -61,59 +63,85 @@ static uint32_t cycles_now(void)
     return esp_cpu_get_cycle_count();
 }
 
+#define BENCH_CPU_MHZ CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ
+#define PCM_RATE_HZ   300000.0
+
+/* Cycles per frame as a share of one core at the 300 kHz output rate. */
+static double core_pct(double cycles_per_frame)
+{
+    return 100.0 * cycles_per_frame * PCM_RATE_HZ / (BENCH_CPU_MHZ * 1e6);
+}
+
 int cmd_audio_pdm_bench(int argc, char **argv)
 {
-    int frames = 2048;
-    if (argc >= 2 && (cli_parse_int_arg(argv[1], &frames) < 0 || frames < 512 || frames > 8192)) {
+    int frames = 1024;
+    int channels = 2;
+    if (argc >= 2 && (cli_parse_int_arg(argv[1], &frames) < 0 || frames < 256 || frames > 4096)) {
         STRRES_ERROR(STR_AUDIO_BENCH_RANGE);
         return -1;
     }
-    const size_t n = (size_t)frames;
-    uint16_t *raw = heap_caps_malloc(n * 4, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    int16_t *o1 = heap_caps_aligned_alloc(16, n * 4 + 64, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    int16_t *o2s = heap_caps_aligned_alloc(16, n * 4 + 64, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    int16_t *o2p = heap_caps_aligned_alloc(16, n * 4 + 64, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    pdm_dec_t *d1 = pdm_dec_new(2, 16, false);
-    pdm_dec2_t *d2s = pdm_dec2_new(2, false);
-    pdm_dec2_t *d2p = pdm_dec2_new(2, true);
-    if (!raw || !o1 || !o2s || !o2p || !d1 || !d2s || !d2p) {
-        STRRES_ERROR(STR_AUDIO_BENCH_NO_MEMORY);
-        free(raw); free(o1); free(o2s); free(o2p);
-        pdm_dec_free(d1); pdm_dec2_free(d2s); pdm_dec2_free(d2p);
+    if (argc >= 3 && (cli_parse_int_arg(argv[2], &channels) < 0 || channels < 2 ||
+                      channels > 8 || (channels & 1))) {
+        STRRES_ERROR(STR_AUDIO_BENCH_CHANNELS);
         return -1;
     }
+    const size_t n = (size_t)frames;
+    const size_t fbytes = (size_t)channels * 2;
+    int rc = -1;
+    uint16_t *raw = heap_caps_malloc(n * fbytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    int16_t *o1 = heap_caps_aligned_alloc(16, n * fbytes + 64, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    int16_t *o2s = heap_caps_aligned_alloc(16, n * fbytes + 64, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    int16_t *o2p = heap_caps_aligned_alloc(16, n * fbytes + 64, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    int16_t *pair = heap_caps_aligned_alloc(16, n * 4 + 64, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    pdm_dec_t *d1 = pdm_dec_new(channels, 16, false);
+    pdm_dec2_t *d2 = NULL;
+    size_t p1 = 0, p2s = 0, p2p = 0;
+    uint32_t c1 = 0, c2s = 0, c2p = 0;
+    if (!raw || !o1 || !o2s || !o2p || !pair || !d1) {
+        STRRES_ERROR(STR_AUDIO_BENCH_NO_MEMORY);
+        goto done;
+    }
 
-    modulate(raw, n, 2);
-
-    /* One warm-up pass so the first timed one does not pay for allocation. */
-    pdm_dec2_process(d2s, raw, 8, o2s);
-    pdm_dec2_process(d2p, raw, 8, o2p);
-    pdm_dec2_free(d2s);
-    pdm_dec2_free(d2p);
-    d2s = pdm_dec2_new(2, false);
-    d2p = pdm_dec2_new(2, true);
+    modulate(raw, n, channels);
 
     uint32_t t = cycles_now();
-    size_t p1 = pdm_dec_process(d1, raw, n, o1);
-    uint32_t c1 = cycles_now() - t;
-    t = cycles_now();
-    size_t p2s = pdm_dec2_process(d2s, raw, n, o2s);
-    uint32_t c2s = cycles_now() - t;
-    t = cycles_now();
-    size_t p2p = pdm_dec2_process(d2p, raw, n, o2p);
-    uint32_t c2p = cycles_now() - t;
+    p1 = pdm_dec_process(d1, raw, n, o1);
+    c1 = cycles_now() - t;
+
+    /* One decimator instance at a time: each holds a per-channel work buffer
+     * of its own, and eight channels of it do not fit twice beside the rest. */
+    for (int pass = 0; pass < 2; pass++) {
+        d2 = pdm_dec2_new(channels, pass == 1);
+        if (!d2) {
+            STRRES_ERROR(STR_AUDIO_BENCH_NO_MEMORY);
+            goto done;
+        }
+        pdm_dec2_process(d2, raw, 8, pass ? o2p : o2s);   /* allocate the buffer */
+        pdm_dec2_free(d2);
+        d2 = pdm_dec2_new(channels, pass == 1);
+        if (!d2) {
+            STRRES_ERROR(STR_AUDIO_BENCH_NO_MEMORY);
+            goto done;
+        }
+        t = cycles_now();
+        size_t p = pdm_dec2_process(d2, raw, n, pass ? o2p : o2s);
+        uint32_t c = cycles_now() - t;
+        pdm_dec2_free(d2);
+        d2 = NULL;
+        if (pass) { p2p = p; c2p = c; } else { p2s = p; c2s = c; }
+    }
 
     if (p1 == 0 || p2s == 0 || p2p == 0) {
         STRRES_ERROR(STR_AUDIO_BENCH_NO_MEMORY);
-        free(raw); free(o1); free(o2s); free(o2p);
-        pdm_dec_free(d1); pdm_dec2_free(d2s); pdm_dec2_free(d2p);
-        return -1;
+        goto done;
     }
-    STRRES_PRINTF(STR_AUDIO_BENCH_DECIMATORS, frames, (double)c1 / (double)n,
-                  (double)c2s / (double)n, (double)c2p / (double)n);
+    double f1 = (double)c1 / (double)n, fs_ = (double)c2s / (double)n;
+    double fp = (double)c2p / (double)n;
+    STRRES_PRINTF(STR_AUDIO_BENCH_DECIMATORS, channels, frames, f1, core_pct(f1), fs_, fp,
+                  core_pct(fp));
 
     int maxdiff = 0;
-    for (size_t i = 0; i < 2 * p2s && i < 2 * p2p; i++) {
+    for (size_t i = 0; i < (size_t)channels * p2s && i < (size_t)channels * p2p; i++) {
         int dd = abs((int)o2s[i] - (int)o2p[i]);
         if (dd > maxdiff) maxdiff = dd;
     }
@@ -123,44 +151,54 @@ int cmd_audio_pdm_bench(int argc, char **argv)
         STRRES_PRINTF(STR_AUDIO_BENCH_PIE_MISMATCH, maxdiff);
     }
 
-    for (int slot = 0; slot < 2; slot++) {
+    for (int slot = 0; slot < channels; slot++) {
         STRRES_PRINTF(STR_AUDIO_BENCH_TONES, slot,
-                      tone_dbfs(o1, p1, slot, TONE1_HZ, 300000.0),
-                      tone_dbfs(o2p, p2p, slot, TONE1_HZ, 300000.0),
-                      tone_dbfs(o1, p1, slot, TONE2_HZ, 300000.0),
-                      tone_dbfs(o2p, p2p, slot, TONE2_HZ, 300000.0));
+                      tone_dbfs(o1, p1, channels, slot, TONE1_HZ, PCM_RATE_HZ),
+                      tone_dbfs(o2p, p2p, channels, slot, TONE1_HZ, PCM_RATE_HZ),
+                      tone_dbfs(o1, p1, channels, slot, TONE2_HZ, PCM_RATE_HZ),
+                      tone_dbfs(o2p, p2p, channels, slot, TONE2_HZ, PCM_RATE_HZ));
     }
 
-    /* Statistics, on the sinc^6 output. */
+    /* Statistics are stereo; run one pass per channel pair and add them up. */
     audio_stats16_t sr, si, sp;
-    audio_stats16_init(&sr);
-    audio_stats16_init(&si);
-    audio_stats16_init(&sp);
-    t = cycles_now();
-    audio_stats16_ref(&sr, o1, p1, 32767);
-    uint32_t cr = cycles_now() - t;
-    t = cycles_now();
-    audio_stats16_i64(&si, o1, p1, 32767);
-    uint32_t ci = cycles_now() - t;
-    t = cycles_now();
-    audio_stats16_pie(&sp, o1, p1, 32767);
-    uint32_t cp = cycles_now() - t;
-    STRRES_PRINTF(STR_AUDIO_BENCH_STATS, (int)p1, (double)cr / (double)p1,
-                  (double)ci / (double)p1, (double)cp / (double)p1);
-
+    uint32_t cr = 0, ci = 0, cp = 0;
     bool same = true;
-    for (int c = 0; c < 2; c++) {
-        same = same && sr.min[c] == sp.min[c] && sr.max[c] == sp.max[c] &&
-               sr.sum[c] == sp.sum[c] && si.sumsq[c] == sp.sumsq[c] &&
-               (double)si.sumsq[c] == sr.sumsq_f[c] && sr.clipped[c] == sp.clipped[c];
+    for (int pr = 0; pr < channels / 2; pr++) {
+        for (size_t i = 0; i < p1; i++) {
+            pair[2 * i] = o1[(size_t)channels * i + (size_t)(2 * pr)];
+            pair[2 * i + 1] = o1[(size_t)channels * i + (size_t)(2 * pr) + 1];
+        }
+        audio_stats16_init(&sr);
+        audio_stats16_init(&si);
+        audio_stats16_init(&sp);
+        t = cycles_now();
+        audio_stats16_ref(&sr, pair, p1, 32767);
+        cr += cycles_now() - t;
+        t = cycles_now();
+        audio_stats16_i64(&si, pair, p1, 32767);
+        ci += cycles_now() - t;
+        t = cycles_now();
+        audio_stats16_pie(&sp, pair, p1, 32767);
+        cp += cycles_now() - t;
+        for (int c = 0; c < 2; c++) {
+            same = same && sr.min[c] == sp.min[c] && sr.max[c] == sp.max[c] &&
+                   sr.sum[c] == sp.sum[c] && si.sumsq[c] == sp.sumsq[c] &&
+                   (double)si.sumsq[c] == sr.sumsq_f[c] && sr.clipped[c] == sp.clipped[c];
+        }
     }
+    double sfr = (double)cr / (double)p1, sfi = (double)ci / (double)p1;
+    double sfp = (double)cp / (double)p1;
+    STRRES_PRINTF(STR_AUDIO_BENCH_STATS, channels, (int)p1, sfr, sfi, sfp, core_pct(sfp));
     if (same) {
         STRRES_PRINTF(STR_AUDIO_BENCH_STATS_MATCH);
     } else {
         STRRES_PRINTF(STR_AUDIO_BENCH_STATS_MISMATCH);
     }
+    rc = same && maxdiff == 0 ? 0 : -1;
 
-    free(raw); free(o1); free(o2s); free(o2p);
-    pdm_dec_free(d1); pdm_dec2_free(d2s); pdm_dec2_free(d2p);
-    return same && maxdiff == 0 ? 0 : -1;
+done:
+    free(raw); free(o1); free(o2s); free(o2p); free(pair);
+    pdm_dec_free(d1);
+    pdm_dec2_free(d2);
+    return rc;
 }
