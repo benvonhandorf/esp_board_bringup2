@@ -17,6 +17,7 @@
  */
 #include "app_bringup.h"
 #include "audio.h"
+#include "esp_cpu.h"
 
 #include "sdkconfig.h"
 #include "soc/soc_caps.h"
@@ -58,6 +59,8 @@ static int pdm_raw_line_count;
 static pdm_dec_t *ultra_dec;
 static uint32_t ultra_max_hz;
 static uint32_t ultra_rate;
+static uint64_t ultra_cycles;
+static uint64_t ultra_frames;
 static uint16_t *ultra_scratch;
 static size_t ultra_scratch_bytes;
 
@@ -613,6 +616,16 @@ uint32_t audio_bus_rx_band_limit_hz(void)
     return ultra_dec ? ultra_max_hz : 0;
 }
 
+bool audio_bus_pdm_ultra_load(uint64_t *cycles, uint64_t *frames)
+{
+    if (!ultra_dec) {
+        return false;
+    }
+    if (cycles) *cycles = ultra_cycles;
+    if (frames) *frames = ultra_frames;
+    return true;
+}
+
 esp_err_t audio_bus_open_pdm_ultra(int clk, int din, uint32_t max_hz)
 {
     if (max_hz == 0 || max_hz > AUDIO_ULTRA_MAX_HZ) {
@@ -664,6 +677,8 @@ esp_err_t audio_bus_open_pdm_ultra(int clk, int din, uint32_t max_hz)
         return ESP_ERR_NO_MEM;
     }
     ultra_max_hz = max_hz;
+    ultra_cycles = 0;
+    ultra_frames = 0;
     ultra_rate = AUDIO_ULTRA_CLK_HZ / (uint32_t)r;
     format.rate_hz = ultra_rate;
 
@@ -690,6 +705,7 @@ esp_err_t audio_bus_open_pdm_ultra(int clk, int din, uint32_t max_hz)
 }
 
 uint32_t audio_bus_rx_band_limit_hz(void) { return 0; }
+bool audio_bus_pdm_ultra_load(uint64_t *c, uint64_t *f) { (void)c; (void)f; return false; }
 
 #endif /* SOC_I2S_SUPPORTS_PDM_RX */
 
@@ -775,7 +791,10 @@ esp_err_t audio_bus_read(void *data, size_t bytes, size_t *read,
         }
         size_t got = 0;
         esp_err_t err = i2s_channel_read(rx_chan, ultra_scratch, raw_bytes, &got, timeout_ms);
+        uint32_t t0 = esp_cpu_get_cycle_count();
         size_t produced = pdm_dec_process(ultra_dec, ultra_scratch, got / 4, data);
+        ultra_cycles += (uint32_t)(esp_cpu_get_cycle_count() - t0);
+        ultra_frames += produced;
         if (read) {
             *read = produced * 4;
         }
@@ -847,6 +866,7 @@ bool audio_bus_rx_internal(void) { return false; }
 uint32_t audio_bus_rx_rate(void) { return 0; }
 uint32_t audio_bus_pdm_clk_hz(void) { return 0; }
 uint32_t audio_bus_rx_band_limit_hz(void) { return 0; }
+bool audio_bus_pdm_ultra_load(uint64_t *c, uint64_t *f) { (void)c; (void)f; return false; }
 void audio_bus_rx_close(void) {}
 
 bool audio_bus_rx_require(void)

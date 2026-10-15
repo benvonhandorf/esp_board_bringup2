@@ -129,6 +129,8 @@
     "pdmultra_open_failed": "Opening the ultrasonic PDM microphone: %s",
     "pdmultra_unexpected_argument": "Unexpected argument '%s'; the only option is 'maxhz <hz>'",
     "usage_pdmultra": "Usage: pdmultra <clk> <data> [maxhz <hz>]\n",
+    "ultra_load": "Decimator: %.0f cycles per frame, %.1f%% of one core at %lu MHz\n",
+    "ultra_task_load": "Capture task: %.1f%% of one core (decimator, statistics, I2S read)\n",
     "pdmbits.help": "Bit statistics of the raw PDM stream (is the mic alive?)",
     "pdmbits.usage": "[seconds | dump [frames]]",
     "pdmbits_dump_range": "dump takes 1 to %d frames",

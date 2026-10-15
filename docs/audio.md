@@ -185,6 +185,10 @@ clock faster than about 5 MHz (the driver needs 16 times the bit clock below
 80 MHz); the hardware-filtered `pdm` path reaches 6.66 MHz but only divides by
 64, which is why `pdmultra` exists.
 
+`record` prints the decimator's cost under the capture table: cycles per
+output frame and that as a share of one core. With FreeRTOS run-time stats
+enabled it adds the capture task's whole share (statistics and I2S read too).
+
 Everything that takes decimated PCM (`record`, `level`) works on it. The sinc
 filter droops, about 6 dB by 80 kHz at 300 kHz, so read the spectrum for shape
 and for differences between microphones rather than absolute level.

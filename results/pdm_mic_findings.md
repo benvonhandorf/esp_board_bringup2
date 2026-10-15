@@ -78,6 +78,19 @@ Noise floor, median 5-80 kHz (dBFS/Hz, slot 0 / slot 1):
   band: perhaps 8 dB above spec, but both rooms add acoustic noise there, so
   this is an upper bound, not a mic failure.
 
+## CPU cost of `audio pdmultra` (measured, 240 MHz, one core)
+
+| maxhz | PCM rate | decimator | whole capture task | PCM bandwidth |
+|-------|----------|-----------|--------------------|---------------|
+| 80 kHz | 300 kHz | 300 cycles/frame, 32.5% | 96% | 1.2 MB/s |
+| 40 kHz | 150 kHz | 530 cycles/frame, 28.7% | 68% | 0.6 MB/s |
+| 20 kHz | 75 kHz  | 994 cycles/frame, 26.9% | 54% | 0.3 MB/s |
+
+Raw input is 1.2 MB/s (9.6 Mbit/s) in every case. The decimator costs roughly
+250-300 cycles per raw stereo frame; the rest of the capture task is the
+per-sample statistics and the read copy. At 80 kHz the task is at 96% of one
+core, so there is almost no headroom: the earlier estimate of 25-30% was low.
+
 ## Corrections
 
 - The first ultrasonic results (-50 dBFS RMS, floor rising ~1.3 dB per

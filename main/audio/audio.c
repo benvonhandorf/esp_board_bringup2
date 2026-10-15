@@ -1223,8 +1223,36 @@ int cmd_audio_record(int argc, char **argv)
         .spectrum = true,
     };
     audio_capture_t cap;
+    uint64_t load_cycles0 = 0, load_frames0 = 0;
+    audio_bus_pdm_ultra_load(&load_cycles0, &load_frames0);
+    int64_t wall0 = esp_timer_get_time();
+#if CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS && CONFIG_FREERTOS_USE_TRACE_FACILITY
+    TaskStatus_t task0;
+    vTaskGetInfo(NULL, &task0, pdFALSE, eRunning);
+    uint32_t rt0 = portGET_RUN_TIME_COUNTER_VALUE();
+#endif
     audio_capture_run(&req, &cap);
+    int64_t wall_us = esp_timer_get_time() - wall0;
     audio_capture_report(&cap);
+    uint64_t load_cycles = 0, load_frames = 0;
+    if (audio_bus_pdm_ultra_load(&load_cycles, &load_frames) && load_frames > load_frames0) {
+        uint64_t dc = load_cycles - load_cycles0;
+        uint64_t df = load_frames - load_frames0;
+        double cpu_hz = (double)CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ * 1e6;
+        STRRES_PRINTF(STR_AUDIO_ULTRA_LOAD, (double)dc / (double)df,
+                      100.0 * ((double)dc / cpu_hz) / (wall_us / 1e6),
+                      (unsigned long)CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ);
+#if CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS && CONFIG_FREERTOS_USE_TRACE_FACILITY
+        TaskStatus_t task1;
+        vTaskGetInfo(NULL, &task1, pdFALSE, eRunning);
+        uint32_t rt1 = portGET_RUN_TIME_COUNTER_VALUE();
+        if (rt1 != rt0) {
+            STRRES_PRINTF(STR_AUDIO_ULTRA_TASK_LOAD,
+                          100.0 * (double)(task1.ulRunTimeCounter - task0.ulRunTimeCounter) /
+                              (double)(rt1 - rt0));
+        }
+#endif
+    }
     audio_capture_spectrum(&cap);
 
     return cap.error == ESP_OK ? 0 : -1;

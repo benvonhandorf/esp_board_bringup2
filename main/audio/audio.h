@@ -280,6 +280,9 @@ int pdm_dec_r_words(const pdm_dec_t *d);
 #define AUDIO_ULTRA_MAX_HZ   100000
 esp_err_t audio_bus_open_pdm_ultra(int clk, int din, uint32_t max_hz);
 uint32_t audio_bus_rx_band_limit_hz(void);   /* 0 when no limit applies */
+/* CPU cycles spent in the software decimator and frames it produced since the
+ * ultrasonic receiver was opened. False when none is open. */
+bool audio_bus_pdm_ultra_load(uint64_t *cycles, uint64_t *frames);
 
 /* ------------------------------------------------------------------ */
 /* Test signals (tone.c)                                               */
