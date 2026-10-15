@@ -174,11 +174,10 @@ may not exceed 100000.
 
 **It needs the CPU at 240 MHz.** At 300 kHz the receiver delivers 1.2 MB/s
 and the decimator plus the capture statistics run once per word; at the
-S3's default 160 MHz the DMA overruns without any error, and the symptom is a
-noise floor 20 dB too high that falls as `maxhz` falls. Set
-`CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240` (and the S3 equivalent) in
-`sdkconfig.defaults.esp32s3`. `pdm_decimate.c` and `capture.c` are built `-O2`
-for the same reason.
+S3's former default of 160 MHz the DMA overruns without any error, and the
+symptom is a noise floor 20 dB too high that falls as `maxhz` falls. The S3
+defaults now set 240 MHz (`sdkconfig.defaults.esp32s3`). `pdm_decimate.c` and
+`capture.c` are built `-O2` for the same reason.
 
 The mic clock is fixed at 4.8 MHz, the top of the part's ultrasonic range, and
 `audio pdmbits` / `pdmraw` is the way to try other clocks. Raw mode cannot

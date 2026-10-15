@@ -203,7 +203,7 @@ anything that exposes credentials or changes the device.
 - **Ultrasonic capture is CPU-bound.** 300 kHz stereo is 1.2 MB/s of raw words,
   decimated in software. At 160 MHz or `-Og` the receiver overruns silently and
   the spectrum floor is 20 dB too high; `pdm_decimate.c` and `capture.c` are
-  `-O2` and the S3 wants 240 MHz. `audio pdmbits dump` plus a host decimator is
+  `-O2` and the S3 defaults to 240 MHz. `audio pdmbits dump` plus a host decimator is
   how to tell an overrun from a real floor.
 - **The image is on trial after an OTA.** `app_main()` confirms it at the very
   end, so firmware that crashes during start-up rolls back on the next reset. Do

@@ -4,3 +4,8 @@ CONFIG_IDF_TARGET="esp32s3"
 CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
 CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+
+# 240 MHz CPU. `audio pdmultra` decimates 1.2 MB/s of raw PDM words in software;
+# at the default 160 MHz the I2S receiver overruns silently and the spectrum
+# floor reads about 20 dB too high.
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
