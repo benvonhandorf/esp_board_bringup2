@@ -26,6 +26,7 @@
 #include "esp_timer.h"
 
 #include <math.h>
+#include "esp_heap_caps.h"
 
 /*
  * 4096 frames is 85 ms at 48 kHz: 12 Hz of resolution, which separates a test
@@ -423,7 +424,7 @@ esp_err_t audio_capture_run(const audio_capture_req_t *req, audio_capture_t *cap
     }
     uint64_t target = (uint64_t)llrint(seconds * rate);
 
-    void *buffer = malloc(block_frames * frame_bytes);
+    void *buffer = heap_caps_aligned_alloc(16, block_frames * frame_bytes + 16, MALLOC_CAP_8BIT);
     int16_t *window = NULL;
     float *re = NULL;
     float *im = NULL;
@@ -463,6 +464,8 @@ esp_err_t audio_capture_run(const audio_capture_req_t *req, audio_capture_t *cap
     };
     int32_t limit = (bits == 16) ? 32767 : 2147483647;
     uint32_t collected = 0;
+    audio_stats16_t st16;
+    audio_stats16_init(&st16);
 
     while (cap->frames < target) {
         size_t want = block_frames;
@@ -485,25 +488,31 @@ esp_err_t audio_capture_run(const audio_capture_req_t *req, audio_capture_t *cap
             cap->overruns++;
         }
 
-        for (size_t i = 0; i < frames; i++) {
-            int32_t left = 0;
-            int32_t right = 0;
-            frame_at(buffer, i, bits, &left, &right);
-            slot_push(&acc[0], left, limit);
-            slot_push(&acc[1], right, limit);
-
+        if (bits == 16) {
+            /* Vectorized statistics: see pdm_fast.c. Same numbers as the
+             * per-sample loop below, exactly. */
+            audio_stats16_pie(&st16, (const int16_t *)buffer, frames, limit);
             if (window && collected < ANALYSIS_FRAMES) {
-                /* Held at 16 bits: the window costs half as much RAM, and a
-                 * spectrum floor 90 dB down is already below anything a
-                 * microphone under test will show. */
-                if (bits == 16) {
-                    window[2 * collected] = (int16_t)left;
-                    window[2 * collected + 1] = (int16_t)right;
-                } else {
+                size_t take = ANALYSIS_FRAMES - collected;
+                if (take > frames) {
+                    take = frames;
+                }
+                memcpy(&window[2 * collected], buffer, take * 2 * sizeof(int16_t));
+                collected += (uint32_t)take;
+            }
+        } else {
+            for (size_t i = 0; i < frames; i++) {
+                int32_t left = 0;
+                int32_t right = 0;
+                frame_at(buffer, i, bits, &left, &right);
+                slot_push(&acc[0], left, limit);
+                slot_push(&acc[1], right, limit);
+
+                if (window && collected < ANALYSIS_FRAMES) {
                     window[2 * collected] = (int16_t)(left >> 16);
                     window[2 * collected + 1] = (int16_t)(right >> 16);
+                    collected++;
                 }
-                collected++;
             }
         }
 
@@ -511,6 +520,16 @@ esp_err_t audio_capture_run(const audio_capture_req_t *req, audio_capture_t *cap
     }
 
     free(buffer);
+
+    if (cap->frames > 0 && bits == 16) {
+        for (int ch = 0; ch < 2; ch++) {
+            acc[ch].min = st16.min[ch];
+            acc[ch].max = st16.max[ch];
+            acc[ch].sum = st16.sum[ch];
+            acc[ch].sum_sq = (double)st16.sumsq[ch];
+            acc[ch].clipped = st16.clipped[ch];
+        }
+    }
 
     if (cap->frames > 0) {
         for (int ch = 0; ch < 2; ch++) {

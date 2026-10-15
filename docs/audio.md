@@ -155,7 +155,7 @@ PDM-to-PCM filter, so what arrives is the raw one-bit stream; every statistic
 below would be measuring the modulator rather than the sound, and would look
 like plausible numbers while meaning nothing.
 
-## `pdmultra <clk> <data> [maxhz <hz>]`
+## `pdmultra <clk> <data> [maxhz <hz>] [fast]`
 
 Opens an ultrasonic-capable PDM microphone (written for the Knowles
 SPH0641LU4H-1) and decimates it in software. The chip's hardware filter divides
@@ -165,6 +165,10 @@ the raw bits instead and filters them with a sixth-order sinc.
 The part must not start in ultrasonic mode, so the command clocks it at
 2.048 MHz first, waits 100 ms, then raises the clock to 4.8 MHz on the same
 open channel (the pins are never released).
+
+`fast` selects the two-stage decimator in place of the sinc^6 x16 one (a
+different filter, always 300 kHz, `maxhz` then only limits the spectrum); see
+[`pdmbench`](#pdmbench-frames) for what it costs and how it compares.
 
 `maxhz` is the highest frequency you care about, 80000 by default (the part's
 specified limit). It picks the decimation ratio — the largest whose Nyquist is
@@ -201,6 +205,18 @@ it yet (`record`, `level`, `loopback` and `capture` refuse it); use
 [`pdmbits`](#pdmbits-seconds--dump-frames) to see whether a microphone is responding. The
 bit clock is 32 times `rate`, and `rate` is accepted up to 640 kHz (20 MHz),
 well past what `pdm`'s filter can take.
+
+## `pdmbench [frames]`
+
+Times the software decimators and the capture statistics against each other
+and cross-checks them, with no microphone. It modulates two tones (10 and
+50 kHz) into a synthetic 4.8 MHz PDM stream, then reports cycles per output
+frame for the sinc^6 x16 decimator, the two-stage filter in plain C, and the
+same filter on the S3's PIE vector unit; then cycles per frame for the capture
+statistics as originally written (double-precision sum of squares), in 64-bit
+integers, and on PIE. It states whether the PIE results match the plain ones
+exactly. Tone levels are printed for the two decimators; the two-stage filter
+is a different filter, so compare those, not samples.
 
 ## `pdmbits [seconds | dump [frames]]`
 

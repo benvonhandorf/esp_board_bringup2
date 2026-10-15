@@ -1027,7 +1027,13 @@ int cmd_audio_pdm_ultra(int argc, char **argv)
     }
 
     int max_hz = 80000;
-    for (int index = 3; index < argc; index += 2) {
+    bool fast = false;
+    for (int index = 3; index < argc;) {
+        if (strcasecmp(argv[index], "fast") == 0) {
+            fast = true;
+            index++;
+            continue;
+        }
         if (strcasecmp(argv[index], "maxhz") != 0) {
             STRRES_ERROR(STR_AUDIO_PDMULTRA_UNEXPECTED_ARGUMENT, argv[index]);
             return -1;
@@ -1037,9 +1043,10 @@ int cmd_audio_pdm_ultra(int argc, char **argv)
             STRRES_ERROR(STR_AUDIO_PDMULTRA_MAXHZ_RANGE, AUDIO_ULTRA_MAX_HZ);
             return -1;
         }
+        index += 2;
     }
 
-    esp_err_t err = audio_bus_open_pdm_ultra(clk, din, (uint32_t)max_hz);
+    esp_err_t err = audio_bus_open_pdm_ultra(clk, din, (uint32_t)max_hz, fast);
     if (err == ESP_ERR_NOT_SUPPORTED) {
         return -1;
     }

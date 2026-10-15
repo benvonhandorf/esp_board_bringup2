@@ -91,6 +91,39 @@ Raw input is 1.2 MB/s (9.6 Mbit/s) in every case. The decimator costs roughly
 per-sample statistics and the read copy. At 80 kHz the task is at 96% of one
 core, so there is almost no headroom: the earlier estimate of 25-30% was low.
 
+## Optimized decimation and statistics (`pdmultra ... fast`, `pdmbench`)
+
+Synthetic-input benchmark (`audio pdmbench`, 240 MHz, cycles per 300 kHz output
+frame):
+
+| item | before | after | factor |
+|------|--------|-------|--------|
+| decimator: sinc^6 x16 | 300 | - | - |
+| decimator: two-stage (sinc^4 bytes + 24-tap FIR), plain C | - | 383 | 0.8x (slower) |
+| decimator: two-stage, PIE dot product | - | 159 | 1.9x |
+| statistics: original (double sum of squares) | 454 | - | - |
+| statistics: int64 | - | 94 | 4.8x |
+| statistics: PIE | - | 11 | 41x |
+
+PIE results are bit-identical to the plain-C ones (decimator and statistics).
+The two-stage filter is a different filter: 10 kHz tone level matches the
+sinc^6 one (-12.1 dBFS), the 50 kHz tone is 1.9 dB higher because it droops
+less. On real microphone data (host-side) the two floors agree within about
+2 dB from 4 to 80 kHz.
+
+On the device, real capture, `audio record 2`, one core at 240 MHz:
+
+| configuration | decimator | whole capture task |
+|---------------|-----------|--------------------|
+| before (sinc^6, original statistics) | 32.5% | 96% |
+| PIE statistics only | 32.5% | 49% |
+| PIE statistics + two-stage filter (`fast`) | 17.4% | 33.9% |
+
+Most of the saving was the statistics: they were summing squares in
+double-precision software floating point. The two-stage filter is worth about
+15 points of one core. Stage 1 is still table lookups, so SIMD cannot help
+there; that is what bounds the decimator at about 160 cycles per frame.
+
 ## Corrections
 
 - The first ultrasonic results (-50 dBFS RMS, floor rising ~1.3 dB per

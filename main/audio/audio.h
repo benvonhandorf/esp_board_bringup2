@@ -270,6 +270,30 @@ size_t pdm_dec_process(pdm_dec_t *d, const uint16_t *raw, size_t frames, int16_t
 int pdm_dec_r_words(const pdm_dec_t *d);
 
 /*
+ * Faster alternatives, kept beside the originals for `audio pdmbench`
+ * (pdm_fast.c). pdm_dec2 is a different, cheaper filter: sinc^4 over bytes,
+ * then a 24-tap FIR decimating by 2 (PIE dot product when use_pie).
+ * It always runs 4.8 MHz -> 300 kHz.
+ */
+typedef struct pdm_dec2 pdm_dec2_t;
+pdm_dec2_t *pdm_dec2_new(int channels, bool use_pie);
+void pdm_dec2_free(pdm_dec2_t *d);
+size_t pdm_dec2_process(pdm_dec2_t *d, const uint16_t *raw, size_t frames, int16_t *out);
+
+/* Capture statistics for interleaved stereo int16, three implementations. */
+typedef struct {
+    int32_t min[2], max[2];
+    int64_t sum[2];
+    uint64_t sumsq[2];
+    double sumsq_f[2];      /* the reference variant only */
+    uint64_t clipped[2];
+} audio_stats16_t;
+void audio_stats16_init(audio_stats16_t *s);
+void audio_stats16_ref(audio_stats16_t *s, const int16_t *x, size_t frames, int32_t limit);
+void audio_stats16_i64(audio_stats16_t *s, const int16_t *x, size_t frames, int32_t limit);
+void audio_stats16_pie(audio_stats16_t *s, const int16_t *x, size_t frames, int32_t limit);
+
+/*
  * Ultrasonic PDM microphone (clocked at 4.8 MHz, decimated in software).
  * Starts the part in standard mode, lets it wake, then raises the clock
  * without ever removing the channel. The decimation ratio is chosen from
@@ -278,7 +302,7 @@ int pdm_dec_r_words(const pdm_dec_t *d);
  */
 #define AUDIO_ULTRA_CLK_HZ   4800000
 #define AUDIO_ULTRA_MAX_HZ   100000
-esp_err_t audio_bus_open_pdm_ultra(int clk, int din, uint32_t max_hz);
+esp_err_t audio_bus_open_pdm_ultra(int clk, int din, uint32_t max_hz, bool fast);
 uint32_t audio_bus_rx_band_limit_hz(void);   /* 0 when no limit applies */
 /* CPU cycles spent in the software decimator and frames it produced since the
  * ultrasonic receiver was opened. False when none is open. */
@@ -397,6 +421,7 @@ int cmd_audio_pdm(int argc, char **argv);
 int cmd_audio_pdm_raw(int argc, char **argv);
 int cmd_audio_pdm_bits(int argc, char **argv);
 int cmd_audio_pdm_ultra(int argc, char **argv);
+int cmd_audio_pdm_bench(int argc, char **argv);
 int cmd_audio_record(int argc, char **argv);
 int cmd_audio_capture_file(int argc, char **argv);
 int cmd_audio_level(int argc, char **argv);
