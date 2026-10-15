@@ -50,6 +50,16 @@ static int pin_ws = -1;
 static int pin_dout = -1;
 static int pin_din = -1;
 static int pin_pdm_clk = -1;
+static int pdm_raw_dins[AUDIO_PDM_MAX_LINES];
+static int pdm_raw_line_count;
+
+/* Software-decimated ultrasonic PDM: set while audio_bus_open_pdm_ultra()'s
+ * receiver is open. The channel underneath is a raw one. */
+static pdm_dec_t *ultra_dec;
+static uint32_t ultra_max_hz;
+static uint32_t ultra_rate;
+static uint16_t *ultra_scratch;
+static size_t ultra_scratch_bytes;
 
 /* 16-bit data sits in a 16-bit slot; 24- and 32-bit data both travel in a
  * 32-bit slot. Packing 24-bit data into three-byte slots is legal I2S and a
@@ -65,10 +75,31 @@ size_t audio_bus_frame_bytes(void)
     return 2 * (slot_bits() / 8);
 }
 
+int audio_bus_rx_channels(void)
+{
+    switch (rx_mode) {
+    case AUDIO_RX_STD:
+    case AUDIO_RX_PDM:
+        return 2;
+    case AUDIO_RX_PDM_RAW:
+        return 2 * pdm_raw_line_count;
+    default:
+        return 0;
+    }
+}
+
 size_t audio_bus_rx_frame_bytes(void)
 {
-    /* PDM decimates to 16-bit whatever the transmit side is doing. */
-    return 2 * ((rx_bits == 16 ? 16 : 32) / 8);
+    /* PDM (either mode) decimates to, or raw-samples at, 16-bit whatever the
+     * transmit side is doing. Fall back to the old stereo assumption when
+     * nothing is open yet, so callers that size a buffer before opening a
+     * receiver keep getting the same answer as before this had a real
+     * per-mode channel count. */
+    int channels = audio_bus_rx_channels();
+    if (channels <= 0) {
+        channels = 2;
+    }
+    return (size_t)channels * ((rx_bits == 16 ? 16 : 32) / 8);
 }
 
 uint8_t audio_bus_rx_bits(void)
@@ -93,8 +124,23 @@ bool audio_bus_rx_internal(void)
 
 void audio_bus_rx_pins(int *clk, int *din)
 {
-    if (clk) *clk = (rx_mode == AUDIO_RX_PDM) ? pin_pdm_clk : pin_bclk;
+    if (clk) *clk = (rx_mode == AUDIO_RX_PDM || rx_mode == AUDIO_RX_PDM_RAW) ? pin_pdm_clk : pin_bclk;
     if (din) *din = pin_din;
+}
+
+void audio_bus_rx_pdm_raw_pins(int *clk, int dins[AUDIO_PDM_MAX_LINES], int *line_count)
+{
+    if (clk) {
+        *clk = (rx_mode == AUDIO_RX_PDM_RAW) ? pin_pdm_clk : -1;
+    }
+    if (dins) {
+        for (int i = 0; i < AUDIO_PDM_MAX_LINES; i++) {
+            dins[i] = (rx_mode == AUDIO_RX_PDM_RAW) ? pdm_raw_dins[i] : -1;
+        }
+    }
+    if (line_count) {
+        *line_count = (rx_mode == AUDIO_RX_PDM_RAW) ? pdm_raw_line_count : 0;
+    }
 }
 
 bool audio_bus_rx_require(void)
@@ -172,7 +218,10 @@ static bool rx_chan_info(i2s_chan_info_t *info)
  */
 uint32_t audio_bus_rx_rate(void)
 {
-    if (rx_mode == AUDIO_RX_PDM) {
+    if (ultra_dec) {
+        return ultra_rate;
+    }
+    if (rx_mode == AUDIO_RX_PDM || rx_mode == AUDIO_RX_PDM_RAW) {
         return format.rate_hz;
     }
 
@@ -187,8 +236,11 @@ uint32_t audio_bus_rx_rate(void)
  * limits on. Zero unless a PDM microphone is open. */
 uint32_t audio_bus_pdm_clk_hz(void)
 {
+    if (ultra_dec) {
+        return AUDIO_ULTRA_CLK_HZ;
+    }
     i2s_chan_info_t info;
-    if (rx_mode != AUDIO_RX_PDM || !rx_chan_info(&info)) {
+    if ((rx_mode != AUDIO_RX_PDM && rx_mode != AUDIO_RX_PDM_RAW) || !rx_chan_info(&info)) {
         return 0;
     }
     return info.bclk_hz;
@@ -225,11 +277,23 @@ void audio_bus_rx_close(void)
         rx_chan = NULL;
     }
 
+    pdm_dec_free(ultra_dec);
+    ultra_dec = NULL;
+    free(ultra_scratch);
+    ultra_scratch = NULL;
+    ultra_scratch_bytes = 0;
+    ultra_max_hz = 0;
+    ultra_rate = 0;
+
     rx_running = false;
     rx_mode = AUDIO_RX_NONE;
     rx_bits = 16;
     pin_din = -1;
     pin_pdm_clk = -1;
+    pdm_raw_line_count = 0;
+    for (int i = 0; i < AUDIO_PDM_MAX_LINES; i++) {
+        pdm_raw_dins[i] = -1;
+    }
 }
 
 void audio_bus_close(void)
@@ -414,6 +478,221 @@ esp_err_t audio_bus_open_pdm(int clk, int din, const audio_format_t *fmt)
 
 #endif /* SOC_I2S_SUPPORTS_PDM_RX && SOC_I2S_SUPPORTS_PDM2PCM */
 
+/* ------------------------------------------------------------------ */
+/* Raw multi-line PDM receive                                          */
+/* ------------------------------------------------------------------ */
+
+#if SOC_I2S_SUPPORTS_PDM_RX
+
+/* Standard PDM oversampling ratio: 64 bit-clock cycles per decimated sample.
+ * Every PDM part this project has met (see codec_sph0645.c) uses it; a part
+ * that does not would need this taught a per-part ratio, the same way the
+ * SPH0645 driver teaches its own bit-clock range on top of this. */
+#define PDM_RAW_OVERSAMPLE 32
+
+esp_err_t audio_bus_open_pdm_raw(int clk, const int *dins, int line_count,
+                                 const audio_format_t *fmt)
+{
+    int max_lines = AUDIO_PDM_MAX_LINES;
+#if SOC_I2S_PDM_MAX_RX_LINES < AUDIO_PDM_MAX_LINES
+    max_lines = SOC_I2S_PDM_MAX_RX_LINES;
+#endif
+    if (line_count < 1 || line_count > max_lines) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    audio_bus_rx_close();
+
+    /* Same reasoning as audio_bus_open_pdm(): one shared rate, so a capture
+     * and a playback never disagree about what they are measuring. */
+    if (!bus_open) {
+        format = *fmt;
+    }
+
+    i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
+    chan_cfg.dma_desc_num = DMA_DESC_NUM;
+    chan_cfg.dma_frame_num = DMA_FRAME_NUM;
+
+    esp_err_t err = i2s_new_channel(&chan_cfg, NULL, &rx_chan);
+    if (err != ESP_OK) {
+        rx_chan = NULL;
+        return err;
+    }
+
+    /*
+     * One line/slot pair per active data pin, per the I2S_PDM_RX_LINEn_SLOT_*
+     * bit layout in hal/i2s_types.h: line n owns bits (2n, 2n+1). Left and
+     * right are always both wanted, for the same reason audio_bus_open_pdm()
+     * always asks for stereo -- which physical half of each line's frame a
+     * mono part lands in is exactly what this is for finding out.
+     */
+    uint32_t slot_mask = 0;
+    for (int i = 0; i < line_count; i++) {
+        slot_mask |= (uint32_t)(I2S_PDM_SLOT_LEFT | I2S_PDM_SLOT_RIGHT) << (2 * i);
+    }
+
+    i2s_pdm_rx_gpio_config_t gpio_cfg = {
+        .clk = (gpio_num_t)clk,
+        .invert_flags = {0},
+    };
+#if SOC_I2S_PDM_MAX_RX_LINES > 1
+    /* gpio_cfg.dins[] is only SOC_I2S_PDM_MAX_RX_LINES entries wide -- looping
+     * to AUDIO_PDM_MAX_LINES on a chip where that constant is smaller would
+     * write past the array and into invert_flags, which shares the union. */
+    for (int i = 0; i < SOC_I2S_PDM_MAX_RX_LINES; i++) {
+        gpio_cfg.dins[i] = -1;
+    }
+    for (int i = 0; i < line_count; i++) {
+        gpio_cfg.dins[i] = (gpio_num_t)dins[i];
+    }
+#else
+    gpio_cfg.din = (gpio_num_t)dins[0];
+#endif
+
+    /*
+     * RAW, not PCM: the one hardware PDM-to-PCM filter on this chip only ever
+     * produces two channels, so more than one line has to skip it and read
+     * the undecimated bitstream instead. The oversample multiplier gets the
+     * bit clock into the megahertz range a real part expects, the same
+     * distinction codec_sph0645.c has to make for the decimated path.
+     */
+    i2s_pdm_rx_slot_config_t slot_cfg = I2S_PDM_RX_SLOT_RAW_FMT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+
+    i2s_pdm_rx_config_t pdm_cfg = {
+        .clk_cfg = I2S_PDM_RX_CLK_DEFAULT_CONFIG(format.rate_hz * PDM_RAW_OVERSAMPLE),
+        .slot_cfg = slot_cfg,
+        .gpio_cfg = gpio_cfg,
+    };
+
+    pdm_cfg.clk_cfg.dn_sample_mode = I2S_PDM_DSR_8S;
+    pdm_cfg.clk_cfg.sample_rate_hz = format.rate_hz * 32;
+
+    /*
+     * NOT VERIFIED AGAINST REAL HARDWARE, and not fully verified against the
+     * driver either: ESP-IDF 6.0.2's i2s_pdm_rx_set_slot() (i2s_pdm.c in the
+     * pinned esp-idf) hardcodes total_slot/active_slot to 1-2 regardless of
+     * how many bits are set in slot_mask above, which is what sizes the DMA
+     * buffer i2s_channel_init_pdm_rx_mode() allocates below. The GPIO wiring
+     * and slot_mask bits say the hardware clocks line_count * 2 slots per
+     * frame; if the buffer stays sized for 2 regardless, reads will alias or
+     * overrun rather than fail loudly. Confirming that -- and, if needed,
+     * reaching into esp_private/i2s_private.h and hal/i2s_ll.h to resize the
+     * buffer and set rx_tdm_tot_chan_num by hand after this call -- is the
+     * experiment this function is a placeholder for.
+     */
+    err = i2s_channel_init_pdm_rx_mode(rx_chan, &pdm_cfg);
+    if (err != ESP_OK) {
+        audio_bus_rx_close();
+        return err;
+    }
+
+    //Set some pull-ups and downs for testing
+    for (int i = 0; i < line_count; i++) {
+        gpio_pull_mode_t mode = ( i % 2 ) == 0 ? GPIO_PULLDOWN_ONLY : GPIO_PULLUP_ONLY;
+        gpio_sleep_set_pull_mode(dins[i], mode);
+    }
+
+
+    rx_mode = AUDIO_RX_PDM_RAW;
+    rx_bits = 16;
+    pin_pdm_clk = clk;
+    pin_din = dins[0];
+    pdm_raw_line_count = line_count;
+    for (int i = 0; i < line_count; i++) {
+        pdm_raw_dins[i] = dins[i];
+    }
+    for (int i = line_count; i < AUDIO_PDM_MAX_LINES; i++) {
+        pdm_raw_dins[i] = -1;
+    }
+    return ESP_OK;
+}
+
+
+uint32_t audio_bus_rx_band_limit_hz(void)
+{
+    return ultra_dec ? ultra_max_hz : 0;
+}
+
+esp_err_t audio_bus_open_pdm_ultra(int clk, int din, uint32_t max_hz)
+{
+    if (max_hz == 0 || max_hz > AUDIO_ULTRA_MAX_HZ) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    /* Largest R (a multiple of 16) whose Nyquist is 1.5 x max_hz or better. */
+    int r = 16;
+    for (int cand = 64; cand >= 16; cand -= 16) {
+        if ((double)AUDIO_ULTRA_CLK_HZ / cand / 2.0 >= 1.5 * max_hz) {
+            r = cand;
+            break;
+        }
+    }
+
+    /* Standard mode first: 2.048 MHz is inside the 1-2.475 MHz entry range. */
+    audio_format_t fmt = {.rate_hz = 64000, .bits = 16, .mclk_pin = -1, .mclk_multiple = 0};
+    esp_err_t err = audio_bus_open_pdm_raw(clk, &din, 1, &fmt);
+    if (err != ESP_OK) {
+        return err;
+    }
+    err = i2s_channel_enable(rx_chan);
+    if (err != ESP_OK) {
+        audio_bus_rx_close();
+        return err;
+    }
+    vTaskDelay(pdMS_TO_TICKS(100));   /* let the part wake in standard mode */
+
+    /* Raise the clock in place: the channel and its pins are never released. */
+    i2s_pdm_rx_clk_config_t clk_cfg = I2S_PDM_RX_CLK_DEFAULT_CONFIG(AUDIO_ULTRA_CLK_HZ);
+    clk_cfg.dn_sample_mode = I2S_PDM_DSR_8S;
+    clk_cfg.sample_rate_hz = AUDIO_ULTRA_CLK_HZ;
+    err = i2s_channel_disable(rx_chan);
+    if (err == ESP_OK) {
+        err = i2s_channel_reconfig_pdm_rx_clock(rx_chan, &clk_cfg);
+    }
+    if (err == ESP_OK) {
+        err = i2s_channel_enable(rx_chan);
+    }
+    if (err != ESP_OK) {
+        audio_bus_rx_close();
+        return err;
+    }
+    rx_running = true;
+
+    ultra_dec = pdm_dec_new(2, r, false);
+    if (!ultra_dec) {
+        audio_bus_rx_close();
+        return ESP_ERR_NO_MEM;
+    }
+    ultra_max_hz = max_hz;
+    ultra_rate = AUDIO_ULTRA_CLK_HZ / (uint32_t)r;
+    format.rate_hz = ultra_rate;
+
+    /* To the rest of the firmware this is an ordinary decimated PDM input. */
+    rx_mode = AUDIO_RX_PDM;
+    return ESP_OK;
+}
+
+#else /* no PDM receive at all */
+
+esp_err_t audio_bus_open_pdm_raw(int clk, const int *dins, int line_count,
+                                 const audio_format_t *fmt)
+{
+    (void)clk; (void)dins; (void)line_count; (void)fmt;
+    STRRES_ERROR(STR_AUDIO_NO_PDM, CONFIG_IDF_TARGET);
+    return ESP_ERR_NOT_SUPPORTED;
+}
+
+esp_err_t audio_bus_open_pdm_ultra(int clk, int din, uint32_t max_hz)
+{
+    (void)clk; (void)din; (void)max_hz;
+    STRRES_ERROR(STR_AUDIO_NO_PDM, CONFIG_IDF_TARGET);
+    return ESP_ERR_NOT_SUPPORTED;
+}
+
+uint32_t audio_bus_rx_band_limit_hz(void) { return 0; }
+
+#endif /* SOC_I2S_SUPPORTS_PDM_RX */
+
 uint64_t audio_bus_buffered_frames(void)
 {
     return (uint64_t)DMA_DESC_NUM * DMA_FRAME_NUM;
@@ -481,6 +760,27 @@ esp_err_t audio_bus_read(void *data, size_t bytes, size_t *read,
     if (!rx_chan || !rx_running) {
         return ESP_ERR_INVALID_STATE;
     }
+    if (ultra_dec) {
+        /* Two words of raw bits per output frame per R/16, decimated here. */
+        size_t out_frames = bytes / 4;
+        size_t raw_frames = out_frames * (size_t)pdm_dec_r_words(ultra_dec);
+        size_t raw_bytes = raw_frames * 4;
+        if (raw_bytes > ultra_scratch_bytes) {
+            free(ultra_scratch);
+            ultra_scratch = malloc(raw_bytes);
+            ultra_scratch_bytes = ultra_scratch ? raw_bytes : 0;
+            if (!ultra_scratch) {
+                return ESP_ERR_NO_MEM;
+            }
+        }
+        size_t got = 0;
+        esp_err_t err = i2s_channel_read(rx_chan, ultra_scratch, raw_bytes, &got, timeout_ms);
+        size_t produced = pdm_dec_process(ultra_dec, ultra_scratch, got / 4, data);
+        if (read) {
+            *read = produced * 4;
+        }
+        return err;
+    }
     return i2s_channel_read(rx_chan, data, bytes, read, timeout_ms);
 }
 
@@ -546,6 +846,7 @@ bool audio_bus_rx_ready(void) { return false; }
 bool audio_bus_rx_internal(void) { return false; }
 uint32_t audio_bus_rx_rate(void) { return 0; }
 uint32_t audio_bus_pdm_clk_hz(void) { return 0; }
+uint32_t audio_bus_rx_band_limit_hz(void) { return 0; }
 void audio_bus_rx_close(void) {}
 
 bool audio_bus_rx_require(void)
@@ -559,9 +860,29 @@ void audio_bus_rx_pins(int *clk, int *din)
     if (din) *din = -1;
 }
 
+int audio_bus_rx_channels(void) { return 0; }
+
+void audio_bus_rx_pdm_raw_pins(int *clk, int dins[AUDIO_PDM_MAX_LINES], int *line_count)
+{
+    if (clk) *clk = -1;
+    if (dins) {
+        for (int i = 0; i < AUDIO_PDM_MAX_LINES; i++) {
+            dins[i] = -1;
+        }
+    }
+    if (line_count) *line_count = 0;
+}
+
 esp_err_t audio_bus_open_pdm(int clk, int din, const audio_format_t *fmt)
 {
     (void)clk; (void)din; (void)fmt;
+    return ESP_ERR_NOT_SUPPORTED;
+}
+
+esp_err_t audio_bus_open_pdm_raw(int clk, const int *dins, int line_count,
+                                 const audio_format_t *fmt)
+{
+    (void)clk; (void)dins; (void)line_count; (void)fmt;
     return ESP_ERR_NOT_SUPPORTED;
 }
 

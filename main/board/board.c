@@ -253,7 +253,7 @@ int cmd_board_minstro_audio(int argc, char **argv)
     (void)argv;
 
     static const char *const lines[] = {
-        "audio bus 8 12 9 din 10 mclk 8",
+        "audio bus 11 12 9 din 10 mclk 8 rate 48000 bits 24",
     };
     return apply(&minstro, lines, ARRAY_COUNT(lines));
 }
@@ -264,7 +264,7 @@ int cmd_board_minstro_i2c(int argc, char **argv)
     (void)argv;
 
     static const char *const lines[] = {
-        "i2c bus 5 4",
+        "i2c bus 7 6",
     };
     return apply(&minstro, lines, ARRAY_COUNT(lines));
 }
@@ -275,7 +275,7 @@ int cmd_board_minstro_sd(int argc, char **argv)
     (void)argv;
 
     static const char *const lines[] = {
-        "sd mmc 40 41 39 38 44 43",
+        "sd mmc 40 41 39 38 43 42 cd 44 khz 40000",
     };
     return apply(&minstro, lines, ARRAY_COUNT(lines));
 }

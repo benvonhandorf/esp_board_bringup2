@@ -45,6 +45,7 @@ idf_component_register(
                  "audio/codec_nau8822.c"
                  "audio/codec_ns4168.c"
                  "audio/codec_sph0645.c"
+                 "audio/pdm_decimate.c"
                  "board/board.c"
                  "display/display.c"
                  "display/panel_st7789.c"
@@ -92,3 +93,9 @@ target_compile_options(${COMPONENT_LIB} PRIVATE -Wall -Wextra -Werror)
 # only, so hand-written sources keep their own error handling.
 set_source_files_properties("${GEN_C}" TARGET_DIRECTORY ${COMPONENT_LIB}
     PROPERTIES COMPILE_OPTIONS "-include;js2c_error_capture.h")
+
+# The software PDM decimator runs once per received word, 600 000 times a
+# second at its highest rate. At the project's -Og it cannot keep up and the
+# receiver overruns, which shows as a noise floor 20 dB too high.
+set_source_files_properties("audio/pdm_decimate.c" "audio/capture.c" TARGET_DIRECTORY ${COMPONENT_LIB}
+    PROPERTIES COMPILE_OPTIONS "-O2;-Wno-maybe-uninitialized")

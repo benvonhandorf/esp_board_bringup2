@@ -732,6 +732,9 @@ static const cli_group_t spi_group = {
 static const cli_command_t audio_commands[] = {
     {"bus",      NULL, NULL, cmd_audio_bus},
     {"pdm",      NULL, NULL, cmd_audio_pdm},
+    {"pdmraw",   NULL, NULL, cmd_audio_pdm_raw},
+    {"pdmbits",  NULL, NULL, cmd_audio_pdm_bits},
+    {"pdmultra", NULL, NULL, cmd_audio_pdm_ultra},
     {"info",     NULL, NULL, cmd_audio_info},
     {"codecs",   NULL, NULL, cmd_audio_codecs},
     {"tone",     NULL, NULL, cmd_audio_tone},
@@ -751,6 +754,9 @@ static const cli_command_t audio_commands[] = {
 static const cli_command_text_t audio_text[] = {
     {STR_AUDIO_BUS_USAGE,       STR_AUDIO_BUS_HELP},
     {STR_AUDIO_PDM_USAGE,       STR_AUDIO_PDM_HELP},
+    {STR_AUDIO_PDMRAW_USAGE,    STR_AUDIO_PDMRAW_HELP},
+    {STR_AUDIO_PDMBITS_USAGE,   STR_AUDIO_PDMBITS_HELP},
+    {STR_AUDIO_PDMULTRA_USAGE,  STR_AUDIO_PDMULTRA_HELP},
     {STR_AUDIO_INFO_USAGE,      STR_AUDIO_INFO_HELP},
     {STR_AUDIO_CODECS_USAGE,    STR_AUDIO_CODECS_HELP},
     {STR_AUDIO_TONE_USAGE,      STR_AUDIO_TONE_HELP},

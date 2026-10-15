@@ -155,6 +155,65 @@ PDM-to-PCM filter, so what arrives is the raw one-bit stream; every statistic
 below would be measuring the modulator rather than the sound, and would look
 like plausible numbers while meaning nothing.
 
+## `pdmultra <clk> <data> [maxhz <hz>]`
+
+Opens an ultrasonic-capable PDM microphone (written for the Knowles
+SPH0641LU4H-1) and decimates it in software. The chip's hardware filter divides
+by 64, which at the part's 4.8 MHz ultrasonic clock is 75 kHz PCM; this takes
+the raw bits instead and filters them with a sixth-order sinc.
+
+The part must not start in ultrasonic mode, so the command clocks it at
+2.048 MHz first, waits 100 ms, then raises the clock to 4.8 MHz on the same
+open channel (the pins are never released).
+
+`maxhz` is the highest frequency you care about, 80000 by default (the part's
+specified limit). It picks the decimation ratio — the largest whose Nyquist is
+at least 1.5 x `maxhz`, so 80 kHz gives 300 kHz PCM — and limits the spectrum
+that [`record`](#record-seconds) reports, so bands above it are not shown. It
+may not exceed 100000.
+
+**It needs the CPU at 240 MHz.** At 300 kHz the receiver delivers 1.2 MB/s
+and the decimator plus the capture statistics run once per word; at the
+S3's default 160 MHz the DMA overruns without any error, and the symptom is a
+noise floor 20 dB too high that falls as `maxhz` falls. Set
+`CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240` (and the S3 equivalent) in
+`sdkconfig.defaults.esp32s3`. `pdm_decimate.c` and `capture.c` are built `-O2`
+for the same reason.
+
+The mic clock is fixed at 4.8 MHz, the top of the part's ultrasonic range, and
+`audio pdmbits` / `pdmraw` is the way to try other clocks. Raw mode cannot
+clock faster than about 5 MHz (the driver needs 16 times the bit clock below
+80 MHz); the hardware-filtered `pdm` path reaches 6.66 MHz but only divides by
+64, which is why `pdmultra` exists.
+
+Everything that takes decimated PCM (`record`, `level`) works on it. The sinc
+filter droops, about 6 dB by 80 kHz at 300 kHz, so read the spectrum for shape
+and for differences between microphones rather than absolute level.
+
+## `pdmraw <clk> <data1>[,<data2>,...] [rate <hz>]`
+
+Opens up to four PDM data lines on one clock **without** the PDM-to-PCM
+filter, so the receiver delivers the raw bitstream. Nothing downstream decodes
+it yet (`record`, `level`, `loopback` and `capture` refuse it); use
+[`pdmbits`](#pdmbits-seconds--dump-frames) to see whether a microphone is responding. The
+bit clock is 32 times `rate`, and `rate` is accepted up to 640 kHz (20 MHz),
+well past what `pdm`'s filter can take.
+
+## `pdmbits [seconds | dump [frames]]`
+
+Reports statistics of the raw bitstream opened by `pdmraw`, with no decimation:
+per slot, the share of ones, the share of adjacent bits that differ (`flips`),
+and the standard deviation of the ones density over 1024-bit windows. A mic
+that is clocked and alive sits near 50% ones with a high flip rate; a stuck or
+sleeping part sits at a constant level or a regular pattern. Window-stdev rises
+with sound, so it answers "does it respond" at clock rates the PDM-to-PCM
+filter cannot take.
+
+`pdmbits dump [frames]` instead captures up to 49152 frames into RAM (without
+pausing for output, so the stream has no gaps) and prints one frame per line as
+hex words, slot 0 then slot 1 for each data line, oldest first and most
+significant bit first. It is for decimating and analysing the stream on a host.
+
 ## `record [seconds]`
 
 Captures the input and reports what was in it. Two seconds by default.

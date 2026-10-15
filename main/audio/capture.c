@@ -34,7 +34,7 @@
  */
 #define ANALYSIS_FRAMES 4096
 
-/* Half-octave steps from here up. Twenty of them reach 22.6 kHz. */
+/* Half-octave steps from here up. Twenty-four of them reach 90 kHz. */
 #define BAND_BASE_HZ 31.25
 
 #define READ_TIMEOUT_MS 1000
@@ -289,6 +289,7 @@ static void analyse(audio_capture_t *cap, const int16_t *window, uint32_t n,
     }
 
     double rate = (double)cap->rate;
+    double band_limit = (double)audio_bus_rx_band_limit_hz();
     uint32_t bands = 0;
 
     /* Half-octave centres, stopping short of Nyquist where the anti-alias
@@ -301,6 +302,11 @@ static void analyse(audio_capture_t *cap, const int16_t *window, uint32_t n,
         for (uint32_t i = 0; i < AUDIO_BANDS; i++) {
             double hz = BAND_BASE_HZ * pow(2.0, i / 2.0);
             if (hz >= rate * 0.45) {
+                break;
+            }
+            /* A part specified only to some frequency: bands whose lower
+             * edge is above it say nothing true. */
+            if (band_limit > 0.0 && hz / pow(2.0, 0.25) >= band_limit) {
                 break;
             }
             cap->band_hz[bands++] = hz;
@@ -367,6 +373,9 @@ static void analyse(audio_capture_t *cap, const int16_t *window, uint32_t n,
         double power[AUDIO_BANDS] = {0};
         for (uint32_t k = 1; k < fft_n / 2; k++) {
             double hz = (double)k * rate / (double)fft_n;
+            if (band_limit > 0.0 && hz > band_limit) {
+                break;
+            }
             int band = (int)lrint(2.0 * log2(hz / BAND_BASE_HZ));
             if (band < 0 || band >= (int)bands) {
                 continue;

@@ -60,9 +60,17 @@ typedef enum {
  */
 typedef enum {
     AUDIO_RX_NONE,
-    AUDIO_RX_STD,   /* I2S standard mode, sharing BCLK and WS with the transmitter */
-    AUDIO_RX_PDM,   /* PDM microphone: one clock out, one data line in */
+    AUDIO_RX_STD,     /* I2S standard mode, sharing BCLK and WS with the transmitter */
+    AUDIO_RX_PDM,     /* PDM microphone: one clock out, one data line in, hardware-decimated to PCM */
+    AUDIO_RX_PDM_RAW, /* Multiple PDM data lines, undecimated -- see audio_bus_open_pdm_raw() */
 } audio_rx_mode_t;
+
+/*
+ * The most PDM data lines this firmware will open at once. ESP32-S3 is the
+ * only target in this build with more than one (SOC_I2S_PDM_MAX_RX_LINES);
+ * the CLI and transport both clamp to whatever the chip actually has.
+ */
+#define AUDIO_PDM_MAX_LINES 4
 
 /* ------------------------------------------------------------------ */
 /* Codec interface                                                     */
@@ -189,6 +197,23 @@ esp_err_t audio_bus_write(const void *data, size_t bytes, size_t *written,
  * and the speaker word-select are the same GPIO.
  */
 esp_err_t audio_bus_open_pdm(int clk, int din, const audio_format_t *fmt);
+
+/*
+ * Open up to AUDIO_PDM_MAX_LINES PDM data lines at once, sharing one clock.
+ *
+ * This is a different mode from audio_bus_open_pdm(), not a generalization of
+ * it: the chip has exactly one PDM-to-PCM decimation filter, good for two
+ * channels total, so more than one line has to bypass that filter and read
+ * the raw, undecimated one-bit stream instead. Turning that into PCM is
+ * pdm_dec_process()'s job, in software, per line (pdmultra does it for one line) -- nothing here produces
+ * anything audio_capture_run() or the other stereo-PCM consumers can read.
+ *
+ * line_count must be 1-AUDIO_PDM_MAX_LINES, further clamped to whatever the
+ * chip actually has (SOC_I2S_PDM_MAX_RX_LINES).
+ */
+esp_err_t audio_bus_open_pdm_raw(int clk, const int *dins, int line_count,
+                                 const audio_format_t *fmt);
+
 void audio_bus_rx_close(void);
 
 audio_rx_mode_t audio_bus_rx_mode(void);
@@ -210,12 +235,51 @@ uint32_t audio_bus_rx_rate(void);        /* achieved, from the driver */
 uint32_t audio_bus_pdm_clk_hz(void);
 
 uint8_t audio_bus_rx_bits(void);         /* valid data bits per sample */
-size_t audio_bus_rx_frame_bytes(void);   /* two slots, as on the transmit side */
+size_t audio_bus_rx_frame_bytes(void);   /* audio_bus_rx_channels() slots */
+
+/* Channels the open receiver produces: 2 for AUDIO_RX_STD/AUDIO_RX_PDM,
+ * 2 * line_count for AUDIO_RX_PDM_RAW, 0 when nothing is open. */
+int audio_bus_rx_channels(void);
+
+/* Detail behind AUDIO_RX_PDM_RAW, for status reporting and for whatever
+ * feeds pdm_dec_process(). dins[] is always AUDIO_PDM_MAX_LINES
+ * long; entries past *line_count are -1. Zeroed/-1'd when not in that mode. */
+void audio_bus_rx_pdm_raw_pins(int *clk, int dins[AUDIO_PDM_MAX_LINES],
+                               int *line_count);
 
 esp_err_t audio_bus_rx_enable(bool enable);
 bool audio_bus_rx_enabled(void);
 esp_err_t audio_bus_read(void *data, size_t bytes, size_t *read,
                          uint32_t timeout_ms);
+
+/* ------------------------------------------------------------------ */
+/* Raw PDM decimation (pdm_decimate.c)                                 */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Software decimation of a raw PDM receiver: a sixth-order sinc by R, R a
+ * multiple of 16 (so outputs land on word boundaries); sixth-order sinc. `raw` is `frames`
+ * frames of `channels` interleaved 16-bit words; `out` receives interleaved
+ * int16 and must hold frames / (R / 16) frames. Returns frames produced.
+ * `lsb_first` says which end of each word is the oldest sample.
+ */
+typedef struct pdm_dec pdm_dec_t;
+pdm_dec_t *pdm_dec_new(int channels, int r, bool lsb_first);
+void pdm_dec_free(pdm_dec_t *d);
+size_t pdm_dec_process(pdm_dec_t *d, const uint16_t *raw, size_t frames, int16_t *out);
+int pdm_dec_r_words(const pdm_dec_t *d);
+
+/*
+ * Ultrasonic PDM microphone (clocked at 4.8 MHz, decimated in software).
+ * Starts the part in standard mode, lets it wake, then raises the clock
+ * without ever removing the channel. The decimation ratio is chosen from
+ * max_hz: the largest R whose Nyquist is at least 1.5 x max_hz. max_hz is
+ * also the upper limit of the spectrum `audio record` reports.
+ */
+#define AUDIO_ULTRA_CLK_HZ   4800000
+#define AUDIO_ULTRA_MAX_HZ   100000
+esp_err_t audio_bus_open_pdm_ultra(int clk, int din, uint32_t max_hz);
+uint32_t audio_bus_rx_band_limit_hz(void);   /* 0 when no limit applies */
 
 /* ------------------------------------------------------------------ */
 /* Test signals (tone.c)                                               */
@@ -258,7 +322,7 @@ bool audio_playing(void);
  * whatever falls below Nyquist. Twenty of them reach 22.6 kHz, which covers
  * every sample rate this tool offers.
  */
-#define AUDIO_BANDS 20
+#define AUDIO_BANDS 24
 
 typedef struct {
     double seconds;
@@ -327,6 +391,9 @@ double audio_dbfs(double amplitude, double full_scale);
 
 int cmd_audio_bus(int argc, char **argv);
 int cmd_audio_pdm(int argc, char **argv);
+int cmd_audio_pdm_raw(int argc, char **argv);
+int cmd_audio_pdm_bits(int argc, char **argv);
+int cmd_audio_pdm_ultra(int argc, char **argv);
 int cmd_audio_record(int argc, char **argv);
 int cmd_audio_capture_file(int argc, char **argv);
 int cmd_audio_level(int argc, char **argv);

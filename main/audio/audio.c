@@ -20,6 +20,7 @@
 #include "driver/gpio.h"
 
 #include <math.h>
+#include "esp_timer.h"
 #include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
@@ -31,6 +32,8 @@
 
 #define MIN_RATE_HZ  8000
 #define MAX_RATE_HZ  192000
+/* Raw PDM runs the bit clock at 32 x rate, so this is 20 MHz of it. */
+#define MAX_RAW_RATE_HZ 640000
 #define MAX_SECONDS  600.0
 #define MIN_TONE_HZ  1.0
 
@@ -258,9 +261,33 @@ static void print_input(void)
          * low-power mode below that, where it returns something that looks
          * like a dead microphone. Saying so here is cheaper than debugging it.
          */
-        if (pdm_hz && (pdm_hz < 1000000 || pdm_hz > 3250000)) {
+        if (audio_bus_rx_band_limit_hz() > 0) {
+            STRRES_PRINTF(STR_AUDIO_INPUT_PDM_ULTRA, audio_bus_rx_band_limit_hz() / 1000.0);
+        } else if (pdm_hz && (pdm_hz < 1000000 || pdm_hz > 3250000)) {
             STRRES_PRINTF(STR_AUDIO_INPUT_PDM_CLOCK_RANGE);
         }
+        break;
+    }
+
+    case AUDIO_RX_PDM_RAW: {
+        int clk = -1;
+        int dins[AUDIO_PDM_MAX_LINES];
+        int line_count = 0;
+        audio_bus_rx_pdm_raw_pins(&clk, dins, &line_count);
+
+        char pins[48];
+        size_t offset = 0;
+        for (int i = 0; i < line_count && offset < sizeof(pins); i++) {
+            int n = snprintf(pins + offset, sizeof(pins) - offset, "%s%d",
+                             i ? "," : "", dins[i]);
+            if (n > 0) {
+                offset += (size_t)n;
+            }
+        }
+
+        STRRES_PRINTF(STR_AUDIO_INPUT_PDM_RAW, clk, pins, line_count,
+                      audio_bus_rx_channels());
+        STRRES_PRINTF(STR_AUDIO_INPUT_PDM_RAW_NOTE);
         break;
     }
     }
@@ -701,6 +728,48 @@ static bool pdm_pins_free(int clk, int din)
     return true;
 }
 
+/* As pdm_pins_free(), generalized to a set of data pins. */
+static bool pdm_raw_pins_free(int clk, const int *dins, int line_count)
+{
+    if (!audio_bus_ready()) {
+        return true;
+    }
+
+    int bclk = -1;
+    int ws = -1;
+    int dout = -1;
+    int bus_din = -1;
+    int mclk = -1;
+    audio_bus_pins(&bclk, &ws, &dout, &bus_din, &mclk);
+
+    const int used[] = {bclk, ws, dout, mclk};
+    const char *const names[] = {"BCLK", "WS", "DOUT", "MCLK"};
+
+    for (size_t i = 0; i < sizeof(used) / sizeof(used[0]); i++) {
+        if (used[i] < 0) {
+            continue;
+        }
+        const char *role = (used[i] == clk) ? "clock" : NULL;
+        if (!role) {
+            for (int j = 0; j < line_count; j++) {
+                if (used[i] == dins[j]) {
+                    role = "data line";
+                    break;
+                }
+            }
+        }
+        if (!role) {
+            continue;
+        }
+
+        STRRES_ERROR(STR_AUDIO_PDM_PIN_CONFLICT, used[i], names[i], role);
+        STRRES_PRINTF(STR_AUDIO_PDM_PIN_CONFLICT_NOTE);
+        return false;
+    }
+
+    return true;
+}
+
 int cmd_audio_pdm(int argc, char **argv)
 {
     if (argc < 3) {
@@ -793,6 +862,126 @@ int cmd_audio_pdm(int argc, char **argv)
     return 0;
 }
 
+int cmd_audio_pdm_raw(int argc, char **argv)
+{
+    if (argc < 3) {
+        STRRES_PRINTF(STR_AUDIO_USAGE_PDMRAW);
+        return -1;
+    }
+
+    int clk = 0;
+    if (cli_parse_int_arg(argv[1], &clk) < 0) {
+        STRRES_ERROR(STR_AUDIO_PDM_PINS_NUMERIC);
+        return -1;
+    }
+    if (!GPIO_IS_VALID_OUTPUT_GPIO(clk)) {
+        STRRES_ERROR(STR_AUDIO_PDM_CLK_INVALID, clk);
+        return -1;
+    }
+
+    int *dins = NULL;
+    int line_count = 0;
+    if (cli_parse_pin_list(argv[2], &dins, &line_count) < 0) {
+        STRRES_ERROR(STR_AUDIO_PDM_PINS_NUMERIC);
+        return -1;
+    }
+
+    if (line_count < 1 || line_count > AUDIO_PDM_MAX_LINES) {
+        STRRES_ERROR(STR_AUDIO_PDMRAW_LINE_COUNT, line_count, AUDIO_PDM_MAX_LINES);
+        free(dins);
+        return -1;
+    }
+
+    for (int i = 0; i < line_count; i++) {
+        if (!GPIO_IS_VALID_GPIO(dins[i])) {
+            STRRES_ERROR(STR_AUDIO_PDM_DATA_INVALID, dins[i]);
+            free(dins);
+            return -1;
+        }
+        if (dins[i] == clk) {
+            STRRES_ERROR(STR_AUDIO_PDMRAW_PIN_REUSED, dins[i]);
+            free(dins);
+            return -1;
+        }
+        for (int j = 0; j < i; j++) {
+            if (dins[i] == dins[j]) {
+                STRRES_ERROR(STR_AUDIO_PDMRAW_PIN_REUSED, dins[i]);
+                free(dins);
+                return -1;
+            }
+        }
+    }
+
+    /* Same rate handling as cmd_audio_pdm(): one shared rate across capture
+     * and playback, decimated-PCM terms even though this path stays raw --
+     * audio_bus_open_pdm_raw() is the one that turns it into a bit clock. */
+    audio_format_t fmt = {
+        .rate_hz = DEFAULT_RATE_HZ,
+        .bits = 16,
+        .mclk_pin = -1,
+        .mclk_multiple = 0,
+    };
+    const audio_format_t *existing = audio_bus_format();
+    if (existing) {
+        fmt.rate_hz = existing->rate_hz;
+    }
+
+    int index = 3;
+    while (index < argc) {
+        if (strcasecmp(argv[index], "rate") != 0) {
+            STRRES_ERROR(STR_AUDIO_UNEXPECTED_ARGUMENT_PDM, argv[index]);
+            free(dins);
+            return -1;
+        }
+        if (index + 1 >= argc) {
+            STRRES_ERROR(STR_AUDIO_RATE_NEEDS_VALUE);
+            free(dins);
+            return -1;
+        }
+        int rate = 0;
+        if (cli_parse_int_arg(argv[index + 1], &rate) < 0 ||
+            rate < MIN_RATE_HZ || rate > MAX_RAW_RATE_HZ) {
+            STRRES_ERROR(STR_AUDIO_RATE_RANGE, MIN_RATE_HZ, MAX_RAW_RATE_HZ);
+            free(dins);
+            return -1;
+        }
+        if (existing && (uint32_t)rate != existing->rate_hz) {
+            STRRES_ERROR(STR_AUDIO_BUS_RATE_FIXED, (unsigned long)existing->rate_hz);
+            STRRES_PRINTF(STR_AUDIO_BUS_RATE_FIXED_NOTE, rate);
+            free(dins);
+            return -1;
+        }
+        fmt.rate_hz = (uint32_t)rate;
+        index += 2;
+    }
+
+    if (!pdm_raw_pins_free(clk, dins, line_count)) {
+        free(dins);
+        return -1;
+    }
+
+    esp_err_t err = audio_bus_open_pdm_raw(clk, dins, line_count, &fmt);
+    free(dins);
+    if (err == ESP_ERR_NOT_SUPPORTED) {
+        return -1;   /* the transport has already explained */
+    }
+    if (err != ESP_OK) {
+        STRRES_ERROR(STR_AUDIO_PDMRAW_OPEN_FAILED, esp_err_to_name(err));
+        return -1;
+    }
+
+    err = audio_bus_rx_enable(true);
+    if (err != ESP_OK) {
+        STRRES_ERROR(STR_AUDIO_RX_START_FAILED, esp_err_to_name(err));
+        audio_bus_rx_close();
+        return -1;
+    }
+
+    print_input();
+    STRRES_PRINTF(STR_AUDIO_PDMRAW_NEXT_STEP);
+    return 0;
+}
+
 /* A bare trailing number is the duration, as it is for `tone`. */
 static int take_seconds(int argc, char **argv, int index, double *seconds,
                         double most)
@@ -812,9 +1001,204 @@ static int take_seconds(int argc, char **argv, int index, double *seconds,
     return 0;
 }
 
+int cmd_audio_pdm_ultra(int argc, char **argv)
+{
+    if (argc < 3) {
+        STRRES_PRINTF(STR_AUDIO_USAGE_PDMULTRA);
+        return -1;
+    }
+    int clk = 0;
+    int din = 0;
+    if (cli_parse_int_arg(argv[1], &clk) < 0 || cli_parse_int_arg(argv[2], &din) < 0) {
+        STRRES_ERROR(STR_AUDIO_PDM_PINS_NUMERIC);
+        return -1;
+    }
+    if (!GPIO_IS_VALID_OUTPUT_GPIO(clk)) {
+        STRRES_ERROR(STR_AUDIO_PDM_CLK_INVALID, clk);
+        return -1;
+    }
+    if (!GPIO_IS_VALID_GPIO(din)) {
+        STRRES_ERROR(STR_AUDIO_PDM_DATA_INVALID, din);
+        return -1;
+    }
+    if (clk == din) {
+        STRRES_ERROR(STR_AUDIO_PDM_PINS_DISTINCT, clk);
+        return -1;
+    }
+
+    int max_hz = 80000;
+    for (int index = 3; index < argc; index += 2) {
+        if (strcasecmp(argv[index], "maxhz") != 0) {
+            STRRES_ERROR(STR_AUDIO_PDMULTRA_UNEXPECTED_ARGUMENT, argv[index]);
+            return -1;
+        }
+        if (index + 1 >= argc || cli_parse_int_arg(argv[index + 1], &max_hz) < 0 ||
+            max_hz < 1000 || max_hz > AUDIO_ULTRA_MAX_HZ) {
+            STRRES_ERROR(STR_AUDIO_PDMULTRA_MAXHZ_RANGE, AUDIO_ULTRA_MAX_HZ);
+            return -1;
+        }
+    }
+
+    esp_err_t err = audio_bus_open_pdm_ultra(clk, din, (uint32_t)max_hz);
+    if (err == ESP_ERR_NOT_SUPPORTED) {
+        return -1;
+    }
+    if (err != ESP_OK) {
+        STRRES_ERROR(STR_AUDIO_PDMULTRA_OPEN_FAILED, esp_err_to_name(err));
+        return -1;
+    }
+    print_input();
+    STRRES_PRINTF(STR_AUDIO_PDM_NEXT_STEP);
+    return 0;
+}
+
+/*
+ * `audio pdmbits`: statistics of the raw bitstream, which needs no decimation.
+ * A PDM microphone that is clocked and alive produces a stream that is about
+ * half ones and flips often; one that is asleep, unpowered or out of its clock
+ * range sits at a constant level or at a regular pattern. The windowed density
+ * moves with sound, so it is the cheap "does it respond" test.
+ */
+#define PDMBITS_WINDOW_WORDS 64   /* 1024 bits per density window */
+
+int cmd_audio_pdm_bits(int argc, char **argv)
+{
+    if (!audio_bus_rx_require()) {
+        return -1;
+    }
+    if (audio_bus_rx_mode() != AUDIO_RX_PDM_RAW) {
+        STRRES_ERROR(STR_AUDIO_PDMBITS_NEEDS_RAW);
+        return -1;
+    }
+
+    int channels = audio_bus_rx_channels();
+
+    /* `pdmbits dump [frames]`: capture to RAM without pausing for output, then
+     * print one frame per line as hex words, for decimation on a host. */
+    if (argc >= 2 && strcasecmp(argv[1], "dump") == 0) {
+        int frames_wanted = 32768;
+        if (argc >= 3 && (cli_parse_int_arg(argv[2], &frames_wanted) < 0 ||
+                          frames_wanted < 1 || frames_wanted > 49152)) {
+            STRRES_ERROR(STR_AUDIO_PDMBITS_DUMP_RANGE, 49152);
+            return -1;
+        }
+        size_t fb = (size_t)channels * sizeof(uint16_t);
+        uint16_t *all = malloc((size_t)frames_wanted * fb);
+        if (!all) {
+            STRRES_ERROR(STR_AUDIO_PDMBITS_NO_MEMORY);
+            return -1;
+        }
+        size_t have = 0;
+        uint8_t *dst = (uint8_t *)all;
+        size_t want_bytes = (size_t)frames_wanted * fb;
+        size_t got_bytes = 0;
+        audio_bus_read(dst, want_bytes < 4096 ? want_bytes : 4096, &got_bytes, 50);   /* drain */
+        while (have < want_bytes) {
+            size_t g = 0;
+            if (audio_bus_read(dst + have, want_bytes - have, &g, 200) != ESP_OK || g == 0) {
+                break;
+            }
+            have += g;
+        }
+        for (size_t f = 0; f < have / fb; f++) {
+            for (int c = 0; c < channels; c++) {
+                diag_printf("%04X", all[f * channels + c]);
+            }
+            diag_printf("\n");
+        }
+        free(all);
+        return 0;
+    }
+
+    double seconds = 1.0;
+    if (take_seconds(argc, argv, 1, &seconds, 10.0) < 0) {
+        return -1;
+    }
+
+    if (channels < 1 || channels > 2 * AUDIO_PDM_MAX_LINES) {
+        STRRES_ERROR(STR_AUDIO_PDMBITS_NEEDS_RAW);
+        return -1;
+    }
+    const size_t frame_bytes = (size_t)channels * sizeof(uint16_t);
+    const size_t block_frames = 256;
+    uint16_t *buf = malloc(block_frames * frame_bytes);
+    if (!buf) {
+        STRRES_ERROR(STR_AUDIO_PDMBITS_NO_MEMORY);
+        return -1;
+    }
+
+    uint64_t ones[2 * AUDIO_PDM_MAX_LINES] = {0};
+    uint64_t flips[2 * AUDIO_PDM_MAX_LINES] = {0};
+    uint64_t words[2 * AUDIO_PDM_MAX_LINES] = {0};
+    uint32_t win_ones[2 * AUDIO_PDM_MAX_LINES] = {0};
+    uint32_t win_n[2 * AUDIO_PDM_MAX_LINES] = {0};
+    double win_sum[2 * AUDIO_PDM_MAX_LINES] = {0};
+    double win_sq[2 * AUDIO_PDM_MAX_LINES] = {0};
+    uint64_t windows[2 * AUDIO_PDM_MAX_LINES] = {0};
+    uint16_t first_word[2 * AUDIO_PDM_MAX_LINES] = {0};
+    bool have_first = false;
+
+    /* Drain what queued up while the receiver sat idle, then measure. */
+    size_t got = 0;
+    audio_bus_read(buf, block_frames * frame_bytes, &got, 50);
+
+    int64_t end_us = esp_timer_get_time() + (int64_t)(seconds * 1e6);
+    while (esp_timer_get_time() < end_us) {
+        if (audio_bus_read(buf, block_frames * frame_bytes, &got, 200) != ESP_OK || got == 0) {
+            break;
+        }
+        size_t frames = got / frame_bytes;
+        for (size_t f = 0; f < frames; f++) {
+            for (int c = 0; c < channels; c++) {
+                uint16_t w = buf[f * channels + c];
+                if (!have_first) {
+                    first_word[c] = w;
+                }
+                int pop = __builtin_popcount(w);
+                ones[c] += pop;
+                flips[c] += __builtin_popcount((uint16_t)(w ^ (w >> 1)) & 0x7FFF);
+                words[c]++;
+                win_ones[c] += pop;
+                if (++win_n[c] == PDMBITS_WINDOW_WORDS) {
+                    double d = (double)win_ones[c] / (PDMBITS_WINDOW_WORDS * 16.0);
+                    win_sum[c] += d;
+                    win_sq[c] += d * d;
+                    windows[c]++;
+                    win_ones[c] = 0;
+                    win_n[c] = 0;
+                }
+            }
+            have_first = true;
+        }
+    }
+    free(buf);
+
+    for (int c = 0; c < channels; c++) {
+        if (words[c] == 0) {
+            STRRES_ERROR(STR_AUDIO_PDMBITS_NO_DATA);
+            return -1;
+        }
+        double density = 100.0 * (double)ones[c] / (16.0 * (double)words[c]);
+        double flip_pct = 100.0 * (double)flips[c] / (15.0 * (double)words[c]);
+        double wstdev = 0.0;
+        if (windows[c] > 1) {
+            double m = win_sum[c] / (double)windows[c];
+            double v = win_sq[c] / (double)windows[c] - m * m;
+            wstdev = 100.0 * sqrt(v > 0.0 ? v : 0.0);
+        }
+        STRRES_PRINTF(STR_AUDIO_PDMBITS_ROW, c, (unsigned long long)(words[c] * 16),
+                      density, flip_pct, wstdev, (unsigned)first_word[c]);
+    }
+    return 0;
+}
+
 int cmd_audio_record(int argc, char **argv)
 {
     if (!audio_bus_rx_require()) {
+        return -1;
+    }
+    if (audio_bus_rx_mode() == AUDIO_RX_PDM_RAW) {
+        STRRES_ERROR(STR_AUDIO_NO_PCM_RAW_PDM);
         return -1;
     }
 
@@ -852,6 +1236,10 @@ int cmd_audio_capture_file(int argc, char **argv)
     (void)argv;
 
     if (!audio_bus_rx_require()) {
+        return -1;
+    }
+    if (audio_bus_rx_mode() == AUDIO_RX_PDM_RAW) {
+        STRRES_ERROR(STR_AUDIO_NO_PCM_RAW_PDM);
         return -1;
     }
 
@@ -964,6 +1352,10 @@ int cmd_audio_level(int argc, char **argv)
     if (!audio_bus_rx_require()) {
         return -1;
     }
+    if (audio_bus_rx_mode() == AUDIO_RX_PDM_RAW) {
+        STRRES_ERROR(STR_AUDIO_NO_PCM_RAW_PDM);
+        return -1;
+    }
 
     double seconds = DEFAULT_LEVEL_SECONDS;
     if (take_seconds(argc, argv, 1, &seconds, 120.0) < 0) {
@@ -1052,6 +1444,10 @@ static double measure_tone(double hz, double seconds, double *level)
 int cmd_audio_loopback(int argc, char **argv)
 {
     if (!audio_bus_require() || !audio_bus_rx_require()) {
+        return -1;
+    }
+    if (audio_bus_rx_mode() == AUDIO_RX_PDM_RAW) {
+        STRRES_ERROR(STR_AUDIO_NO_PCM_RAW_PDM);
         return -1;
     }
 

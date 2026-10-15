@@ -41,6 +41,7 @@
 #define REG_ADC_CONTROL        0x0e
 #define REG_LEFT_ADC_VOLUME    0x0f
 #define REG_RIGHT_ADC_VOLUME   0x10
+#define REG_RSPK_SUBMIXER      0x2b
 #define REG_INPUT_CONTROL      0x2c
 #define REG_LEFT_INPPGA        0x2d
 #define REG_RIGHT_INPPGA       0x2e

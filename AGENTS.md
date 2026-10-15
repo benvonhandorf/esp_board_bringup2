@@ -196,6 +196,15 @@ anything that exposes credentials or changes the device.
 - **A supplied scale factor is gain-specific**, in both load-cell drivers, and
   `weight` refuses when a factor is set with no tare. See `docs/i2c.md` and
   `docs/loadcell.md`; both explain why, and both are easy to undo by accident.
+- **A PDM microphone with an ultrasonic mode must not be started in it.** The
+  SPH0641LU4H-1 wants 1-2.475 MHz first, then 3.072-4.8 MHz. `audio pdmultra`
+  does that on one open channel (`audio_bus_open_pdm_ultra()`); closing and
+  reopening the receiver stops the clock and loses the standard-mode entry.
+- **Ultrasonic capture is CPU-bound.** 300 kHz stereo is 1.2 MB/s of raw words,
+  decimated in software. At 160 MHz or `-Og` the receiver overruns silently and
+  the spectrum floor is 20 dB too high; `pdm_decimate.c` and `capture.c` are
+  `-O2` and the S3 wants 240 MHz. `audio pdmbits dump` plus a host decimator is
+  how to tell an overrun from a real floor.
 - **The image is on trial after an OTA.** `app_main()` confirms it at the very
   end, so firmware that crashes during start-up rolls back on the next reset. Do
   not move that call earlier.
