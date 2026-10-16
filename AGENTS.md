@@ -44,7 +44,7 @@ main/
   app_bringup.h             the includes every command module wants
   audio/                    i2s_bus.c (transport), tone.c (signal generation),
                             capture.c (input statistics, FFT, tone detection),
-                            audio.c (the group + codec registry), codec_*.c
+                            pcm_stats.c (the statistics), audio.c (the group + codec registry), codec_*.c
   board/board.c             named pinouts and per-subsystem setup presets
   display/                  display.c (SPI transport, panel registry, test
                             patterns), panel_st7789.c
@@ -106,6 +106,10 @@ drifting out of step.
 **A group.** A `cli_command_t[]` and a `cli_group_t` in `app_console.c`, a row in
 the `groups[]` array, and an entry in `PAGE` in `tools/check_docs.py` naming the
 docs page that covers it.
+
+**Raw PDM decimation** is the `pdm_decimator` component (any channel count, two
+filters, a portable C stage 2 beside the S3 vector one). `i2s_bus.c` owns the receiver
+and feeds it; `audio pdmbench` checks the vector stage against the C one on the chip.
 
 **A device driver.** It goes in `esp_components`, not here. What lives here is
 the `_cmd.c` shim: argument parsing, which parts the user has configured, and
@@ -202,8 +206,8 @@ anything that exposes credentials or changes the device.
   reopening the receiver stops the clock and loses the standard-mode entry.
 - **Ultrasonic capture is CPU-bound.** 300 kHz stereo is 1.2 MB/s of raw words,
   decimated in software. At 160 MHz or `-Og` the receiver overruns silently and
-  the spectrum floor is 20 dB too high; `pdm_decimate.c` and `capture.c` are
-  `-O2` and the S3 defaults to 240 MHz. `audio pdmbits dump` plus a host decimator is
+  the spectrum floor is 20 dB too high; the `pdm_decimator` component builds itself `-O2`, `capture.c` and
+  `pcm_stats.c` are `-O2` here, and the S3 defaults to 240 MHz. `audio pdmbits dump` plus a host decimator is
   how to tell an overrun from a real floor.
 - **The image is on trial after an OTA.** `app_main()` confirms it at the very
   end, so firmware that crashes during start-up rolls back on the next reset. Do

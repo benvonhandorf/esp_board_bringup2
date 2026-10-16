@@ -12,6 +12,7 @@
 #include <string.h>
 #include "app_bringup.h"
 #include "audio.h"
+#include "pdm_decimator.h"
 #include "esp_cpu.h"
 #include "esp_heap_caps.h"
 
@@ -93,8 +94,14 @@ int cmd_audio_pdm_bench(int argc, char **argv)
     int16_t *o2s = heap_caps_aligned_alloc(16, n * fbytes + 64, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     int16_t *o2p = heap_caps_aligned_alloc(16, n * fbytes + 64, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
     int16_t *pair = heap_caps_aligned_alloc(16, n * 4 + 64, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
-    pdm_dec_t *d1 = pdm_dec_new(channels, 16, false);
-    pdm_dec2_t *d2 = NULL;
+    pdm_decimator_t *d1 = NULL;
+    pdm_decimator_config_t cfg1 = {
+        .filter = PDM_DECIMATOR_SINC6, .channels = channels, .ratio = 16,
+    };
+    if (pdm_decimator_create(&cfg1, &d1) != ESP_OK) {
+        d1 = NULL;
+    }
+    pdm_decimator_t *d2 = NULL;
     size_t p1 = 0, p2s = 0, p2p = 0;
     uint32_t c1 = 0, c2s = 0, c2p = 0;
     if (!raw || !o1 || !o2s || !o2p || !pair || !d1) {
@@ -105,29 +112,36 @@ int cmd_audio_pdm_bench(int argc, char **argv)
     modulate(raw, n, channels);
 
     uint32_t t = cycles_now();
-    p1 = pdm_dec_process(d1, raw, n, o1);
+    pdm_decimator_process(d1, raw, n, o1, &p1);
     c1 = cycles_now() - t;
 
     /* One decimator instance at a time: each holds a per-channel work buffer
-     * of its own, and eight channels of it do not fit twice beside the rest. */
+     * of its own, and eight channels of it do not fit twice beside the rest.
+     * Pass 0 is the portable C stage 2, pass 1 the vector one. */
     for (int pass = 0; pass < 2; pass++) {
-        d2 = pdm_dec2_new(channels, pass == 1);
-        if (!d2) {
+        pdm_decimator_config_t cfg2 = {
+            .filter = PDM_DECIMATOR_TWO_STAGE, .channels = channels, .allow_simd = pass == 1,
+        };
+        if (pdm_decimator_create(&cfg2, &d2) != ESP_OK) {
+            d2 = NULL;
             STRRES_ERROR(STR_AUDIO_BENCH_NO_MEMORY);
             goto done;
         }
-        pdm_dec2_process(d2, raw, 8, pass ? o2p : o2s);   /* allocate the buffer */
-        pdm_dec2_free(d2);
-        d2 = pdm_dec2_new(channels, pass == 1);
-        if (!d2) {
+        /* Size the work buffer first so the timed call does not allocate. */
+        if (pdm_decimator_reserve(d2, n) != ESP_OK) {
             STRRES_ERROR(STR_AUDIO_BENCH_NO_MEMORY);
             goto done;
         }
         t = cycles_now();
-        size_t p = pdm_dec2_process(d2, raw, n, pass ? o2p : o2s);
+        size_t p = 0;
+        esp_err_t derr = pdm_decimator_process(d2, raw, n, pass ? o2p : o2s, &p);
         uint32_t c = cycles_now() - t;
-        pdm_dec2_free(d2);
+        pdm_decimator_destroy(d2);
         d2 = NULL;
+        if (derr != ESP_OK) {
+            STRRES_ERROR(STR_AUDIO_BENCH_NO_MEMORY);
+            goto done;
+        }
         if (pass) { p2p = p; c2p = c; } else { p2s = p; c2s = c; }
     }
 
@@ -198,7 +212,7 @@ int cmd_audio_pdm_bench(int argc, char **argv)
 
 done:
     free(raw); free(o1); free(o2s); free(o2p); free(pair);
-    pdm_dec_free(d1);
-    pdm_dec2_free(d2);
+    pdm_decimator_destroy(d1);
+    pdm_decimator_destroy(d2);
     return rc;
 }

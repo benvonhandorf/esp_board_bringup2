@@ -182,8 +182,8 @@ may not exceed 100000.
 and the decimator plus the capture statistics run once per word; at the
 S3's former default of 160 MHz the DMA overruns without any error, and the
 symptom is a noise floor 20 dB too high that falls as `maxhz` falls. The S3
-defaults now set 240 MHz (`sdkconfig.defaults.esp32s3`). `pdm_decimate.c` and
-`capture.c` are built `-O2` for the same reason.
+defaults now set 240 MHz (`sdkconfig.defaults.esp32s3`). the
+`pdm_decimator` component and `capture.c` are built `-O2` for the same reason.
 
 The mic clock is fixed at 4.8 MHz, the top of the part's ultrasonic range, and
 `audio pdmbits` / `pdmraw` is the way to try other clocks. Raw mode cannot

@@ -18,6 +18,7 @@
 #include "app_bringup.h"
 #include "audio.h"
 #include "esp_cpu.h"
+#include "pdm_decimator.h"
 
 #include "sdkconfig.h"
 #include "soc/soc_caps.h"
@@ -56,8 +57,7 @@ static int pdm_raw_line_count;
 
 /* Software-decimated ultrasonic PDM: set while audio_bus_open_pdm_ultra()'s
  * receiver is open. The channel underneath is a raw one. */
-static pdm_dec_t *ultra_dec;
-static pdm_dec2_t *ultra_dec2;   /* set instead of ultra_dec for the fast filter */
+static pdm_decimator_t *ultra_dec;
 static uint32_t ultra_max_hz;
 static uint32_t ultra_rate;
 static uint64_t ultra_cycles;
@@ -222,7 +222,7 @@ static bool rx_chan_info(i2s_chan_info_t *info)
  */
 uint32_t audio_bus_rx_rate(void)
 {
-    if (ultra_dec || ultra_dec2) {
+    if (ultra_dec) {
         return ultra_rate;
     }
     if (rx_mode == AUDIO_RX_PDM || rx_mode == AUDIO_RX_PDM_RAW) {
@@ -240,7 +240,7 @@ uint32_t audio_bus_rx_rate(void)
  * limits on. Zero unless a PDM microphone is open. */
 uint32_t audio_bus_pdm_clk_hz(void)
 {
-    if (ultra_dec || ultra_dec2) {
+    if (ultra_dec) {
         return AUDIO_ULTRA_CLK_HZ;
     }
     i2s_chan_info_t info;
@@ -281,10 +281,8 @@ void audio_bus_rx_close(void)
         rx_chan = NULL;
     }
 
-    pdm_dec_free(ultra_dec);
+    pdm_decimator_destroy(ultra_dec);
     ultra_dec = NULL;
-    pdm_dec2_free(ultra_dec2);
-    ultra_dec2 = NULL;
     free(ultra_scratch);
     ultra_scratch = NULL;
     ultra_scratch_bytes = 0;
@@ -616,12 +614,12 @@ esp_err_t audio_bus_open_pdm_raw(int clk, const int *dins, int line_count,
 
 uint32_t audio_bus_rx_band_limit_hz(void)
 {
-    return (ultra_dec || ultra_dec2) ? ultra_max_hz : 0;
+    return (ultra_dec) ? ultra_max_hz : 0;
 }
 
 bool audio_bus_pdm_ultra_load(uint64_t *cycles, uint64_t *frames)
 {
-    if (!ultra_dec && !ultra_dec2) {
+    if (!ultra_dec) {
         return false;
     }
     if (cycles) *cycles = ultra_cycles;
@@ -674,16 +672,20 @@ esp_err_t audio_bus_open_pdm_ultra(int clk, int din, uint32_t max_hz, bool fast)
     }
     rx_running = true;
 
-    if (fast) {
-        r = 16;   /* the two-stage filter is a fixed 4.8 MHz -> 300 kHz */
-        ultra_dec2 = pdm_dec2_new(2, true);
-    } else {
-        ultra_dec = pdm_dec_new(2, r, false);
-    }
-    if (!ultra_dec && !ultra_dec2) {
+    /* The two-stage filter is a fixed 4.8 MHz -> 300 kHz, ratio 16. */
+    pdm_decimator_config_t dcfg = {
+        .filter = fast ? PDM_DECIMATOR_TWO_STAGE : PDM_DECIMATOR_SINC6,
+        .channels = 2,
+        .ratio = fast ? 16 : r,
+        .lsb_first = false,
+        .allow_simd = true,
+    };
+    err = pdm_decimator_create(&dcfg, &ultra_dec);
+    if (err != ESP_OK) {
         audio_bus_rx_close();
-        return ESP_ERR_NO_MEM;
+        return err;
     }
+    r = pdm_decimator_ratio(ultra_dec);
     ultra_max_hz = max_hz;
     ultra_cycles = 0;
     ultra_frames = 0;
@@ -785,10 +787,10 @@ esp_err_t audio_bus_read(void *data, size_t bytes, size_t *read,
     if (!rx_chan || !rx_running) {
         return ESP_ERR_INVALID_STATE;
     }
-    if (ultra_dec || ultra_dec2) {
-        /* Two words of raw bits per output frame per R/16, decimated here. */
+    if (ultra_dec) {
+        /* Raw words in, decimated PCM out, in whatever ratio the filter has. */
         size_t out_frames = bytes / 4;
-        size_t raw_frames = out_frames * (ultra_dec2 ? 1 : (size_t)pdm_dec_r_words(ultra_dec));
+        size_t raw_frames = pdm_decimator_input_frames(ultra_dec, out_frames);
         size_t raw_bytes = raw_frames * 4;
         if (raw_bytes > ultra_scratch_bytes) {
             free(ultra_scratch);
@@ -797,19 +799,23 @@ esp_err_t audio_bus_read(void *data, size_t bytes, size_t *read,
             if (!ultra_scratch) {
                 return ESP_ERR_NO_MEM;
             }
+            /* Size the filter's own work buffer here too, so that it is never
+             * allocated inside the timed section below. */
+            if (pdm_decimator_reserve(ultra_dec, raw_frames) != ESP_OK) {
+                return ESP_ERR_NO_MEM;
+            }
         }
         size_t got = 0;
         esp_err_t err = i2s_channel_read(rx_chan, ultra_scratch, raw_bytes, &got, timeout_ms);
         uint32_t t0 = esp_cpu_get_cycle_count();
-        size_t produced = ultra_dec2
-                              ? pdm_dec2_process(ultra_dec2, ultra_scratch, got / 4, data)
-                              : pdm_dec_process(ultra_dec, ultra_scratch, got / 4, data);
+        size_t produced = 0;
+        esp_err_t derr = pdm_decimator_process(ultra_dec, ultra_scratch, got / 4, data, &produced);
         ultra_cycles += (uint32_t)(esp_cpu_get_cycle_count() - t0);
         ultra_frames += produced;
         if (read) {
             *read = produced * 4;
         }
-        return err;
+        return err != ESP_OK ? err : derr;
     }
     return i2s_channel_read(rx_chan, data, bytes, read, timeout_ms);
 }

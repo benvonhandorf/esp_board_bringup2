@@ -105,6 +105,10 @@ dependencies:
     git: https://github.com/benvonhandorf/esp_components.git
     path: nau7802
     version: nau7802-v0.2.0
+  pdm_decimator:
+    git: https://github.com/benvonhandorf/esp_components.git
+    path: pdm_decimator
+    version: pdm_decimator-v0.1.0
   pi4ioe5v6408:
     git: https://github.com/benvonhandorf/esp_components.git
     path: pi4ioe5v6408

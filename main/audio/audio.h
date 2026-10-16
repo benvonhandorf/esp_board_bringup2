@@ -205,7 +205,7 @@ esp_err_t audio_bus_open_pdm(int clk, int din, const audio_format_t *fmt);
  * it: the chip has exactly one PDM-to-PCM decimation filter, good for two
  * channels total, so more than one line has to bypass that filter and read
  * the raw, undecimated one-bit stream instead. Turning that into PCM is
- * pdm_dec_process()'s job, in software, per line (pdmultra does it for one line) -- nothing here produces
+ * pdm_decimator_process()'s job, in software, per line (pdmultra does it for one line) -- nothing here produces
  * anything audio_capture_run() or the other stereo-PCM consumers can read.
  *
  * line_count must be 1-AUDIO_PDM_MAX_LINES, further clamped to whatever the
@@ -242,7 +242,7 @@ size_t audio_bus_rx_frame_bytes(void);   /* audio_bus_rx_channels() slots */
 int audio_bus_rx_channels(void);
 
 /* Detail behind AUDIO_RX_PDM_RAW, for status reporting and for whatever
- * feeds pdm_dec_process(). dins[] is always AUDIO_PDM_MAX_LINES
+ * feeds pdm_decimator_process(). dins[] is always AUDIO_PDM_MAX_LINES
  * long; entries past *line_count are -1. Zeroed/-1'd when not in that mode. */
 void audio_bus_rx_pdm_raw_pins(int *clk, int dins[AUDIO_PDM_MAX_LINES],
                                int *line_count);
@@ -253,32 +253,10 @@ esp_err_t audio_bus_read(void *data, size_t bytes, size_t *read,
                          uint32_t timeout_ms);
 
 /* ------------------------------------------------------------------ */
-/* Raw PDM decimation (pdm_decimate.c)                                 */
+/* Capture statistics (pcm_stats.c)                                    */
 /* ------------------------------------------------------------------ */
 
-/*
- * Software decimation of a raw PDM receiver: a sixth-order sinc by R, R a
- * multiple of 16 (so outputs land on word boundaries); sixth-order sinc. `raw` is `frames`
- * frames of `channels` interleaved 16-bit words; `out` receives interleaved
- * int16 and must hold frames / (R / 16) frames. Returns frames produced.
- * `lsb_first` says which end of each word is the oldest sample.
- */
-typedef struct pdm_dec pdm_dec_t;
-pdm_dec_t *pdm_dec_new(int channels, int r, bool lsb_first);
-void pdm_dec_free(pdm_dec_t *d);
-size_t pdm_dec_process(pdm_dec_t *d, const uint16_t *raw, size_t frames, int16_t *out);
-int pdm_dec_r_words(const pdm_dec_t *d);
-
-/*
- * Faster alternatives, kept beside the originals for `audio pdmbench`
- * (pdm_fast.c). pdm_dec2 is a different, cheaper filter: sinc^4 over bytes,
- * then a 24-tap FIR decimating by 2 (PIE dot product when use_pie).
- * It always runs 4.8 MHz -> 300 kHz.
- */
-typedef struct pdm_dec2 pdm_dec2_t;
-pdm_dec2_t *pdm_dec2_new(int channels, bool use_pie);
-void pdm_dec2_free(pdm_dec2_t *d);
-size_t pdm_dec2_process(pdm_dec2_t *d, const uint16_t *raw, size_t frames, int16_t *out);
+/* Raw PDM decimation is the pdm_decimator component; see pdm_decimator.h. */
 
 /* Capture statistics for interleaved stereo int16, three implementations. */
 typedef struct {
