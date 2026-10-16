@@ -19,6 +19,7 @@
 # Build artifacts and directories
 **/build/
 build/
+build_*/
 *.o
 *.a
 *.out
@@ -31,6 +32,8 @@ build/
 flasher_args.json # Generated in build directory
 sdkconfig.old
 sdkconfig
+sdkconfig.s3
+.cache/
 
 # ESP-IDF dependencies
 # For older versions or manual component management
