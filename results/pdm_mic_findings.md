@@ -70,9 +70,10 @@ Noise floor, median 5-80 kHz (dBFS/Hz, slot 0 / slot 1):
 
 - Datasheet response (ultrasonic mode, acoustic, re 1 kHz): +14.6 dB peak at
   25 kHz, about +8 dB from 40 to 65 kHz, +12.8 dB at 80 kHz.
-- **Not verified.** No ultrasonic source was available, so only the noise
-  floor was measured, and it is electrical. No bump at 25 kHz is expected
-  from it and none is seen.
+- **Partly verified.** The noise floor is electrical (above). A 44 kHz
+  transducer is detected cleanly in the 45 kHz band (see the 44 kHz section),
+  but with one frequency and half-octave bands the response shape and the
+  25 kHz peak are still unchecked.
 - Datasheet in-band noise implies about -90 dBFS A-weighted (20 Hz-8 kHz).
   The flat floor extrapolates to roughly -79 dBFS unweighted over the same
   band: perhaps 8 dB above spec, but both rooms add acoustic noise there, so
@@ -145,6 +146,59 @@ about 34% (2 ch), 68% (4 ch), 100% (6 ch) and 135% (8 ch) of one core at
 across both cores. Whether the I2S driver delivers more than two raw slots
 correctly is unverified.
 
+## On-device half-octave measurements: ports covered and 44 kHz source (2026-10-15)
+
+All from `audio pdmultra 8 3` then `audio record 5` (300 kHz PCM, two-stage
+decimator, 4.8 MHz clock). Values are power per half-octave band in dBFS as
+`record` prints them, so they are band totals, not dBFS/Hz, and are not
+comparable with the floor figures above. Resolution is a half octave, so a tone
+lands in a band, not at a frequency.
+
+### Ports covered (acoustic or electrical?)
+
+| band | open L / R | covered L / R |
+|------|------------|---------------|
+| overall rms | -64.4 / -66.7 | -63.3 / -63.7 |
+| 62 Hz | -63.4 / -70.5 | -55.0 / -60.3 |
+| 16 kHz | -83.2 / -76.6 | -87.7 / -96.3 |
+| 22.6 kHz | -81.7 / -79.2 | -92.8 / -92.7 |
+| 32 kHz | -84.1 / -79.1 | -84.4 / -83.4 |
+| 45 kHz | -79.4 / -79.2 | -84.9 / -83.1 |
+| 64 kHz | -64.3 / -70.7 | -76.9 / -77.6 |
+| 90 kHz | -80.9 / -80.3 | -79.3 / -80.4 |
+
+- The 16 and 22.6 kHz spurs fall 11-20 dB when the ports are covered: they are
+  largely **acoustic**.
+- The 64 kHz spur falls 7-12 dB but is still the highest ultrasonic band (3-8 dB
+  above 32 and 45 kHz): partly acoustic, partly electrical or conducted.
+- 62 Hz **rises** 9-10 dB when covered: electrical (hum or supply ripple), not
+  acoustic.
+- The covered 32-45 kHz level, about -83 to -85 dBFS per band, is the best
+  estimate of the electrical floor. Above 80 kHz the figure (about -80) is the
+  filter and decimator floor.
+- rms is not lower covered because the 62 Hz hum dominates it.
+
+### 44 kHz transducer
+
+| run | 45 kHz L / R | rms L / R | peak L / R | note |
+|-----|--------------|-----------|------------|------|
+| close | -2.9 / +0.8 | -6.0 / -2.2 | -2.5 / 0.0 | R clipped; skirts are clipping distortion |
+| moved away | -16.9 / -5.8 | -18.9 / -11.3 | -14.0 / -5.4 | clean |
+| same again | -24.9 / -11.1 | -28.0 / -14.8 | -21.1 / -10.1 | position drifted |
+| rig | -16.7 / -6.3 | -18.0 / -9.1 | -11.5 / -2.6 | clean; reproduces "moved away" within 0.5 dB |
+
+- The tone is 66 dB (L) and 77 dB (R) above the covered-port floor in the clean
+  runs, with no overrun symptoms (decimator 18.9% of one core).
+- The right slot reads about 10 dB hotter than the left in every position-stable
+  run. The mics matched within 0.5 dB in standard mode, so this is geometry
+  (angle or distance to the transducer), not gain.
+- In the clean runs the only other elevated band is 64 kHz (-58 / -66 dBFS,
+  roughly 60 dB below the tone), a harmonic or skirt; 32 and 90 kHz are at the
+  floor on L and 5-7 dB above it on R.
+- Plots: `pdm_44khz_transducer_response.png` (third row) and
+  `pdm_44khz_rig_response.png` (rig); dashed line is the covered-port left
+  slot.
+
 ## Corrections
 
 - The first ultrasonic results (-50 dBFS RMS, floor rising ~1.3 dB per
@@ -154,7 +208,10 @@ correctly is unverified.
 
 ## Still open
 
-1. Acoustic response: needs a known ultrasonic source (40 kHz transducer).
+1. Acoustic response across frequency: a 44 kHz source is detected; a swept or
+   multi-frequency source and a finer spectrum than half-octave bands are needed.
 2. Which set B mic was hot in set D.
-3. Whether the indoor spurs are acoustic or electrical (cover the ports).
+3. Which indoor spurs are electrical: 16 and 22.6 kHz are acoustic, 62 Hz is
+   electrical, 64 kHz is mixed. 15.6, 28, 31.3, 54.5 kHz not resolved by
+   half-octave bands.
 4. S3 default CPU frequency is still 160 MHz in `sdkconfig.defaults.esp32s3`.
