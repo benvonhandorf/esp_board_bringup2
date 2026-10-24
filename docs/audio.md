@@ -84,15 +84,15 @@ full scale (−12 dBFS) — loud enough to hear, quiet enough not to hurt.
 finite tone occupies the shell — serial *and* web — for its whole duration;
 a continuous one runs on its own task and is ended with `audio stop`.
 
-The signal is generated from a 1024-entry sine table with interpolation rather
-than by calling `sinf()`. The S3 has an FPU and would manage; the C3 has none,
-and softfloat there would spend a large part of a core generating the test
-signal, which is precisely when the question is whether the *hardware* keeps
-up. The table's error floor measures 90 dB below the signal, far under anything
-an amplifier under test contributes. Phase is a full 32-bit accumulator, so no
-frequency has to divide into the buffer length and block boundaries are
-inaudible, and every tone gets a 5 ms raised-cosine fade at each end so it does
-not thump the speaker.
+The signal comes from the `tone_gen` component, from a 129-entry quarter-wave
+sine table with interpolation rather than by calling `sinf()`. The S3 has an FPU
+and would manage; the C3 has none, and softfloat there would spend a large part
+of a core generating the test signal, which is precisely when the question is
+whether the *hardware* keeps up. The table costs 258 bytes of flash and no RAM,
+and its error is about 1 LSB of 32767 — far under anything an amplifier under
+test contributes. Phase is a full 32-bit accumulator, so no frequency has to
+divide into the buffer length and block boundaries are inaudible, and every tone
+gets a 5 ms raised-cosine fade at each end so it does not thump the speaker.
 
 ```
 > audio tone 1000 3
@@ -111,8 +111,53 @@ something starved the DMA.
 
 Sweeps between two frequencies over 5 seconds by default. Logarithmic unless
 told otherwise, because equal time per octave is how audio hardware is judged.
-Frequency steps once per block of 256 frames — 5 ms at 48 kHz — with phase
-carried across, so there is no clicking at the steps.
+The frequency steps every 5 ms, whatever the sample rate, with phase carried
+across, so there is no clicking at the steps.
+
+## `dtmf <digits> [tone <ms>] [gap <ms>] [pause <ms>] [level <pct>] [twist <db>] [left|right|both]`
+
+Dials a string of touch-tone keys: each is two sine tones at once, one from a
+low group and one from a high group, so no single frequency can be mistaken for
+a key.
+
+```
+          1209  1336  1477  1633 Hz
+    697     1     2     3     A
+    770     4     5     6     B
+    852     7     8     9     C
+    941     *     0     #     D
+```
+
+Keys are `0`–`9`, `*`, `#` and `A`–`D` (either case). `,` is a pause of
+`pause` milliseconds, for a line that needs time to answer. A space or `-` is
+skipped, so `555-1234` dials as `5551234`. A character that is none of these is
+refused before anything plays, with its position.
+
+The usual use is dialling a phone through a speaker held to the handset, which
+wants the sample rate the telephone network uses:
+
+```
+> audio bus 41 43 42 din 46 rate 8000
+> audio dtmf 5551234
+Dialled 5551234
+Keys 100 ms, gaps 100 ms, pauses 2000 ms
+Level 25% (-12.0 dBFS), twist 2.0 dB, 10400 frames
+Sample rate: 8000 requested, 8000 configured, 8000 measured
+```
+
+Any bus rate works; 8 kHz is simply the one that costs least and matches the
+line. A DTMF receiver needs 40 ms or more of each key and of each gap, which is
+why the defaults are 100 ms; `tone` and `gap` go down to 20 ms to find a
+receiver's limit.
+
+**Level is the two tones together.** `level` is the combined peak, as a percentage
+of full scale, so the sum can never clip. `twist` makes the high tone louder than
+the low one by that many decibels (0–6, default 2): telephone lines lose more at
+high frequency, and receivers are specified to expect the high tone a little
+stronger. Each key has a 3 ms raised-cosine edge, so keys do not click.
+
+Like a finite `tone`, `dtmf` occupies the shell until it finishes, and always
+does — there is no continuous form.
 
 ## `stop`
 
@@ -446,6 +491,59 @@ signal to confirm.
 `reg` reads or writes any of the 64 registers, showing both the shadow value
 and the live one where the part reads back, and flagging a difference between
 them. `route` chooses which output drivers are powered.
+
+## ES8311
+
+Reached as `audio-es8311 ...`. Drives the Everest ES8311 mono codec: a DAC for a
+speaker amplifier and an ADC for an analog (or PDM) microphone, on one I2S bus. Like the
+NAU8822 it both plays and records, so `audio loopback` works; unlike it, the part is
+**mono** and **needs no MCLK pin**. It is what the M5Stack Cardputer Adv carries — see
+`board-cardputer-adv` in [board](board.md).
+
+Control is I2C at `0x18` (CE low) or `0x19` (CE high), so the `i2c` bus must be up first
+— `i2c bus <scl> <sda>`, which the board preset does — and `audio bus` must be up too.
+
+**Clocking without MCLK.** The part runs its converters from 256 × the sample rate. With
+no MCLK pin it takes the bit clock instead, and 16-bit stereo at 8 kHz has a bit clock of
+only 256 kHz; the codec's pre-multiplier brings that to 2.048 MHz. `init` works the
+divider out from the clock the bus is actually running, so `audio bus ... rate 8000
+bits 16` followed by `init` is the whole procedure. If the bus has an `mclk` pin the part
+uses that instead. A clock no divider can reach is refused with the numbers, rather than
+leaving a codec that accepts every write and plays at the wrong pitch. Rates are
+8000–48000 Hz.
+
+**Mono.** The wire is still two slots wide; the codec plays the left slot. `audio tone`'s
+`right` argument is therefore silent here, and `both` or `left` is what to use.
+
+### `init [address]`
+
+Identifies the part from its chip ID registers, resets it, programs the clock and word
+length for the current `audio bus` format, powers the analog blocks and the DAC, and sets
+up the analog microphone. The DAC comes up **unmuted at 10 %**, deliberately not at the
+last setting the previous owner left in the part.
+
+Run `init` again after `audio bus` changes the format. `audio bus` reconfigures an
+attached codec itself, but the reset it implies means any register written by hand with
+`reg` is lost.
+
+Volume maps percent onto decibels rather than register codes: 1 % is −50 dB, 100 % is
+0 dB, 0 % is muted. The register itself spans 95.5 dB in half-dB steps, which as a linear
+percentage would put 5 % at −90 dB — silence. The gain above 0 dB the part can apply is
+deliberately not reachable from `audio volume`.
+
+### `status` and `reg <n> [value]`
+
+`status` shows the I2C address, volume as percent, register code and decibels, mute, the
+clock source and the divide and multiply in use, and the microphone path.
+
+`reg` reads or writes one 8-bit register (`0x00`–`0xff`); the chip ID is at `0xfd`,
+`0xfe` and `0xff`. Unlike the NAU8822 the registers read back, so there is no shadow copy
+and the value shown is what the part holds.
+
+### `gain [db]`
+
+The analog microphone preamp, 0 to 30 dB in 3 dB steps; with no argument it shows the
+current setting. It starts at 18 dB.
 
 ## NS4168
 

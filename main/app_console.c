@@ -31,6 +31,7 @@
 #include "aw9523b_cmd.h"
 #include "board.h"
 #include "cli.h"
+#include "codec_es8311.h"
 #include "codec_nau8822.h"
 #include "codec_ns4168.h"
 #include "codec_sph0645.h"
@@ -740,6 +741,7 @@ static const cli_command_t audio_commands[] = {
     {"codecs",   NULL, NULL, cmd_audio_codecs},
     {"tone",     NULL, NULL, cmd_audio_tone},
     {"sweep",    NULL, NULL, cmd_audio_sweep},
+    {"dtmf",     NULL, NULL, cmd_audio_dtmf},
     {"stop",     NULL, NULL, cmd_audio_stop},
     {"record",   NULL, NULL, cmd_audio_record},
     {"capture",  NULL, NULL, cmd_audio_capture_file},
@@ -763,6 +765,7 @@ static const cli_command_text_t audio_text[] = {
     {STR_AUDIO_CODECS_USAGE,    STR_AUDIO_CODECS_HELP},
     {STR_AUDIO_TONE_USAGE,      STR_AUDIO_TONE_HELP},
     {STR_AUDIO_SWEEP_USAGE,     STR_AUDIO_SWEEP_HELP},
+    {STR_AUDIO_DTMF_USAGE,      STR_AUDIO_DTMF_HELP},
     {STR_AUDIO_STOP_USAGE,      STR_AUDIO_STOP_HELP},
     {STR_AUDIO_RECORD_USAGE,    STR_AUDIO_RECORD_HELP},
     {STR_AUDIO_CAPTURE_USAGE,   STR_AUDIO_CAPTURE_HELP},
@@ -811,6 +814,32 @@ static const cli_group_t nau8822_group = {
     .command_count = ARRAY_COUNT(nau8822_commands),
     .command_text = nau8822_text,
     .help_id = STR_AUDIO_NAU8822_GROUP_HELP,
+};
+
+static const cli_command_t es8311_commands[] = {
+    {"init",   NULL, NULL, cmd_es8311_init},
+    {"status", NULL, NULL, cmd_es8311_status},
+    {"reg",    NULL, NULL, cmd_es8311_reg},
+    {"gain",   NULL, NULL, cmd_es8311_gain},
+};
+
+/* Parallel to es8311_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t es8311_text[] = {
+    {STR_AUDIO_ES8311_INIT_USAGE,    STR_AUDIO_ES8311_INIT_HELP},
+    {STR_AUDIO_ES8311_STATUS_USAGE,  STR_AUDIO_ES8311_STATUS_HELP},
+    {STR_AUDIO_ES8311_REG_USAGE,     STR_AUDIO_ES8311_REG_HELP},
+    {STR_AUDIO_ES8311_GAIN_USAGE,    STR_AUDIO_ES8311_GAIN_HELP},
+};
+_Static_assert(ARRAY_COUNT(es8311_text) == ARRAY_COUNT(es8311_commands),
+               "audio-es8311 help ids and commands must be the same length");
+
+static const cli_group_t es8311_group = {
+    .name = "audio-es8311",
+    .commands = es8311_commands,
+    .command_count = ARRAY_COUNT(es8311_commands),
+    .command_text = es8311_text,
+    .help_id = STR_AUDIO_ES8311_GROUP_HELP,
 };
 
 static const cli_command_t ns4168_commands[] = {
@@ -1045,6 +1074,28 @@ static const cli_group_t board_cardputer_group = {
     .help_id = STR_BOARD_CARDPUTER_GROUP_HELP,
 };
 
+static const cli_command_t board_cardputer_adv_commands[] = {
+    {"pins",    NULL, NULL, cmd_board_cardputer_adv_pins},
+    {"audio",   NULL, NULL, cmd_board_cardputer_adv_audio},
+};
+
+/* Parallel to board_cardputer_adv_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t board_cardputer_adv_text[] = {
+    {STR_BOARD_CARDPUTER_ADV_PINS_USAGE,  STR_BOARD_CARDPUTER_ADV_PINS_HELP},
+    {STR_BOARD_CARDPUTER_ADV_AUDIO_USAGE, STR_BOARD_CARDPUTER_ADV_AUDIO_HELP},
+};
+_Static_assert(ARRAY_COUNT(board_cardputer_adv_text) == ARRAY_COUNT(board_cardputer_adv_commands),
+               "board-cardputer-adv help ids and commands must be the same length");
+
+static const cli_group_t board_cardputer_adv_group = {
+    .name = "board-cardputer-adv",
+    .commands = board_cardputer_adv_commands,
+    .command_count = ARRAY_COUNT(board_cardputer_adv_commands),
+    .command_text = board_cardputer_adv_text,
+    .help_id = STR_BOARD_CARDPUTER_ADV_GROUP_HELP,
+};
+
 static const cli_command_t board_xiao_commands[] = {
     {"pins", NULL, NULL, cmd_board_xiao_pins},
     {"mic",  NULL, NULL, cmd_board_xiao_mic},
@@ -1168,6 +1219,7 @@ static const cli_group_t *const groups[] = {
     &loadcell_group,
     &audio_group,
     &nau8822_group,
+    &es8311_group,
     &ns4168_group,
     &sph0645_group,
     &uart_group,
@@ -1178,6 +1230,7 @@ static const cli_group_t *const groups[] = {
     &touch_group,
     &board_group,
     &board_cardputer_group,
+    &board_cardputer_adv_group,
     &board_xiao_group,
     &board_sensor_group,
     &board_minstro_group,

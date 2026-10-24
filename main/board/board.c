@@ -89,6 +89,34 @@ static const board_t cardputer = {
 };
 
 /*
+ * M5Stack Cardputer Adv. Same Stamp-S3A and the same GPIO numbers for the audio
+ * lines as the original Cardputer, but the NS4168 and the PDM microphone are gone:
+ * an ES8311 codec drives the speaker amplifier and carries an analog microphone,
+ * so the speaker and the microphone share one I2S bus and no pin. That is what
+ * makes `audio loopback` possible here and impossible on the Cardputer.
+ *
+ * These pins are from M5Stack's documentation and have not yet been exercised
+ * here. The codec has no MCLK pin; it clocks from the bit clock.
+ */
+static const board_pin_t cardputer_adv_pins[] = {
+    {"I2C SDA", 8, STR_BOARD_NOTE_FROM_M5STACK_DOCUMENTATION_NOT},
+    {"I2C SCL", 9, STR_BOARD_NOTE_FROM_M5STACK_DOCUMENTATION_NOT},
+    {"Codec BCLK", 41, STR_BOARD_NOTE_FROM_M5STACK_DOCUMENTATION_NOT},
+    {"Codec WS/LRCK", 43, STR_BOARD_NOTE_FROM_M5STACK_DOCUMENTATION_NOT},
+    {"Codec DSDIN", 42, STR_BOARD_NOTE_FROM_M5STACK_DOCUMENTATION_NOT},
+    {"Codec ASDOUT", 46, STR_BOARD_NOTE_FROM_M5STACK_DOCUMENTATION_NOT},
+    {"Codec MCLK", -1, STR_BOARD_NOTE_NOT_WIRED_THE_CODEC_CLOCKS},
+};
+
+static const board_t cardputer_adv = {
+    .name = "cardputer-adv",
+    .chip = "esp32s3",
+    .description = STR_BOARD_DESC_M5STACK_CARDPUTER_ADV_ES8311_CODEC,
+    .pins = cardputer_adv_pins,
+    .pin_count = ARRAY_COUNT(cardputer_adv_pins),
+};
+
+/*
  * Seeed XIAO ESP32-S3 Sense. No speaker at all, so there is no audio output
  * preset -- but its microphone pins are its own, unlike the Cardputer's, so a
  * capture here does not have to give anything up first.
@@ -216,7 +244,7 @@ static const board_t core_basic = {
 };
 
 
-static const board_t *const boards[] = {&cardputer, &xiao, &sensor, &minstro, &core_basic};
+static const board_t *const boards[] = {&cardputer, &cardputer_adv, &xiao, &sensor, &minstro, &core_basic};
 
 /* ------------------------------------------------------------------ */
 /* Command functions                                                   */
@@ -480,6 +508,32 @@ int cmd_board_cardputer_display(int argc, char **argv)
         "display-st7789 init 135 240 gap 52 40",
     };
     return apply(&cardputer, lines, ARRAY_COUNT(lines));
+}
+
+int cmd_board_cardputer_adv_pins(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+    return show_pins(&cardputer_adv);
+}
+
+int cmd_board_cardputer_adv_audio(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+
+    /*
+     * The ES8311 has no MCLK pin here, so the bus is opened without one and the
+     * codec clocks from the bit clock. `audio bus` takes `rate` and `bits` if
+     * 48 kHz is not what the next command wants -- for dialling, `rate 8000`.
+     * `init` leaves the volume low rather than at 0 dB.
+     */
+    static const char *const lines[] = {
+        "i2c bus 9 8",
+        "audio bus 41 43 42 din 46",
+        "audio-es8311 init",
+    };
+    return apply(&cardputer_adv, lines, ARRAY_COUNT(lines));
 }
 
 int cmd_board_xiao_pins(int argc, char **argv)

@@ -1,13 +1,18 @@
 /*
- * Test signal generation: a steady tone and a frequency sweep.
+ * Playing a test signal: a steady tone or a frequency sweep.
  *
- * Everything here is bus-agnostic -- it fills a buffer and hands it to
- * audio_bus_write(). Nothing knows what part is on the other end, which is why
+ * The waveform comes from the tone_gen component, which fills mono samples and
+ * knows nothing about buses. This file is everything specific to this rig:
+ * packing those samples into whatever frame the bus is using, writing them to
+ * the DMA, measuring the rate the hardware really consumed them at, and saying
+ * what happened. Nothing here knows what part is on the other end, which is why
  * a bare I2S amplifier with no control interface is exercised by exactly the
  * same commands as a codec with sixty registers.
  */
 #include "app_bringup.h"
 #include "audio.h"
+
+#include "tone_gen.h"
 
 #include "freertos/semphr.h"
 
@@ -16,60 +21,10 @@
 #include <math.h>
 
 /*
- * A 1024-entry table with 8-bit interpolation between entries, rather than
- * calling sinf() per sample.
- *
- * The ESP32-S3 has an FPU and would manage sinf() at 48 kHz; the ESP32-C3 has
- * none, and softfloat there would spend a large part of a core generating the
- * test signal -- exactly when the point of the exercise is to find out whether
- * the *hardware* keeps up. The table costs 2 KB of RAM, is built once, and is
- * the same speed on every chip. Interpolated this way its error floor measures
- * 90 dB below the signal and its worst single-sample error is 2 LSB of 32767,
- * far below anything an amplifier under test will contribute.
- */
-#define SINE_BITS  10
-#define SINE_SIZE  (1 << SINE_BITS)
-#define SINE_MASK  (SINE_SIZE - 1)
-
-static int16_t sine_table[SINE_SIZE];
-static bool sine_ready;
-
-static void sine_table_init(void)
-{
-    if (sine_ready) {
-        return;
-    }
-    for (int i = 0; i < SINE_SIZE; i++) {
-        sine_table[i] = (int16_t)lrint(32767.0 * sin(2.0 * M_PI * i / SINE_SIZE));
-    }
-    sine_ready = true;
-}
-
-/*
- * Phase is a full 32-bit accumulator, so a frequency is represented to about
- * 11 microhertz at 48 kHz and no frequency has to divide into the buffer
- * length. Phase carries across blocks, so block boundaries are inaudible.
- */
-static inline int32_t sine_at(uint32_t phase)
-{
-    uint32_t index = phase >> (32 - SINE_BITS);
-    uint32_t frac = (phase >> (32 - SINE_BITS - 8)) & 0xFF;
-    int32_t a = sine_table[index];
-    int32_t b = sine_table[(index + 1) & SINE_MASK];
-    return a + (((b - a) * (int32_t)frac) >> 8);
-}
-
-static inline uint32_t phase_step(double hz, double rate)
-{
-    return (uint32_t)llrint(hz / rate * 4294967296.0);
-}
-
-/*
  * The generator writes one DMA descriptor at a time -- see
  * audio_bus_block_frames() for why that size and no other. At the descriptor
- * size the driver uses that is 240 frames, or 5 ms at 48 kHz, which also
- * bounds how coarsely a sweep steps in frequency and keeps the write loop
- * responsive to a stop request.
+ * size the driver uses that is 240 frames, or 5 ms at 48 kHz, which also keeps
+ * the write loop responsive to a stop request.
  */
 #define MAX_BLOCK_FRAMES 512
 
@@ -85,6 +40,12 @@ static inline uint32_t phase_step(double hz, double rate)
 
 static struct {
     audio_signal_t signal;
+    /* A dial string plays instead of `signal` when `dtmf` is set. It is
+     * blocking-only, so these live exactly as long as the call that set them. */
+    bool dtmf;
+    tone_gen_dtmf_config_t dtmf_cfg;
+    char digits[AUDIO_DTMF_MAX_DIGITS + 1];
+    audio_dtmf_req_t dtmf_req;
     volatile bool running;
     volatile bool stop_requested;
     SemaphoreHandle_t finished;
@@ -93,21 +54,6 @@ static struct {
 bool audio_playing(void)
 {
     return player.running;
-}
-
-/*
- * A raised-cosine fade, sin^2(pi*t/2), built from the same table so the sample
- * loop stays integer-only. Returns Q15 gain for position `n` of `span`.
- */
-static inline int32_t fade_gain(uint32_t n, uint32_t span)
-{
-    if (span == 0 || n >= span) {
-        return 32768;
-    }
-    /* Quarter turn of the sine over the span. */
-    uint32_t phase = (uint32_t)(((uint64_t)n << 30) / span);
-    int32_t s = sine_at(phase);
-    return (s * s) >> 15;
 }
 
 /* Pack one sample pair into the buffer at frame `i`. */
@@ -131,25 +77,6 @@ static inline void put_frame(void *buffer, size_t i, int32_t sample,
     }
 }
 
-static double instantaneous_hz(const audio_signal_t *sig, double elapsed)
-{
-    if (sig->end_hz == sig->start_hz || sig->seconds <= 0.0) {
-        return sig->start_hz;
-    }
-
-    double t = elapsed / sig->seconds;
-    if (t > 1.0) {
-        t = 1.0;
-    }
-
-    /* A log sweep spends equal time per octave, which is how audio hardware is
-     * actually judged, so it is the default. */
-    if (sig->logarithmic) {
-        return sig->start_hz * pow(sig->end_hz / sig->start_hz, t);
-    }
-    return sig->start_hz + (sig->end_hz - sig->start_hz) * t;
-}
-
 typedef struct {
     uint64_t frames_written;
     /* The measurement window: both ends taken at the same DMA queue state. */
@@ -163,7 +90,7 @@ typedef struct {
 } play_result_t;
 
 /*
- * Generate and write until the duration expires or a stop is requested.
+ * Generate and write until the signal ends or a stop is requested.
  *
  * The rate measurement is taken between two moments when the DMA queue is
  * equally full, not across the whole run. Writes block once the queue fills,
@@ -194,60 +121,85 @@ static void run_player(play_result_t *result)
     }
 
     void *buffer = malloc(block_frames * frame_bytes);
-    if (!buffer) {
+    int16_t *mono = malloc(block_frames * sizeof(int16_t));
+    if (!buffer || !mono) {
+        free(buffer);
+        free(mono);
         result->error = ESP_ERR_NO_MEM;
         return;
     }
 
-    uint64_t total_frames = (sig->seconds > 0.0)
-        ? (uint64_t)llrint(sig->seconds * rate) : 0;   /* 0 means until stopped */
-    uint32_t fade_frames = (uint32_t)((uint64_t)FADE_MS * rate / 1000);
-    /* The stop-time fade below emits one block, so the ramp has to fit in one. */
-    if (fade_frames > block_frames) {
-        fade_frames = (uint32_t)block_frames;
+    /*
+     * One of two sources, behind the same fill-and-release shape. Either way
+     * the samples are mono and the rest of this function neither knows nor
+     * cares which it is.
+     */
+    tone_gen_t tone;
+    tone_gen_dtmf_t dial;
+    esp_err_t err;
+    audio_channel_t channel;
+
+    if (player.dtmf) {
+        tone_gen_dtmf_config_t dcfg = player.dtmf_cfg;
+        dcfg.sample_rate_hz = rate;
+        channel = player.dtmf_req.channel;
+        err = tone_gen_dtmf_init(&dial, &dcfg, player.digits);
+    } else {
+        /* A sweep with no duration is a steady tone at its start frequency,
+         * which is what the generator would otherwise refuse. */
+        tone_gen_config_t cfg = {
+            .sample_rate_hz = rate,
+            .start_hz = sig->start_hz,
+            .end_hz = (sig->seconds > 0.0) ? sig->end_hz : sig->start_hz,
+            .logarithmic = sig->logarithmic,
+            .duration_samples = (sig->seconds > 0.0)
+                ? (uint64_t)llrint(sig->seconds * rate) : 0,   /* 0 means until stopped */
+            .peak = (int16_t)((int32_t)sig->level_pct * 32767 / 100),
+            .ramp_ms = FADE_MS,
+        };
+        channel = sig->channel;
+        err = tone_gen_init(&tone, &cfg);
     }
-    if (total_frames > 0 && fade_frames * 2 > total_frames) {
-        fade_frames = (uint32_t)(total_frames / 2);
+    if (err != ESP_OK) {
+        free(buffer);
+        free(mono);
+        result->error = err;
+        return;
     }
 
-    int32_t amplitude = (int32_t)sig->level_pct * 32767 / 100;
     uint64_t prefill = audio_bus_buffered_frames();
-
-    uint32_t phase = 0;
-    uint32_t step = phase_step(sig->start_hz, rate);
     uint64_t done = 0;
+    bool released = false;
 
-    while (!player.stop_requested) {
-        size_t frames = block_frames;
-        if (total_frames > 0 && done + frames > total_frames) {
-            frames = (size_t)(total_frames - done);
+    for (;;) {
+        /*
+         * A continuous tone has no scheduled fade-out, so `audio stop` would cut
+         * the waveform mid-cycle and thump the speaker. Releasing the generator
+         * ramps it down instead, and the loop below keeps writing until it
+         * runs dry. The measurement is closed out before this point, so the
+         * extra frames do not skew it.
+         */
+        if (player.stop_requested && !released) {
+            if (player.dtmf) {
+                tone_gen_dtmf_release(&dial);
+            } else {
+                tone_gen_release(&tone);
+            }
+            released = true;
         }
+
+        size_t frames = player.dtmf ? tone_gen_dtmf_fill(&dial, mono, block_frames)
+                                    : tone_gen_fill(&tone, mono, block_frames);
         if (frames == 0) {
             break;
         }
 
-        /* One frequency per block. At 5 ms a block the steps are far below the
-         * ear's pitch resolution, and phase continuity means no clicks. */
-        step = phase_step(instantaneous_hz(sig, (double)done / rate), rate);
-
         for (size_t i = 0; i < frames; i++) {
-            int32_t sample = (sine_at(phase) * amplitude) >> 15;
-
-            uint64_t n = done + i;
-            if (n < fade_frames) {
-                sample = (sample * fade_gain((uint32_t)n, fade_frames)) >> 15;
-            } else if (total_frames > 0 && n >= total_frames - fade_frames) {
-                uint32_t remaining = (uint32_t)(total_frames - n);
-                sample = (sample * fade_gain(remaining, fade_frames)) >> 15;
-            }
-
-            put_frame(buffer, i, sample, fmt->bits, sig->channel);
-            phase += step;
+            put_frame(buffer, i, mono[i], fmt->bits, channel);
         }
 
         size_t written = 0;
-        esp_err_t err = audio_bus_write(buffer, frames * frame_bytes, &written,
-                                        WRITE_TIMEOUT_MS);
+        err = audio_bus_write(buffer, frames * frame_bytes, &written, WRITE_TIMEOUT_MS);
         if (err != ESP_OK) {
             result->error = err;
             break;
@@ -265,7 +217,7 @@ static void run_player(play_result_t *result)
          * the queue fuller than a full block would, and that difference would
          * be charged to the measurement as if the hardware had consumed it.
          */
-        if (frames == block_frames) {
+        if (!released && frames == block_frames) {
             if (!result->measured && done >= prefill) {
                 /* Writes are rate-limited by the hardware from here on. */
                 result->measured = true;
@@ -278,49 +230,16 @@ static void run_player(play_result_t *result)
         }
     }
 
-    /*
-     * A continuous tone has no scheduled fade-out, so `audio stop` would cut
-     * the waveform mid-cycle and thump the speaker. Ramp it down here instead.
-     * This runs after the measurement is closed out so the extra frames do not
-     * skew it.
-     */
-    if (player.stop_requested && result->error == ESP_OK && fade_frames > 0) {
-        for (uint32_t i = 0; i < fade_frames; i++) {
-            int32_t sample = (sine_at(phase) * amplitude) >> 15;
-            sample = (sample * fade_gain(fade_frames - i, fade_frames)) >> 15;
-            put_frame(buffer, i, sample, fmt->bits, sig->channel);
-            phase += step;
-        }
-        size_t written = 0;
-        audio_bus_write(buffer, fade_frames * frame_bytes, &written,
-                        WRITE_TIMEOUT_MS);
-        result->frames_written += fade_frames;
-    }
-
     free(buffer);
+    free(mono);
 }
 
-static void report(const play_result_t *result)
+/* The sample-rate lines every playback ends with: asked for, configured, and
+ * measured. */
+static void report_rate(const play_result_t *result)
 {
-    const audio_signal_t *sig = &player.signal;
     const audio_format_t *fmt = audio_bus_format();
     uint32_t configured = audio_bus_actual_rate();
-
-    if (result->error != ESP_OK) {
-        STRRES_ERROR(STR_AUDIO_PLAYBACK_FAILED, esp_err_to_name(result->error));
-        return;
-    }
-
-    double dbfs = 20.0 * log10((double)sig->level_pct / 100.0);
-
-    if (sig->end_hz == sig->start_hz) {
-        STRRES_PRINTF(STR_AUDIO_PLAYED, sig->start_hz);
-    } else {
-        STRRES_PRINTF(STR_AUDIO_SWEPT,
-                      sig->start_hz, sig->end_hz, sig->logarithmic ? "logarithmic" : "linear");
-    }
-    STRRES_PRINTF(STR_AUDIO_AT_LEVEL,
-                  sig->level_pct, dbfs, (unsigned long long)result->frames_written);
 
     STRRES_PRINTF(STR_AUDIO_RATE_REQUESTED, (unsigned long)(fmt ? fmt->rate_hz : 0));
     if (configured) {
@@ -348,6 +267,48 @@ static void report(const play_result_t *result)
     }
 }
 
+static void report(const play_result_t *result)
+{
+    const audio_signal_t *sig = &player.signal;
+
+    if (result->error != ESP_OK) {
+        STRRES_ERROR(STR_AUDIO_PLAYBACK_FAILED, esp_err_to_name(result->error));
+        return;
+    }
+
+    double dbfs = 20.0 * log10((double)sig->level_pct / 100.0);
+
+    if (sig->end_hz == sig->start_hz) {
+        STRRES_PRINTF(STR_AUDIO_PLAYED, sig->start_hz);
+    } else {
+        STRRES_PRINTF(STR_AUDIO_SWEPT,
+                      sig->start_hz, sig->end_hz, sig->logarithmic ? "logarithmic" : "linear");
+    }
+    STRRES_PRINTF(STR_AUDIO_AT_LEVEL,
+                  sig->level_pct, dbfs, (unsigned long long)result->frames_written);
+
+    report_rate(result);
+}
+
+static void report_dtmf(const play_result_t *result)
+{
+    if (result->error != ESP_OK) {
+        STRRES_ERROR(STR_AUDIO_PLAYBACK_FAILED, esp_err_to_name(result->error));
+        return;
+    }
+
+    const audio_dtmf_req_t *req = &player.dtmf_req;
+    double dbfs = 20.0 * log10((double)req->level_pct / 100.0);
+
+    STRRES_PRINTF(STR_AUDIO_DTMF_DIALLED, player.digits);
+    STRRES_PRINTF(STR_AUDIO_DTMF_TIMING, player.dtmf_cfg.tone_ms, player.dtmf_cfg.gap_ms,
+                  player.dtmf_cfg.pause_ms);
+    STRRES_PRINTF(STR_AUDIO_DTMF_AT_LEVEL, req->level_pct, dbfs, req->twist_db,
+                  (unsigned long long)result->frames_written);
+
+    report_rate(result);
+}
+
 static void player_task(void *arg)
 {
     (void)arg;
@@ -373,8 +334,6 @@ int audio_play(const audio_signal_t *signal)
         return -1;
     }
 
-    sine_table_init();
-
     esp_err_t err = audio_bus_tx_enable(true);
     if (err != ESP_OK) {
         STRRES_ERROR(STR_AUDIO_TRANSMITTER_ENABLE_FAILED, esp_err_to_name(err));
@@ -382,6 +341,7 @@ int audio_play(const audio_signal_t *signal)
     }
 
     player.signal = *signal;
+    player.dtmf = false;
     player.stop_requested = false;
     player.running = true;
 
@@ -428,6 +388,78 @@ int audio_play(const audio_signal_t *signal)
         STRRES_PRINTF(STR_AUDIO_PLAYING_CONTINUOUSLY);
     }
     return 0;
+}
+
+/*
+ * Overall level and twist to the two tone amplitudes. The two peaks sum to
+ * level_pct of full scale, which is what guarantees their sum never clips;
+ * twist makes the high tone louder by that many decibels.
+ */
+static void dtmf_peaks(int level_pct, double twist_db, int16_t *low, int16_t *high)
+{
+    int32_t total = (int32_t)level_pct * 32767 / 100;
+    double ratio = pow(10.0, twist_db / 20.0);
+    int32_t lo = (int32_t)lrint((double)total / (1.0 + ratio));
+    *low = (int16_t)lo;
+    *high = (int16_t)(total - lo);
+}
+
+int audio_play_dtmf(const audio_dtmf_req_t *req)
+{
+    if (!audio_bus_require()) {
+        return -1;
+    }
+    if (player.running) {
+        STRRES_ERROR(STR_AUDIO_ALREADY_PLAYING);
+        return -1;
+    }
+
+    size_t bad = 0;
+    esp_err_t err = tone_gen_dtmf_validate(req->digits, &bad);
+    if (err == TONE_GEN_ERR_INVALID_DIGIT) {
+        STRRES_ERROR(STR_AUDIO_DTMF_BAD_KEY, req->digits[bad], (int)bad + 1);
+        return -1;
+    }
+    if (err != ESP_OK) {
+        STRRES_ERROR(STR_AUDIO_DTMF_NOTHING_TO_DIAL);
+        return -1;
+    }
+    if (strlen(req->digits) > AUDIO_DTMF_MAX_DIGITS) {
+        STRRES_ERROR(STR_AUDIO_DTMF_TOO_LONG, AUDIO_DTMF_MAX_DIGITS);
+        return -1;
+    }
+
+    err = audio_bus_tx_enable(true);
+    if (err != ESP_OK) {
+        STRRES_ERROR(STR_AUDIO_TRANSMITTER_ENABLE_FAILED, esp_err_to_name(err));
+        return -1;
+    }
+
+    player.dtmf = true;
+    player.dtmf_req = *req;
+    strlcpy(player.digits, req->digits, sizeof(player.digits));
+    player.dtmf_req.digits = player.digits;
+
+    tone_gen_dtmf_config_t cfg = TONE_GEN_DTMF_CONFIG_DEFAULT(0);
+    if (req->tone_ms) cfg.tone_ms = req->tone_ms;
+    if (req->gap_ms) cfg.gap_ms = req->gap_ms;
+    if (req->pause_ms) cfg.pause_ms = req->pause_ms;
+    dtmf_peaks(req->level_pct, req->twist_db, &cfg.low_peak, &cfg.high_peak);
+    player.dtmf_cfg = cfg;
+
+    player.stop_requested = false;
+    player.running = true;
+
+    /* Always blocking: a dial string is seconds long and the line should be
+     * quiet again when the command returns. */
+    play_result_t result;
+    run_player(&result);
+    if (!req->quiet) {
+        report_dtmf(&result);
+    }
+    player.running = false;
+    player.dtmf = false;
+    return result.error == ESP_OK ? 0 : -1;
 }
 
 int audio_play_stop(void)

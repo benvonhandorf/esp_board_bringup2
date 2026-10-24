@@ -61,6 +61,16 @@ dependencies:
       path: diag
       type: git
     version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
+  es8311:
+    component_hash: 5f317701fbd0ba22ff41ad6f189a16c6b53c675ee6c1329bb26508b3c41fc7fc
+    dependencies:
+    - name: idf
+      version: '>=5.3'
+    source:
+      git: https://github.com/benvonhandorf/esp_components.git
+      path: es8311
+      type: git
+    version: 0238d66d63cb555d836572a1555b229ff2a64b6a
   espressif/iperf:
     component_hash: 9c95e1c897e9bce78a811682041a284ce22dac888fb61c3988867d5cb09b5961
     dependencies:
@@ -289,6 +299,16 @@ dependencies:
       path: ota
       type: git
     version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
+  pdm_decimator:
+    component_hash: f9ed73b0a2b47cd29a1f1fdf5e285e6af7f0228d954164a2cf3bb327dc818313
+    dependencies:
+    - name: idf
+      version: '>=5.3'
+    source:
+      git: https://github.com/benvonhandorf/esp_components.git
+      path: pdm_decimator
+      type: git
+    version: 79d5036ce5072711b8499e5f4888b2fc23e50e04
   pi4ioe5v6408:
     component_hash: 188ccfaf9e1b7896eef75975a100d3654613f607bb5861e7d834dd46fb4ec809
     dependencies:
@@ -319,6 +339,16 @@ dependencies:
       path: sht4x
       type: git
     version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
+  tone_gen:
+    component_hash: bab6bad0cc45d05a01f7334cea44d6e19156bf01af94ac7760fc1d57178c8421
+    dependencies:
+    - name: idf
+      version: '>=5.3'
+    source:
+      git: https://github.com/benvonhandorf/esp_components.git
+      path: tone_gen
+      type: git
+    version: 8f2840c9d9df537de152d1e5ba7e8d7d03ab4b09
   wifi_manager:
     component_hash: 29e0cb1fb9b452d585d697e3ae850fa99cc2c6e7276bda57d031f02fd89a9207
     dependencies:
@@ -343,6 +373,7 @@ direct_dependencies:
 - cli_web
 - config_store
 - diag
+- es8311
 - espressif/iperf-cmd
 - http_server
 - hx711
@@ -359,10 +390,12 @@ direct_dependencies:
 - net_events
 - ntp_manager
 - ota
+- pdm_decimator
 - pi4ioe5v6408
 - rx8130ce
 - sht4x
+- tone_gen
 - wifi_manager
-manifest_hash: 162bd99caebc39c431f6bfda22da0786c1a39a3cbb228b63f5eb5bea2cb16e4d
+manifest_hash: c67afca3566d2157c1898aa3af32a3f75d5d05df53d03d0bcef7ac754aef5ee7
 target: esp32c3
 version: 3.0.0

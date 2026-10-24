@@ -58,6 +58,20 @@ take the pin from the first, which is the failure worth preventing: it is not an
 error but a plausible silence, with the amplifier seeing a megahertz square wave
 where its frame clock used to be.
 
+### board-cardputer-adv
+
+M5Stack Cardputer Adv, ESP32-S3. `pins`, `audio`.
+
+An ES8311 codec replaces the original's NS4168 amplifier and PDM microphone, so the
+speaker and the microphone share one I2S bus and no pin: `audio loopback` and
+`audio record` work here, which they cannot on the Cardputer. `board-cardputer-adv audio`
+runs `i2c bus 9 8`, `audio bus 41 43 42 din 46` and `audio-es8311 init`.
+
+The codec has no MCLK pin and clocks from the bit clock, so there is no `mclk` argument.
+Pass `rate` and `bits` to `audio bus` for anything but the defaults, for example
+`audio bus 41 43 42 din 46 rate 8000 bits 16`, then `audio-es8311 init` again.
+The pins are from M5Stack's documentation and have not yet been exercised here.
+
 ### board-xiao
 
 Seeed XIAO ESP32-S3 Sense. `pins`, `mic`, `sd`.

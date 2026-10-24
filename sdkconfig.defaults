@@ -21,6 +21,10 @@ CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
 # The web console carries command output over a WebSocket, which
 # esp_http_server compiles out unless this is set.
 CONFIG_HTTPD_WS_SUPPORT=y
+# Every command group in app_console.c is one slot. The default of 32 was exactly
+# full: adding a group made app_console_register() fail with ESP_ERR_NO_MEM and
+# the device abort at boot. The table holds pointers only.
+CONFIG_CLI_MAX_GROUPS=48
 
 # --- Networking ------------------------------------------------------------
 # ntp_manager falls back to a single server without this; esp_sntp_config_t sizes

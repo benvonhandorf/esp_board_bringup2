@@ -42,7 +42,9 @@ main/
   app_status.{c,h}          what this device reports
   app_http.{c,h}            this project's HTTP routes
   app_bringup.h             the includes every command module wants
-  audio/                    i2s_bus.c (transport), tone.c (signal generation),
+  audio/                    i2s_bus.c (transport), tone.c (the player: packing,
+                            bus writes, rate measurement -- the waveform is the
+                            `tone_gen` component),
                             capture.c (input statistics, FFT, tone detection),
                             pcm_stats.c (the statistics), audio.c (the group + codec registry), codec_*.c
   board/board.c             named pinouts and per-subsystem setup presets
@@ -106,6 +108,16 @@ drifting out of step.
 **A group.** A `cli_command_t[]` and a `cli_group_t` in `app_console.c`, a row in
 the `groups[]` array, and an entry in `PAGE` in `tools/check_docs.py` naming the
 docs page that covers it.
+
+**Test signals** -- tones, sweeps and DTMF -- are the `tone_gen` component: mono `int16`,
+a pull model, no heap. `tone.c` only packs those samples into the bus frame and writes
+them, and `audio_play_dtmf()` reuses the same player. Do not add waveform code to
+`tone.c`; add it to the component, where its host test (`make -C
+../esp_components/tone_gen/test`) can check it.
+
+**Codecs** attach through `audio_codec_t`. `es8311` and `nau8822` are both
+register-driver components in `esp_components` plus a `codec_*.c` shim here. The ES8311
+has no MCLK pin on the Cardputer Adv and clocks from the bit clock.
 
 **Raw PDM decimation** is the `pdm_decimator` component (any channel count, two
 filters, a portable C stage 2 beside the S3 vector one). `i2s_bus.c` owns the receiver

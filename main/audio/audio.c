@@ -13,6 +13,7 @@
  */
 #include "app_bringup.h"
 #include "audio.h"
+#include "codec_es8311.h"
 #include "codec_nau8822.h"
 #include "codec_ns4168.h"
 #include "codec_sph0645.h"
@@ -41,6 +42,7 @@
  * row here, and one group in app_console.c. */
 static const audio_codec_t *const codec_registry[] = {
     &nau8822_codec,
+    &es8311_codec,
     &ns4168_codec,
     &sph0645_codec,
 };
@@ -666,6 +668,108 @@ int cmd_audio_sweep(int argc, char **argv)
     }
 
     return audio_play(&signal);
+}
+
+/* ITU-T Q.23 wants at least 40 ms of tone and of gap; the limits here are
+ * wider than that, because testing a receiver's limits is what a bring-up rig
+ * is for. */
+#define DTMF_MS_MIN    20
+#define DTMF_MS_MAX    5000
+#define DTMF_PAUSE_MAX 10000
+#define DTMF_TWIST_MAX 6.0
+#define DTMF_TWIST_DEFAULT 2.0
+
+/* Read `<keyword> <value>` where the value is a whole number of milliseconds. */
+static int take_ms_option(int argc, char **argv, int index, uint16_t *out,
+                          int min_ms, int max_ms)
+{
+    if (index + 1 >= argc) {
+        STRRES_ERROR(STR_AUDIO_OPTION_NEEDS_VALUE, argv[index]);
+        return -1;
+    }
+    int ms = 0;
+    if (cli_parse_int_arg(argv[index + 1], &ms) < 0 || ms < min_ms || ms > max_ms) {
+        STRRES_ERROR(STR_AUDIO_DTMF_MS_RANGE, argv[index], min_ms, max_ms);
+        return -1;
+    }
+    *out = (uint16_t)ms;
+    return 0;
+}
+
+int cmd_audio_dtmf(int argc, char **argv)
+{
+    if (!audio_bus_require()) {
+        return -1;
+    }
+    if (argc < 2) {
+        STRRES_PRINTF(STR_AUDIO_USAGE_DTMF);
+        return -1;
+    }
+
+    audio_dtmf_req_t req = {
+        .digits = argv[1],
+        .level_pct = DEFAULT_LEVEL_PCT,
+        .twist_db = DTMF_TWIST_DEFAULT,
+        .channel = AUDIO_CHANNEL_BOTH,
+    };
+
+    for (int index = 2; index < argc;) {
+        const char *token = argv[index];
+        if (strcasecmp(token, "tone") == 0) {
+            if (take_ms_option(argc, argv, index, &req.tone_ms, DTMF_MS_MIN, DTMF_MS_MAX) < 0) {
+                return -1;
+            }
+            index += 2;
+        } else if (strcasecmp(token, "gap") == 0) {
+            if (take_ms_option(argc, argv, index, &req.gap_ms, DTMF_MS_MIN, DTMF_MS_MAX) < 0) {
+                return -1;
+            }
+            index += 2;
+        } else if (strcasecmp(token, "pause") == 0) {
+            if (take_ms_option(argc, argv, index, &req.pause_ms, DTMF_MS_MIN, DTMF_PAUSE_MAX) < 0) {
+                return -1;
+            }
+            index += 2;
+        } else if (strcasecmp(token, "level") == 0) {
+            int pct = 0;
+            if (index + 1 >= argc) {
+                STRRES_ERROR(STR_AUDIO_LEVEL_NEEDS_VALUE);
+                return -1;
+            }
+            if (cli_parse_int_arg(argv[index + 1], &pct) < 0 || pct < 1 || pct > 100) {
+                STRRES_ERROR(STR_AUDIO_LEVEL_RANGE);
+                return -1;
+            }
+            req.level_pct = pct;
+            index += 2;
+        } else if (strcasecmp(token, "twist") == 0) {
+            double db = 0.0;
+            if (index + 1 >= argc) {
+                STRRES_ERROR(STR_AUDIO_OPTION_NEEDS_VALUE, token);
+                return -1;
+            }
+            if (cli_parse_double_arg(argv[index + 1], &db) < 0 || db < 0.0 || db > DTMF_TWIST_MAX) {
+                STRRES_ERROR(STR_AUDIO_DTMF_TWIST_RANGE, DTMF_TWIST_MAX);
+                return -1;
+            }
+            req.twist_db = db;
+            index += 2;
+        } else if (strcasecmp(token, "left") == 0) {
+            req.channel = AUDIO_CHANNEL_LEFT;
+            index++;
+        } else if (strcasecmp(token, "right") == 0) {
+            req.channel = AUDIO_CHANNEL_RIGHT;
+            index++;
+        } else if (strcasecmp(token, "both") == 0) {
+            req.channel = AUDIO_CHANNEL_BOTH;
+            index++;
+        } else {
+            STRRES_ERROR(STR_AUDIO_UNEXPECTED_ARGUMENT, token);
+            return -1;
+        }
+    }
+
+    return audio_play_dtmf(&req);
 }
 
 int cmd_audio_stop(int argc, char **argv)

@@ -318,6 +318,29 @@ int audio_play(const audio_signal_t *signal);
 int audio_play_stop(void);
 bool audio_playing(void);
 
+/*
+ * Dial a string of DTMF keys (0-9 * # A-D; ',' pauses; space and '-' are
+ * skipped). Always blocks until it has been played, then reports. Reports its
+ * own errors and returns 0 or -1 like a command.
+ *
+ * The waveform is the tone_gen component's; this only sets its level and where
+ * on the bus it goes. Any bus rate from the bus minimum up works.
+ */
+#define AUDIO_DTMF_MAX_DIGITS 64
+
+typedef struct {
+    const char *digits;
+    uint16_t tone_ms;       /* 0 takes the component's default, 100 */
+    uint16_t gap_ms;        /* 0 takes the default, 100 */
+    uint16_t pause_ms;      /* what ',' adds; 0 takes the default, 2000 */
+    int level_pct;          /* both tones together, 1-100 percent of full scale */
+    double twist_db;        /* how much louder the high tone is than the low one */
+    audio_channel_t channel;
+    bool quiet;
+} audio_dtmf_req_t;
+
+int audio_play_dtmf(const audio_dtmf_req_t *req);
+
 /* ------------------------------------------------------------------ */
 /* Capture and analysis (capture.c)                                    */
 /* ------------------------------------------------------------------ */
@@ -408,6 +431,7 @@ int cmd_audio_info(int argc, char **argv);
 int cmd_audio_codecs(int argc, char **argv);
 int cmd_audio_tone(int argc, char **argv);
 int cmd_audio_sweep(int argc, char **argv);
+int cmd_audio_dtmf(int argc, char **argv);
 int cmd_audio_stop(int argc, char **argv);
 int cmd_audio_volume(int argc, char **argv);
 int cmd_audio_mute(int argc, char **argv);

@@ -24,6 +24,9 @@ int cmd_board_cardputer_mic(int argc, char **argv);
 int cmd_board_cardputer_sd(int argc, char **argv);
 int cmd_board_cardputer_display(int argc, char **argv);
 
+int cmd_board_cardputer_adv_pins(int argc, char **argv);
+int cmd_board_cardputer_adv_audio(int argc, char **argv);
+
 int cmd_board_xiao_pins(int argc, char **argv);
 int cmd_board_xiao_sd(int argc, char **argv);
 int cmd_board_xiao_mic(int argc, char **argv);

@@ -1,0 +1,10 @@
+{
+  "section": "board-cardputer-adv",
+  "strings": {
+    "audio.help": "Set up I2C, I2S and the ES8311 codec",
+    "audio.usage": "",
+    "group.help": "M5Stack Cardputer Adv (esp32s3)",
+    "pins.help": "Show the known pinout",
+    "pins.usage": ""
+  }
+}

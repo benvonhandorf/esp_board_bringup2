@@ -81,6 +81,10 @@ dependencies:
     git: https://github.com/benvonhandorf/esp_components.git
     path: aw9523b
     version: aw9523b-v0.1.0
+  es8311:
+    git: https://github.com/benvonhandorf/esp_components.git
+    path: es8311
+    version: es8311-v0.1.0
   hx711:
     git: https://github.com/benvonhandorf/esp_components.git
     path: hx711
@@ -121,3 +125,7 @@ dependencies:
     git: https://github.com/benvonhandorf/esp_components.git
     path: sht4x
     version: sht4x-v0.1.0
+  tone_gen:
+    git: https://github.com/benvonhandorf/esp_components.git
+    path: tone_gen
+    version: tone_gen-v0.1.0

@@ -26,10 +26,10 @@ PAGE = {
     "i2c-rx8130ce": "i2c", "i2c-aw9523b": "i2c", "i2c-pi4ioe": "i2c",
     "uart": "uart", "spi": "spi", "sd": "sd",
     "display": "display", "display-st7789": "display",
-    "audio": "audio", "audio-nau8822": "audio", "audio-ns4168": "audio",
+    "audio": "audio", "audio-nau8822": "audio", "audio-es8311": "audio", "audio-ns4168": "audio",
     "audio-sph0645": "audio",
     "touch": "touch", "loadcell": "loadcell",
-    "board": "board", "board-cardputer": "board", "board-xiao": "board",
+    "board": "board", "board-cardputer": "board", "board-cardputer-adv": "board", "board-xiao": "board",
     "board-sensor": "board", "board-minstro": "board", "board-core-basic": "board",
 }
 
