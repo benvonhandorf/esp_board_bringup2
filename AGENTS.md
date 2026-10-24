@@ -251,10 +251,11 @@ anything that exposes credentials or changes the device.
   `sdkconfig.defaults.<target>`, then `idf.py reconfigure`.
 - **`.vscode/settings.json` sets `IDF_TARGET` as an environment variable**, which
   outranks everything else. Build from a plain shell to avoid a cache mismatch.
-- **Flash is getting tight, but less so.** The image is 1.50 MB against a
-  1.69 MB OTA slot on 4 MB parts, with ~264 kB spare. That is 58 kB better than
-  it was: every command group's prose now lives on the `res` partition rather
-  than in the slot, where it was duplicated across both. `strings/en-US/` is
+- **Flash is getting tight, but less so.** The image is 1.54 MB against a
+  1.69 MB OTA slot on 4 MB parts (ESP32-C3), with ~223 kB spare. Moving every
+  command group's prose to the `res` partition rather than the slot, where it
+  was duplicated across both, bought 58 kB; the ES8311 codec, DTMF and the
+  Cardputer Adv preset have since spent some of it. `strings/en-US/` is
   31 files and 65 kB of `.sr` blobs in a partition that is still 446 kB empty.
   What is left in `main/` is short labels a lookup would cost more than -- reset
   reasons, "pull-up", "driven low" -- plus the boot-time `ESP_LOG` lines and the
