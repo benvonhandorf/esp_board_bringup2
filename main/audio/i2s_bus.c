@@ -627,21 +627,11 @@ bool audio_bus_pdm_ultra_load(uint64_t *cycles, uint64_t *frames)
     return true;
 }
 
-esp_err_t audio_bus_open_pdm_ultra(int clk, int din, uint32_t max_hz, bool fast)
+/* The part's required entry sequence, shared by the decimated and raw opens:
+ * standard mode at 2.048 MHz, then 4.8 MHz on the same open channel. On success
+ * the receiver is running in AUDIO_RX_PDM_RAW; on failure it is closed. */
+static esp_err_t pdm_ultra_start(int clk, int din)
 {
-    if (max_hz == 0 || max_hz > AUDIO_ULTRA_MAX_HZ) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    /* Largest R (a multiple of 16) whose Nyquist is 1.5 x max_hz or better. */
-    int r = 16;
-    for (int cand = 64; cand >= 16; cand -= 16) {
-        if ((double)AUDIO_ULTRA_CLK_HZ / cand / 2.0 >= 1.5 * max_hz) {
-            r = cand;
-            break;
-        }
-    }
-
     /* Standard mode first: 2.048 MHz is inside the 1-2.475 MHz entry range. */
     audio_format_t fmt = {.rate_hz = 64000, .bits = 16, .mclk_pin = -1, .mclk_multiple = 0};
     esp_err_t err = audio_bus_open_pdm_raw(clk, &din, 1, &fmt);
@@ -671,6 +661,28 @@ esp_err_t audio_bus_open_pdm_ultra(int clk, int din, uint32_t max_hz, bool fast)
         return err;
     }
     rx_running = true;
+    return ESP_OK;
+}
+
+esp_err_t audio_bus_open_pdm_ultra(int clk, int din, uint32_t max_hz, bool fast)
+{
+    if (max_hz == 0 || max_hz > AUDIO_ULTRA_MAX_HZ) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    /* Largest R (a multiple of 16) whose Nyquist is 1.5 x max_hz or better. */
+    int r = 16;
+    for (int cand = 64; cand >= 16; cand -= 16) {
+        if ((double)AUDIO_ULTRA_CLK_HZ / cand / 2.0 >= 1.5 * max_hz) {
+            r = cand;
+            break;
+        }
+    }
+
+    esp_err_t err = pdm_ultra_start(clk, din);
+    if (err != ESP_OK) {
+        return err;
+    }
 
     /* The two-stage filter is a fixed 4.8 MHz -> 300 kHz, ratio 16. */
     pdm_decimator_config_t dcfg = {
@@ -697,12 +709,30 @@ esp_err_t audio_bus_open_pdm_ultra(int clk, int din, uint32_t max_hz, bool fast)
     return ESP_OK;
 }
 
+esp_err_t audio_bus_open_pdm_ultra_raw(int clk, int din)
+{
+    esp_err_t err = pdm_ultra_start(clk, din);
+    if (err != ESP_OK) {
+        return err;
+    }
+    /* The bit clock is 32 x the rate in raw mode; report the one now running. */
+    format.rate_hz = AUDIO_ULTRA_CLK_HZ / 32;
+    return ESP_OK;
+}
+
 #else /* no PDM receive at all */
 
 esp_err_t audio_bus_open_pdm_raw(int clk, const int *dins, int line_count,
                                  const audio_format_t *fmt)
 {
     (void)clk; (void)dins; (void)line_count; (void)fmt;
+    STRRES_ERROR(STR_AUDIO_NO_PDM, CONFIG_IDF_TARGET);
+    return ESP_ERR_NOT_SUPPORTED;
+}
+
+esp_err_t audio_bus_open_pdm_ultra_raw(int clk, int din)
+{
+    (void)clk; (void)din;
     STRRES_ERROR(STR_AUDIO_NO_PDM, CONFIG_IDF_TARGET);
     return ESP_ERR_NOT_SUPPORTED;
 }

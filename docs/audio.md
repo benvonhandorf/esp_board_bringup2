@@ -200,7 +200,7 @@ PDM-to-PCM filter, so what arrives is the raw one-bit stream; every statistic
 below would be measuring the modulator rather than the sound, and would look
 like plausible numbers while meaning nothing.
 
-## `pdmultra <clk> <data> [maxhz <hz>] [sinc6]`
+## `pdmultra <clk> <data> [maxhz <hz>] [sinc6] [raw]`
 
 Opens an ultrasonic-capable PDM microphone (written for the Knowles
 SPH0641LU4H-1) and decimates it in software. The chip's hardware filter divides
@@ -210,6 +210,12 @@ the raw bits instead and filters them with a sixth-order sinc.
 The part must not start in ultrasonic mode, so the command clocks it at
 2.048 MHz first, waits 100 ms, then raises the clock to 4.8 MHz on the same
 open channel (the pins are never released).
+
+`raw` stops after the start-up sequence: the receiver is left as a raw PDM input
+at 4.8 MHz, undecimated, for [`pdmbits`](#pdmbits-seconds--dump-frames-grab-seconds)
+`dump` or `grab`. It is how to capture the bitstream with the part in its
+ultrasonic mode, which `pdmraw` cannot do (it would start the part at 4.8 MHz).
+`maxhz` and `sinc6` have no effect with it.
 
 The default decimator is the two-stage one (sinc^4 over bytes, then a 24-tap
 FIR on the S3's PIE unit): always 4.8 MHz to 300 kHz, about 17% of a core.
@@ -268,7 +274,7 @@ integers, and on PIE. It states whether the PIE results match the plain ones
 exactly. Tone levels are printed for the two decimators; the two-stage filter
 is a different filter, so compare those, not samples.
 
-## `pdmbits [seconds | dump [frames]]`
+## `pdmbits [seconds | dump [frames] | grab [seconds]]`
 
 Reports statistics of the raw bitstream opened by `pdmraw`, with no decimation:
 per slot, the share of ones, the share of adjacent bits that differ (`flips`),
@@ -282,6 +288,25 @@ filter cannot take.
 pausing for output, so the stream has no gaps) and prints one frame per line as
 hex words, slot 0 then slot 1 for each data line, oldest first and most
 significant bit first. It is for decimating and analysing the stream on a host.
+
+`pdmbits grab [seconds]` is the same capture for longer than RAM allows, into
+PSRAM (the S3's 8 MB; the build enables it in `sdkconfig.defaults.esp32s3`).
+It keeps the words rather than printing them, up to 600 seconds, or as much as
+PSRAM has free less 512 kB, which is 6.4 s of two microphones clocked at
+4.8 MHz (1.2 MB/s) and 12.9 s at 2.4 MHz. A request that does not fit is
+clamped and says so. It then reports how many frames per second the receiver
+actually delivered against the nominal rate; a shortfall means the receiver
+overran and the grab is missing data. Each grab replaces the last.
+
+Fetch it over HTTP, which needs the device on a network (or its access point,
+see [`wifi ap`](wifi.md)):
+
+    ./tools/pdm_grab.py <host> grab.bin
+
+`GET /api/capture` is behind the HTTP credentials. The file is the same
+16-bit words as `dump`, little-endian, one frame after another; the channel
+count and nominal frame rate come back as the `X-Channels` and
+`X-Frames-Per-Second` headers, and `pdm_grab.py` prints them.
 
 ## `record [seconds]`
 

@@ -397,5 +397,5 @@ direct_dependencies:
 - tone_gen
 - wifi_manager
 manifest_hash: c67afca3566d2157c1898aa3af32a3f75d5d05df53d03d0bcef7ac754aef5ee7
-target: esp32c3
+target: esp32s3
 version: 3.0.0

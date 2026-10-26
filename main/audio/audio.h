@@ -252,6 +252,17 @@ bool audio_bus_rx_enabled(void);
 esp_err_t audio_bus_read(void *data, size_t bytes, size_t *read,
                          uint32_t timeout_ms);
 
+/* The last `audio pdmbits grab`, held in PSRAM until the next grab. Frames are
+ * `channels` 16-bit words, in the order `pdmbits dump` prints them. Returns
+ * false when nothing has been grabbed. */
+typedef struct {
+    const uint8_t *data;
+    size_t bytes;
+    int channels;
+    uint32_t frames_per_s;      /* nominal, from the receiver's bit clock */
+} audio_grab_t;
+bool audio_grab_get(audio_grab_t *grab);
+
 /* ------------------------------------------------------------------ */
 /* Capture statistics (pcm_stats.c)                                    */
 /* ------------------------------------------------------------------ */
@@ -281,6 +292,10 @@ void audio_stats16_pie(audio_stats16_t *s, const int16_t *x, size_t frames, int3
 #define AUDIO_ULTRA_CLK_HZ   4800000
 #define AUDIO_ULTRA_MAX_HZ   100000
 esp_err_t audio_bus_open_pdm_ultra(int clk, int din, uint32_t max_hz, bool fast);
+
+/* The same start-up sequence, but the receiver is left as AUDIO_RX_PDM_RAW at
+ * 4.8 MHz with no decimation, for `pdmbits` to examine or grab. */
+esp_err_t audio_bus_open_pdm_ultra_raw(int clk, int din);
 uint32_t audio_bus_rx_band_limit_hz(void);   /* 0 when no limit applies */
 /* CPU cycles spent in the software decimator and frames it produced since the
  * ultrasonic receiver was opened. False when none is open. */

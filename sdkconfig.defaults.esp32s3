@@ -9,3 +9,12 @@ CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
 # at the default 160 MHz the I2S receiver overruns silently and the spectrum
 # floor reads about 20 dB too high.
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+
+# 8 MB octal PSRAM (embedded in the S3R8 package). `audio pdmbits grab` keeps
+# seconds of raw PDM in it. CAPS_ALLOC keeps plain malloc() in internal RAM, so
+# nothing else moves into the slower memory by accident; only code that asks for
+# MALLOC_CAP_SPIRAM gets it.
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_SPIRAM_USE_CAPS_ALLOC=y

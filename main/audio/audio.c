@@ -19,10 +19,12 @@
 #include "codec_sph0645.h"
 
 #include "driver/gpio.h"
+#include "esp_heap_caps.h"
 
 #include <math.h>
 #include "esp_timer.h"
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 #include <errno.h>
 
@@ -1132,7 +1134,13 @@ int cmd_audio_pdm_ultra(int argc, char **argv)
 
     int max_hz = 80000;
     bool fast = true;
+    bool raw = false;
     for (int index = 3; index < argc;) {
+        if (strcasecmp(argv[index], "raw") == 0) {
+            raw = true;
+            index++;
+            continue;
+        }
         if (strcasecmp(argv[index], "sinc6") == 0) {
             fast = false;
             index++;
@@ -1150,7 +1158,8 @@ int cmd_audio_pdm_ultra(int argc, char **argv)
         index += 2;
     }
 
-    esp_err_t err = audio_bus_open_pdm_ultra(clk, din, (uint32_t)max_hz, fast);
+    esp_err_t err = raw ? audio_bus_open_pdm_ultra_raw(clk, din)
+                        : audio_bus_open_pdm_ultra(clk, din, (uint32_t)max_hz, fast);
     if (err == ESP_ERR_NOT_SUPPORTED) {
         return -1;
     }
@@ -1172,6 +1181,108 @@ int cmd_audio_pdm_ultra(int argc, char **argv)
  */
 #define PDMBITS_WINDOW_WORDS 64   /* 1024 bits per density window */
 
+/* The last grab, kept until the next one. A new grab frees it first, so a
+ * second grab can use all of PSRAM rather than what the first left over; a
+ * download in flight at that moment gets a failed transfer, not freed memory
+ * (the HTTP handler copies nothing, so it is the user's to avoid). */
+static struct {
+    uint8_t *data;
+    size_t bytes;
+    int channels;
+    uint32_t frames_per_s;
+} grab_state;
+
+bool audio_grab_get(audio_grab_t *grab)
+{
+    if (!grab_state.data) {
+        return false;
+    }
+    grab->data = grab_state.data;
+    grab->bytes = grab_state.bytes;
+    grab->channels = grab_state.channels;
+    grab->frames_per_s = grab_state.frames_per_s;
+    return true;
+}
+
+/* Left free for the rest of the system: TLS buffers, the file system cache. */
+#define GRAB_PSRAM_RESERVE (512 * 1024)
+#define GRAB_STAGE_BYTES   8192
+
+static int pdm_bits_grab(int argc, char **argv, int channels)
+{
+    double seconds = 1.0;
+    if (take_seconds(argc, argv, 2, &seconds, 600.0) < 0) {
+        return -1;
+    }
+    /* 16-bit words at the microphone's bit clock; the receiver's rate is bit
+     * clock / 32 per slot, so a frame comes round twice per rate period. */
+    const uint32_t frames_per_s = audio_bus_rx_rate() * 2;
+    const size_t fb = (size_t)channels * sizeof(uint16_t);
+
+    heap_caps_free(grab_state.data);
+    grab_state.data = NULL;
+    grab_state.bytes = 0;
+
+    size_t free_psram = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM);
+    if (free_psram <= GRAB_PSRAM_RESERVE) {
+        STRRES_ERROR(STR_AUDIO_GRAB_NO_PSRAM);
+        return -1;
+    }
+    size_t cap = free_psram - GRAB_PSRAM_RESERVE;
+    size_t want = (size_t)(seconds * (double)frames_per_s) * fb;
+    if (want > cap) {
+        want = cap;
+        STRRES_PRINTF(STR_AUDIO_GRAB_CLAMPED, (double)want / (double)(frames_per_s * fb));
+    }
+    want -= want % fb;
+
+    uint8_t *buf = heap_caps_malloc(want, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    uint8_t *stage = heap_caps_malloc(GRAB_STAGE_BYTES, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    if (!buf || !stage) {
+        heap_caps_free(buf);
+        heap_caps_free(stage);
+        STRRES_ERROR(STR_AUDIO_PDMBITS_NO_MEMORY);
+        return -1;
+    }
+
+    size_t got_bytes = 0;
+    audio_bus_read(stage, GRAB_STAGE_BYTES, &got_bytes, 50);        /* drain */
+    size_t have = 0;
+    int64_t t0 = esp_timer_get_time();
+    while (have < want) {
+        size_t n = want - have < GRAB_STAGE_BYTES ? want - have : GRAB_STAGE_BYTES;
+        size_t g = 0;
+        if (audio_bus_read(stage, n, &g, 200) != ESP_OK || g == 0) {
+            break;
+        }
+        memcpy(buf + have, stage, g);
+        have += g;
+    }
+    int64_t elapsed_us = esp_timer_get_time() - t0;
+    heap_caps_free(stage);
+
+    have -= have % fb;
+    if (have == 0) {
+        heap_caps_free(buf);
+        STRRES_ERROR(STR_AUDIO_PDMBITS_NO_DATA);
+        return -1;
+    }
+
+    grab_state.data = buf;
+    grab_state.bytes = have;
+    grab_state.channels = channels;
+    grab_state.frames_per_s = frames_per_s;
+
+    double achieved = (double)(have / fb) / ((double)elapsed_us / 1e6);
+    STRRES_PRINTF(STR_AUDIO_GRAB_DONE, (unsigned)have, (unsigned)(have / fb), channels,
+                  (double)(have / fb) / (double)frames_per_s, achieved,
+                  (double)frames_per_s);
+    if (achieved < 0.98 * (double)frames_per_s) {
+        STRRES_PRINTF(STR_AUDIO_GRAB_SLOW);
+    }
+    return 0;
+}
+
 int cmd_audio_pdm_bits(int argc, char **argv)
 {
     if (!audio_bus_rx_require()) {
@@ -1183,6 +1294,10 @@ int cmd_audio_pdm_bits(int argc, char **argv)
     }
 
     int channels = audio_bus_rx_channels();
+
+    if (argc >= 2 && strcasecmp(argv[1], "grab") == 0) {
+        return pdm_bits_grab(argc, argv, channels);
+    }
 
     /* `pdmbits dump [frames]`: capture to RAM without pausing for output, then
      * print one frame per line as hex words, for decimation on a host. */

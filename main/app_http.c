@@ -1,9 +1,11 @@
 #include "app_http.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "app_status.h"
+#include "audio.h"
 #include "config_reader.h"
 #include "config_store.h"
 #include "esp_log.h"
@@ -90,6 +92,36 @@ static esp_err_t handle_config_post(httpd_req_t *req)
     return ESP_OK;
 }
 
+/* The last `audio pdmbits grab`, raw. The sample layout is in the headers, so a
+ * host needs nothing but this response. Sent in chunks: it is megabytes, and
+ * httpd would otherwise want it all in one buffer. */
+static esp_err_t handle_capture(httpd_req_t *req)
+{
+    audio_grab_t g;
+    if (!audio_grab_get(&g)) {
+        httpd_resp_send_err(req, HTTPD_404_NOT_FOUND,
+                            "Nothing grabbed; run 'audio pdmbits grab' first");
+        return ESP_OK;
+    }
+    /* httpd keeps the pointer it is given, not a copy, until the headers go
+     * out: one shared buffer would send the last value under both names. */
+    char channels[16], rate[16];
+    httpd_resp_set_type(req, "application/octet-stream");
+    snprintf(channels, sizeof(channels), "%d", g.channels);
+    httpd_resp_set_hdr(req, "X-Channels", channels);
+    snprintf(rate, sizeof(rate), "%u", (unsigned)g.frames_per_s);
+    httpd_resp_set_hdr(req, "X-Frames-Per-Second", rate);
+
+    const size_t chunk = 16 * 1024;
+    for (size_t off = 0; off < g.bytes; off += chunk) {
+        size_t n = g.bytes - off < chunk ? g.bytes - off : chunk;
+        if (httpd_resp_send_chunk(req, (const char *)g.data + off, n) != ESP_OK) {
+            return ESP_FAIL;
+        }
+    }
+    return httpd_resp_send_chunk(req, NULL, 0);
+}
+
 static const http_route_t routes[] = {
     /* Open: a dashboard scraping status should not need credentials, and it
      * exposes nothing that is not already on the MQTT status topic. */
@@ -98,6 +130,8 @@ static const http_route_t routes[] = {
      * broker password. */
     {"/api/config", HTTP_GET,  handle_config_get,  NULL, true},
     {"/api/config", HTTP_POST, handle_config_post, NULL, true},
+    /* Protected: it is whatever the microphones heard. */
+    {"/api/capture", HTTP_GET, handle_capture,     NULL, true},
 };
 
 esp_err_t app_http_register(void)
