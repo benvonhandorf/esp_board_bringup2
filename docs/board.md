@@ -72,6 +72,14 @@ Pass `rate` and `bits` to `audio bus` for anything but the defaults, for example
 `audio bus 41 43 42 din 46 rate 8000 bits 16`, then `audio-es8311 init` again.
 The pins are from M5Stack's documentation and have not yet been exercised here.
 
+**Build with the no-PSRAM overlay.** The Stamp-S3A has no PSRAM, and the default S3 build
+enables octal PSRAM, so a plain build boot-loops with "PSRAM chip is not connected":
+
+```
+idf.py -B build_adv -DIDF_TARGET=esp32s3 -DSDKCONFIG=sdkconfig.adv \
+  "-DSDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.esp32s3;sdkconfig.defaults.adv" build
+```
+
 ### board-xiao
 
 Seeed XIAO ESP32-S3 Sense. `pins`, `mic`, `sd`.

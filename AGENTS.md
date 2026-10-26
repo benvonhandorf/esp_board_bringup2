@@ -200,7 +200,8 @@ anything that exposes credentials or changes the device.
   It claims GPIO 33-37 too. The Sinn board (ESP32-S3FH4R2, quad PSRAM) puts its I2C
   bus and NAU7802 DRDY on 35-37, so build it with `sdkconfig.defaults.sinn` in a
   separate `build_sinn` directory; the command is in `docs/board.md`. The
-  Cardputer Adv has no PSRAM at all and needs its own overlay for the same reason.
+  Cardputer Adv has no PSRAM at all and builds with `sdkconfig.defaults.adv` into
+  `build_adv` for the same reason. Generated `sdkconfig.<board>` files stay untracked.
 - **SD host peripheral is chip-dependent.** `sd mmc` is behind
   `SOC_SDMMC_HOST_SUPPORTED`; it exists on the S3 and not on the C3.
 - **SD bring-up is deliberately two-stage.** `sd spi` / `sd mmc` init the host and

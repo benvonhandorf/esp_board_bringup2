@@ -1,0 +1,4 @@
+# M5Stack Cardputer Adv (Stamp-S3A): no PSRAM at all. Layered after
+# sdkconfig.defaults.esp32s3, whose octal PSRAM makes this board boot-loop with
+# "PSRAM chip is not connected".
+# CONFIG_SPIRAM is not set
