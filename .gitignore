@@ -35,6 +35,9 @@ sdkconfig
 sdkconfig.s3
 sdkconfig.sinn
 sdkconfig.adv
+
+# Captures from `audio pdmbits grab` and tools/pdm_grab.py
+grab*.wav
 .cache/
 
 # ESP-IDF dependencies
