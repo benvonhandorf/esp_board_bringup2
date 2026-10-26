@@ -40,6 +40,14 @@ int cmd_board_minstro_i2c(int argc, char **argv);
 int cmd_board_minstro_sd(int argc, char **argv);
 int cmd_board_minstro_display(int argc, char **argv);
 
+int cmd_board_sinn_pins(int argc, char **argv);
+int cmd_board_sinn_sd(int argc, char **argv);
+int cmd_board_sinn_i2c(int argc, char **argv);
+int cmd_board_sinn_nau7802(int argc, char **argv);
+int cmd_board_sinn_mic(int argc, char **argv);
+int cmd_board_sinn_mic_array(int argc, char **argv);
+int cmd_board_sinn_vin(int argc, char **argv);
+
 int cmd_board_core_basic_pins(int argc, char **argv);
 int cmd_board_core_basic_audio(int argc, char **argv);
 int cmd_board_core_basic_mic(int argc, char **argv);

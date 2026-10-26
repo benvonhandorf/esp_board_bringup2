@@ -41,6 +41,8 @@ slot width back and narrows the host to match, so setting the slot is what
 actually stops a 1-bit slot from being switched to 4-bit partway through
 initialization.
 
+With `cd <pin>` the card-detect pin is also pulled up internally, since the switch only grounds it when a card is seated.
+
 Internal pull-ups are enabled on the bus. They are weak and no substitute for
 proper external ones, but a board being brought up frequently has none fitted at
 all, and getting the card to answer is the point of the exercise.

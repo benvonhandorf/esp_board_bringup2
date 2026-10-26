@@ -196,6 +196,11 @@ anything that exposes credentials or changes the device.
   no SPI3, so `BP_DISPLAY_SPI_HOST` falls back to `SPI2_HOST` and `display`
   joins the same three-way refusal via `display_owns_spi_host()`; on chips with
   SPI3 that check never fires, which is intended.
+- **The default S3 build enables octal PSRAM, which boards without it cannot boot.**
+  It claims GPIO 33-37 too. The Sinn board (ESP32-S3FH4R2, quad PSRAM) puts its I2C
+  bus and NAU7802 DRDY on 35-37, so build it with `sdkconfig.defaults.sinn` in a
+  separate `build_sinn` directory; the command is in `docs/board.md`. The
+  Cardputer Adv has no PSRAM at all and needs its own overlay for the same reason.
 - **SD host peripheral is chip-dependent.** `sd mmc` is behind
   `SOC_SDMMC_HOST_SUPPORTED`; it exists on the S3 and not on the C3.
 - **SD bring-up is deliberately two-stage.** `sd spi` / `sd mmc` init the host and

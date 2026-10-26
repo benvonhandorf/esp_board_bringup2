@@ -1170,6 +1170,38 @@ static const cli_group_t board_minstro_group = {
     .help_id = STR_BOARD_MINSTRO_GROUP_HELP,
 };
 
+static const cli_command_t board_sinn_commands[] = {
+    {"pins",      NULL, NULL, cmd_board_sinn_pins},
+    {"sd",        NULL, NULL, cmd_board_sinn_sd},
+    {"i2c",       NULL, NULL, cmd_board_sinn_i2c},
+    {"nau7802",   NULL, NULL, cmd_board_sinn_nau7802},
+    {"mic",       NULL, NULL, cmd_board_sinn_mic},
+    {"mic-array", NULL, NULL, cmd_board_sinn_mic_array},
+    {"vin",       NULL, NULL, cmd_board_sinn_vin},
+};
+
+/* Parallel to board_sinn_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t board_sinn_text[] = {
+    {STR_BOARD_SINN_PINS_USAGE,      STR_BOARD_SINN_PINS_HELP},
+    {STR_BOARD_SINN_SD_USAGE,        STR_BOARD_SINN_SD_HELP},
+    {STR_BOARD_SINN_I2C_USAGE,       STR_BOARD_SINN_I2C_HELP},
+    {STR_BOARD_SINN_NAU7802_USAGE,   STR_BOARD_SINN_NAU7802_HELP},
+    {STR_BOARD_SINN_MIC_USAGE,       STR_BOARD_SINN_MIC_HELP},
+    {STR_BOARD_SINN_MIC_ARRAY_USAGE, STR_BOARD_SINN_MIC_ARRAY_HELP},
+    {STR_BOARD_SINN_VIN_USAGE,       STR_BOARD_SINN_VIN_HELP},
+};
+_Static_assert(ARRAY_COUNT(board_sinn_text) == ARRAY_COUNT(board_sinn_commands),
+               "board-sinn help ids and commands must be the same length");
+
+static const cli_group_t board_sinn_group = {
+    .name = "board-sinn",
+    .commands = board_sinn_commands,
+    .command_count = ARRAY_COUNT(board_sinn_commands),
+    .command_text = board_sinn_text,
+    .help_id = STR_BOARD_SINN_GROUP_HELP,
+};
+
 static const cli_command_t board_core_basic_commands[] = {
     {"pins",  NULL, NULL, cmd_board_core_basic_pins},
     {"audio", NULL, NULL, cmd_board_core_basic_audio},
@@ -1235,6 +1267,7 @@ static const cli_group_t *const groups[] = {
     &board_sensor_group,
     &board_minstro_group,
     &board_core_basic_group,
+    &board_sinn_group,
 };
 
 /*

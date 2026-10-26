@@ -1,0 +1,5 @@
+# Sinn board: ESP32-S3FH4R2, quad flash and quad PSRAM. Layered after
+# sdkconfig.defaults.esp32s3, whose octal PSRAM would claim GPIO 33-37 (the I2C
+# bus and NAU7802 DRDY are on 35-37) and fail to boot on this chip.
+CONFIG_SPIRAM_MODE_QUAD=y
+CONFIG_SPIRAM_SPEED_80M=y

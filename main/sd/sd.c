@@ -219,6 +219,16 @@ static int take_options(int argc, char **argv, int index, int *freq_khz, int *cd
     return 0;
 }
 
+/* The IDF drivers configure the card-detect pin as a bare input. The switch
+ * only pulls it to ground when a card is seated, so without a pull-up an empty
+ * slot floats. Applied after the host has set the pin up. */
+static void enable_cd_pullup(int cd_pin)
+{
+    if (cd_pin != GPIO_NUM_NC) {
+        gpio_pullup_en((gpio_num_t)cd_pin);
+    }
+}
+
 /* Every SD line is bidirectional, so all of them must be output-capable. */
 static bool check_pins(const int *pins, int count, const char *const *names)
 {
@@ -418,6 +428,7 @@ static esp_err_t open_spi(void)
     if (err != ESP_OK) {
         return err;
     }
+    enable_cd_pullup(cfg.cd_pin);
 
     host = (sdmmc_host_t)SDSPI_HOST_DEFAULT();
     host.slot = spi_dev;
@@ -461,7 +472,11 @@ static esp_err_t open_mmc(void)
     }
     host_inited = true;
 
-    return sdmmc_host_init_slot(host.slot, &slot_config);
+    err = sdmmc_host_init_slot(host.slot, &slot_config);
+    if (err == ESP_OK) {
+        enable_cd_pullup(cfg.cd_pin);
+    }
+    return err;
 }
 #endif
 

@@ -1,0 +1,20 @@
+{
+  "section": "board-sinn",
+  "strings": {
+    "group.help": "Sinn ESP32-S3 board (esp32s3)",
+    "i2c.help": "Initialize the I2C bus (SHT4x at 0x44, NAU7802 at 0x2A)",
+    "i2c.usage": "",
+    "mic-array.help": "Open all eight PDM microphones as raw bits",
+    "mic-array.usage": "",
+    "mic.help": "Open the first PDM microphone pair",
+    "mic.usage": "",
+    "nau7802.help": "Initialize the I2C bus and the NAU7802",
+    "nau7802.usage": "",
+    "pins.help": "Show the known pinout",
+    "pins.usage": "",
+    "sd.help": "Initialize the 4-bit SD interface",
+    "sd.usage": "",
+    "vin.help": "Read the board input voltage pin (mV x 6)",
+    "vin.usage": ""
+  }
+}

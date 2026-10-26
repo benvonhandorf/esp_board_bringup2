@@ -244,7 +244,44 @@ static const board_t core_basic = {
 };
 
 
-static const board_t *const boards[] = {&cardputer, &cardputer_adv, &xiao, &sensor, &minstro, &core_basic};
+/*
+ * Sinn. ESP32-S3FH4R2 (quad flash and quad PSRAM), 4-bit SD with card detect, an
+ * I2C bus with an SHT4x (0x44) and an optional NAU7802 (0x2A), and eight PDM microphones: one shared clock
+ * and four data lines, each carrying a left/right pair. Vin is read through a
+ * 500k/100k divider, so the pin sees a sixth of the input voltage.
+ *
+ * GPIO 35-37 are free only because this chip has quad PSRAM; the octal PSRAM in
+ * the default S3 build would claim them. Build with sdkconfig.defaults.sinn.
+ * These pins are from the board designer and have not yet been exercised here.
+ */
+static const board_pin_t sinn_pins[] = {
+    {"SD CLK", 42, STR_BOARD_NOTE_FROM_THE_DESIGNER_NOT},
+    {"SD CMD", 41, STR_BOARD_NOTE_FROM_THE_DESIGNER_NOT},
+    {"SD D0", 43, STR_BOARD_NOTE_FROM_THE_DESIGNER_NOT},
+    {"SD D1", 44, STR_BOARD_NOTE_FROM_THE_DESIGNER_NOT},
+    {"SD D2", 39, STR_BOARD_NOTE_FROM_THE_DESIGNER_NOT},
+    {"SD D3", 40, STR_BOARD_NOTE_FROM_THE_DESIGNER_NOT},
+    {"SD CD", 38, STR_BOARD_NOTE_CARD_DETECT_FLOATS_UNUSED},
+    {"I2C SCL", 35, STR_BOARD_NOTE_FROM_THE_DESIGNER_NOT},
+    {"I2C SDA", 36, STR_BOARD_NOTE_FROM_THE_DESIGNER_NOT},
+    {"NAU7802 DRDY", 37, STR_BOARD_NOTE_OPTIONAL_PART_DATA_READY},
+    {"Mic PDM CLK", 10, STR_BOARD_NOTE_SHARED_BY_ALL_EIGHT_MICS},
+    {"Mic PDM DATA0", 11, STR_BOARD_NOTE_LEFT_RIGHT_PAIR_ON_ONE_LINE},
+    {"Mic PDM DATA1", 12, STR_BOARD_NOTE_LEFT_RIGHT_PAIR_ON_ONE_LINE},
+    {"Mic PDM DATA2", 13, STR_BOARD_NOTE_LEFT_RIGHT_PAIR_ON_ONE_LINE},
+    {"Mic PDM DATA3", 14, STR_BOARD_NOTE_LEFT_RIGHT_PAIR_ON_ONE_LINE},
+    {"Vin sense", 1, STR_BOARD_NOTE_VIN_DIVIDER_READING_TIMES_6},
+};
+
+static const board_t sinn = {
+    .name = "sinn",
+    .chip = "esp32s3",
+    .description = STR_BOARD_DESC_SINN_ESP32_S3_BOARD,
+    .pins = sinn_pins,
+    .pin_count = ARRAY_COUNT(sinn_pins),
+};
+
+static const board_t *const boards[] = {&cardputer, &cardputer_adv, &xiao, &sensor, &minstro, &core_basic, &sinn};
 
 /* ------------------------------------------------------------------ */
 /* Command functions                                                   */
@@ -632,4 +669,91 @@ int cmd_board_core_basic_i2c(int argc, char **argv)
         "i2c bus 22 21",
     };
     return apply(&core_basic, lines, ARRAY_COUNT(lines));
+}
+/* ------------------------------------------------------------------ */
+/* Sinn                                                                */
+/* ------------------------------------------------------------------ */
+
+int cmd_board_sinn_pins(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+    return show_pins(&sinn);
+}
+
+int cmd_board_sinn_sd(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+
+    /* No `cd 38`: with a card seated the pin floats (1 with a pull-up, 0 with a
+     * pull-down), and the driver reads a high CD pin as an empty slot, so the
+     * card is never found. */
+    static const char *const lines[] = {
+        "sd mmc 42 41 43 44 39 40",
+    };
+    return apply(&sinn, lines, ARRAY_COUNT(lines));
+}
+
+int cmd_board_sinn_i2c(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+
+    /* The SHT4x sits at 0x44; `i2c scan` also guesses other parts there. */
+    static const char *const lines[] = {
+        "i2c bus 35 36",
+    };
+    return apply(&sinn, lines, ARRAY_COUNT(lines));
+}
+
+int cmd_board_sinn_nau7802(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+
+    /* The NAU7802 is optional on this board, so it has its own preset rather
+     * than being part of `i2c`. */
+    static const char *const lines[] = {
+        "i2c bus 35 36",
+        "i2c-nau7802 init drdy 37",
+    };
+    return apply(&sinn, lines, ARRAY_COUNT(lines));
+}
+
+int cmd_board_sinn_mic(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+
+    /* One data line, so one left/right pair, decoded to PCM. */
+    static const char *const lines[] = {
+        "audio pdm 10 11",
+    };
+    return apply(&sinn, lines, ARRAY_COUNT(lines));
+}
+
+int cmd_board_sinn_mic_array(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+
+    /* All eight microphones as raw bits; nothing decodes these yet, so use
+     * `audio pdmbits` to see which respond. */
+    static const char *const lines[] = {
+        "audio pdmraw 10 11,12,13,14",
+    };
+    return apply(&sinn, lines, ARRAY_COUNT(lines));
+}
+
+int cmd_board_sinn_vin(int argc, char **argv)
+{
+    (void)argc;
+    (void)argv;
+
+    /* The divider is 500k over 100k: multiply the millivolts by 6. */
+    static const char *const lines[] = {
+        "gpio aread 1",
+    };
+    return apply(&sinn, lines, ARRAY_COUNT(lines));
 }

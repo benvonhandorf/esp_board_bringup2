@@ -30,7 +30,7 @@ PAGE = {
     "audio-sph0645": "audio",
     "touch": "touch", "loadcell": "loadcell",
     "board": "board", "board-cardputer": "board", "board-cardputer-adv": "board", "board-xiao": "board",
-    "board-sensor": "board", "board-minstro": "board", "board-core-basic": "board",
+    "board-sensor": "board", "board-minstro": "board", "board-core-basic": "board", "board-sinn": "board",
 }
 
 

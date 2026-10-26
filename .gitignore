@@ -33,6 +33,7 @@ flasher_args.json # Generated in build directory
 sdkconfig.old
 sdkconfig
 sdkconfig.s3
+sdkconfig.sinn
 .cache/
 
 # ESP-IDF dependencies

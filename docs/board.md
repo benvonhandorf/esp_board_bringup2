@@ -104,6 +104,36 @@ design decision, not something the firmware can work around: only one subsystem
 can have the pin at a time, so running `board-core-basic sd` and then
 `board-core-basic audio` (or the reverse) reconfigures it for the new purpose.
 
+### board-sinn
+
+Sinn, ESP32-S3FH4R2 — 4-bit SD with card detect, I2C with an SHT4x, optional NAU7802, eight PDM
+microphones, Vin sense. `pins`, `sd`, `i2c`, `nau7802`, `mic`, `mic-array`, `vin`.
+
+**Build with the quad-PSRAM overlay.** The default S3 build enables octal PSRAM,
+which claims GPIO 33–37 (the I2C bus and DRDY here) and does not boot on this chip:
+
+```
+idf.py -B build_sinn -DSDKCONFIG=sdkconfig.sinn \
+  "-DSDKCONFIG_DEFAULTS=sdkconfig.defaults;sdkconfig.defaults.esp32s3;sdkconfig.defaults.sinn" build
+```
+
+- `sd` runs `sd mmc 42 41 43 44 39 40`, 4-bit. It leaves out `cd 38`: with a card seated
+  GPIO 38 floats rather than going low, and the driver reads a high CD pin as an empty
+  slot, so `cd 38` makes the card undiscoverable. Measured on a 3.68 GiB SDHC card:
+  verified reads up to 40 MHz (the S3's limit), 12 MiB/s.
+- `i2c` runs `i2c bus 35 36`. The SHT4x temperature/humidity sensor is at 0x44, read with
+  `i2c-sht4x read 0x44`. `i2c scan` also lists INA2xx and PI4IOE5V6408 parts at 0x44,
+  because they share the address; on this board it is the SHT4x.
+- `nau7802` runs `i2c bus 35 36` then `i2c-nau7802 init drdy 37`. It is separate from
+  `i2c` because the part is optional.
+- `mic` opens the first microphone pair (`audio pdm 10 11`), decoded to PCM, so
+  `audio level` and `audio record` work. `mic-array` opens all eight as raw bits
+  (`audio pdmraw 10 11,12,13,14`), for `audio pdmbits`.
+- `vin` runs `gpio aread 1`. The divider is 500k over 100k, so the input voltage is
+  the reported millivolts × 6 (about 18.6 V at full scale).
+
+The pins are from the board designer and have not yet been exercised here.
+
 ## Adding a board
 
 A `board_t` entry in `main/board/board.c` — name, chip, description, the pin
