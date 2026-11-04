@@ -28,7 +28,7 @@ PAGE = {
     "display": "display", "display-st7789": "display",
     "audio": "audio", "audio-nau8822": "audio", "audio-es8311": "audio", "audio-ns4168": "audio",
     "audio-sph0645": "audio",
-    "touch": "touch", "loadcell": "loadcell",
+    "touch": "touch", "led": "led", "loadcell": "loadcell",
     "board": "board", "board-cardputer": "board", "board-cardputer-adv": "board", "board-xiao": "board",
     "board-sensor": "board", "board-minstro": "board", "board-core-basic": "board", "board-sinn": "board",
 }

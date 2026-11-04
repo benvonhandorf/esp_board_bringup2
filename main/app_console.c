@@ -39,6 +39,7 @@
 #include "diag.h"
 #include "display.h"
 #include "esp_app_desc.h"
+#include "esp_log.h"
 #include "esp_system.h"
 #include "gpio.h"
 #include "hx711_cmd.h"
@@ -60,6 +61,7 @@
 #include "strres.h"
 #include "strres_ids.h"
 #include "sys_hw.h"
+#include "led.h"
 #include "touch.h"
 #include "uart.h"
 #include "wifi.h"
@@ -1019,6 +1021,38 @@ static const cli_group_t touch_group = {
 };
 
 /* ------------------------------------------------------------------ */
+/* led                                                                 */
+/* ------------------------------------------------------------------ */
+
+static const cli_command_t led_commands[] = {
+    {"config",  NULL, NULL, cmd_led_config},
+    {"fill",    NULL, NULL, cmd_led_fill},
+    {"rainbow", NULL, NULL, cmd_led_rainbow},
+    {"cycle",   NULL, NULL, cmd_led_cycle},
+    {"stop",    NULL, NULL, cmd_led_stop},
+};
+
+/* Parallel to led_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t led_text[] = {
+    {STR_LED_CONFIG_USAGE,   STR_LED_CONFIG_HELP},
+    {STR_LED_FILL_USAGE,     STR_LED_FILL_HELP},
+    {STR_LED_RAINBOW_USAGE,  STR_LED_RAINBOW_HELP},
+    {STR_LED_CYCLE_USAGE,    STR_LED_CYCLE_HELP},
+    {STR_LED_STOP_USAGE,     STR_LED_STOP_HELP},
+};
+_Static_assert(ARRAY_COUNT(led_text) == ARRAY_COUNT(led_commands),
+               "led help ids and commands must be the same length");
+
+static const cli_group_t led_group = {
+    .name = "led",
+    .commands = led_commands,
+    .command_count = ARRAY_COUNT(led_commands),
+    .command_text = led_text,
+    .help_id = STR_LED_GROUP_HELP,
+};
+
+/* ------------------------------------------------------------------ */
 /* board, board-<name>                                                 */
 /*                                                                     */
 /* A preset runs fully qualified command lines, so a board's group can  */
@@ -1260,6 +1294,7 @@ static const cli_group_t *const groups[] = {
     &display_group,
     &st7789_group,
     &touch_group,
+    &led_group,
     &board_group,
     &board_cardputer_group,
     &board_cardputer_adv_group,
@@ -1285,11 +1320,20 @@ esp_err_t app_console_register(void)
 {
     cli_set_text_resolver(resolve_help_text);
 
+    /* Keep going after a failure so one bad group does not hide the rest, and
+     * name each one: a full table (CONFIG_CLI_MAX_GROUPS) otherwise drops
+     * groups with nothing on the console to say so. */
+    esp_err_t result = ESP_OK;
     for (size_t i = 0; i < ARRAY_COUNT(groups); i++) {
         esp_err_t err = cli_register_group(groups[i]);
         if (err != ESP_OK) {
-            return err;
+            ESP_LOGE("app_console", "group '%s' not registered: %s%s", groups[i]->name,
+                     esp_err_to_name(err),
+                     err == ESP_ERR_NO_MEM ? " (raise CONFIG_CLI_MAX_GROUPS)" : "");
+            if (result == ESP_OK) {
+                result = err;
+            }
         }
     }
-    return ESP_OK;
+    return result;
 }

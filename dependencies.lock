@@ -350,7 +350,7 @@ dependencies:
       type: git
     version: 8f2840c9d9df537de152d1e5ba7e8d7d03ab4b09
   wifi_manager:
-    component_hash: 29e0cb1fb9b452d585d697e3ae850fa99cc2c6e7276bda57d031f02fd89a9207
+    component_hash: 7afe9a23273da7ec70d23c102a17feb056c34d2f86a75479f362fe6291e11721
     dependencies:
     - name: idf
       version: '>=5.0'
@@ -366,7 +366,7 @@ dependencies:
       git: https://github.com/benvonhandorf/esp_components.git
       path: wifi_manager
       type: git
-    version: d317dc0811f5d0da001255ecc03a7fd17fc19721
+    version: fba07e28b12833539a6067749cf4b283187efeb8
 direct_dependencies:
 - aw9523b
 - cli
@@ -396,6 +396,6 @@ direct_dependencies:
 - sht4x
 - tone_gen
 - wifi_manager
-manifest_hash: c67afca3566d2157c1898aa3af32a3f75d5d05df53d03d0bcef7ac754aef5ee7
+manifest_hash: 961b0bd9b466147cb9b82b4b252cf60afa1efa4d260d9206fda486dc287b8b8b
 target: esp32s3
 version: 3.0.0

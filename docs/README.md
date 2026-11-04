@@ -19,6 +19,7 @@ conventions that apply everywhere (how commands are addressed, case folding,
 | [audio](audio.md) | Audio over I2S: tone, sweep, microphone capture and loopback | `audio-nau8822`, `audio-ns4168`, `audio-sph0645` |
 | [display](display.md) | SPI displays: test patterns and an orientation/offset tool | `display-st7789` |
 | [touch](touch.md) | Capacitive touch pads: calibrate a set and watch them live | |
+| [led](led.md) | Addressable LED chains (WS2812): solid colour, rainbow, continuous cycle | |
 | [loadcell](loadcell.md) | HX711 24-bit load cell ADC, bit-banged on two pins (no bus) | |
 | [board](board.md) | Known board pinouts and per-subsystem setup presets | `board-<name>` |
 
