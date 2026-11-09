@@ -207,12 +207,15 @@ esp_err_t audio_bus_open_pdm_lines(int clk, const int *dins, int line_count,
 /*
  * Open up to AUDIO_PDM_MAX_LINES PDM data lines at once, sharing one clock.
  *
- * This is a different mode from audio_bus_open_pdm(), not a generalization of
- * it: the chip has exactly one PDM-to-PCM decimation filter, good for two
- * channels total, so more than one line has to bypass that filter and read
- * the raw, undecimated one-bit stream instead. Turning that into PCM is
- * pdm_decimator_process()'s job, in software, per line (pdmultra does it for one line) -- nothing here produces
- * anything audio_capture_run() or the other stereo-PCM consumers can read.
+ * NOT USABLE FOR MORE THAN ONE LINE: measured on an ESP32-S3, this receiver delivers
+ * only the first line's left and right (as [A, B, A', B']) however many are given,
+ * and ignores the others, even with the slot mask applied before the GPIOs and the
+ * TDM frame widened. For several lines use audio_bus_open_pdm_lines(), which uses
+ * the chip's PDM-to-PCM filter and does handle them (two lines, four channels,
+ * verified). What this mode is for is one line at a clock the filter cannot take:
+ * the undecimated stream goes to pdm_decimator_process() in software (pdmultra), and
+ * nothing here produces anything audio_capture_run() or the other stereo-PCM
+ * consumers can read.
  *
  * line_count must be 1-AUDIO_PDM_MAX_LINES, further clamped to whatever the
  * chip actually has (SOC_I2S_PDM_MAX_RX_LINES).

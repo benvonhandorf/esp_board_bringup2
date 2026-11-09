@@ -608,10 +608,13 @@ esp_err_t audio_bus_open_pdm_raw(int clk, const int *dins, int line_count,
 #endif
 
     /*
-     * RAW, not PCM: the one hardware PDM-to-PCM filter on this chip only ever
-     * produces two channels, so more than one line has to skip it and read
-     * the undecimated bitstream instead. The oversample multiplier gets the
-     * bit clock into the megahertz range a real part expects, the same
+     * RAW, not PCM: the undecimated bitstream, for a clock the hardware filter cannot
+     * be given (its ratio is fixed at 64) -- the ultrasonic path -- and for the
+     * statistics in `pdmbits`. This used to say the filter only produces two
+     * channels and that more lines therefore had to be raw; the opposite is true:
+     * the filter handles two lines (four channels, measured), and this raw receiver
+     * is the one that only captures a single line. The oversample multiplier gets
+     * the bit clock into the megahertz range a real part expects, the same
      * distinction codec_sph0645.c has to make for the decimated path.
      */
     i2s_pdm_rx_slot_config_t slot_cfg = I2S_PDM_RX_SLOT_RAW_FMT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
