@@ -243,8 +243,15 @@ uint32_t audio_bus_pdm_clk_hz(void)
     if (ultra_dec) {
         return AUDIO_ULTRA_CLK_HZ;
     }
+    if (rx_mode == AUDIO_RX_PDM_RAW) {
+        /* The driver's bclk_hz for a raw channel is twice what the pin carries: 6.144
+         * MHz for `rate 96000`, where the pin runs 32 x rate = 3.072 MHz. The part's
+         * ultrasonic entry sequence, which needs 2.048 MHz at rate 64000, only works
+         * with the latter. */
+        return format.rate_hz * 32;
+    }
     i2s_chan_info_t info;
-    if ((rx_mode != AUDIO_RX_PDM && rx_mode != AUDIO_RX_PDM_RAW) || !rx_chan_info(&info)) {
+    if (rx_mode != AUDIO_RX_PDM || !rx_chan_info(&info)) {
         return 0;
     }
     return info.bclk_hz;

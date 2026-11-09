@@ -48,6 +48,7 @@ idf_component_register(
                  "audio/codec_sph0645.c"
                  "audio/pcm_stats.c"
                  "audio/audio_bench.c"
+                 "audio/usb_stream.c"
                  "board/board.c"
                  "display/display.c"
                  "display/panel_st7789.c"

@@ -647,3 +647,113 @@ Other 24/32-bit I2S microphones — the INMP441, the ICS-43434 — work through 
 same `audio bus ... din <pin> bits 32` and the same `audio record`, without
 this submenu. They differ in their clock limits, so the checks here are the
 SPH0645's rather than universal.
+
+## USB audio
+
+`audio-usb` presents the open microphone to a computer as a USB audio device, so
+`arecord`, Audacity or a script can record it live with no custom transport. It
+works on chips with a USB device controller (ESP32-S2, S3, P4); on others every
+command here says so.
+
+**Starting it ends the serial console.** The USB device and USB-Serial-JTAG share
+the chip's one USB PHY, so after `audio-usb start` the serial port is gone until
+the next reset. Everything else still works over the web console and MQTT. To
+flash again, reset the board (or replug it, holding BOOT if it does not
+re-enumerate).
+
+**What fits is a property of the chip.** A USB audio packet must fit whole in the
+endpoint's transmit FIFO, and the S3's controller has one 1 KB block of FIFO RAM
+shared by every FIFO. After the receive FIFO and endpoint 0 that leaves 712 bytes
+per 1 ms packet for the whole stream, whatever the channel count — less than the
+1023 bytes the USB full-speed protocol allows. A packet carries `floor(rate/1000)
++ 1` frames, so the stream needs `(floor(rate/1000) + 1) × channels × bytes`
+bytes, and `config` refuses what does not fit:
+
+| Rate | 16-bit, most channels on an S3 |
+|---|---|
+| 300 kHz | 1 |
+| 192 kHz | 1 |
+| 150 kHz | 2 |
+| 100 kHz | 3 |
+| 75 kHz | 4 |
+| 48 kHz | 7 |
+| 32 kHz | 8 |
+
+24-bit costs half again as much. Two ultrasonic microphones at 300 kHz need 1.2
+MB/s, which no full-speed device can carry; take one channel at 300 kHz, or both at
+150 kHz or less. The P4 and S31 have high-speed USB and a larger FIFO; the check
+uses the controller the firmware is running on.
+
+**The rate is the microphone's.** Nothing here resamples. To change the rate, reopen
+the microphone at the rate you want (`audio pdm ... rate <hz>`, `audio pdmultra ...
+maxhz <hz>`); `config` checks that it fits and refuses a `rate` the microphone is not
+running at. Close nothing the stream depends on while it runs: run `audio-usb stop`
+before `audio close` or reopening the microphone.
+
+**Three kinds of microphone can be streamed.**
+
+- A decimated PDM microphone (`audio pdm`, `audio pdmultra`): one PDM line, two
+  channels, at the rate the receiver produces.
+- An I2S microphone (`audio bus ... din`): the slots the bus carries, 16, 24 or 32
+  bits.
+- An undecimated PDM receiver (`audio pdmraw`, `audio pdmultra ... raw`): any number
+  of lines, up to four, so up to eight microphones. The stream decimates it in
+  software with the sixth-order sinc filter, and the rate is the bit clock divided
+  by 64, 48, 32 or 16 — `config rate` picks one, and 64 (the standard PDM
+  oversampling) is the default. `audio pdmraw 10 11 rate 96000` runs a 3.072 MHz
+  clock, so 48 kHz by default; the same receiver at `rate 192000` runs 6.144 MHz.
+  The decimation costs processor time in proportion to the channels and the bit
+  clock; `status` reports it.
+
+  Each line carries a left and a right microphone, and the order the receiver
+  delivers them is not the same on the raw path as on the filtered one: the same two
+  microphones came out swapped. Tap a microphone and look at which channel moves
+  before trusting the labels.
+
+On Linux the device appears as a USB microphone:
+
+```sh
+arecord -l                                  # find the card
+arecord -D hw:CARD=<name>,DEV=0 -c 2 -r 48000 -f S16_LE -d 10 mic.wav
+```
+
+Use the channel count and rate `config` printed.
+
+### `config [rate <hz>] [ch <list>] [bits <16|24>]`
+
+Chooses the stream and checks it against the bandwidth, without starting USB. `rate`
+must be one the microphone offers (see above). `ch`
+takes a comma-separated list of the microphone's channels (`0,1`, or `1` for the
+second microphone alone); it defaults to all of them. `bits` is 16 by default, and
+24 needs a 24- or 32-bit source. Every call states the whole configuration: anything
+left out goes back to following the microphone.
+
+When it does not fit, the error says what would: the most channels at this rate, and
+the highest rate at this channel count.
+
+### `start [timeout <seconds>]`
+
+Checks the stream again against the microphone as it is now, warns that the serial
+console is about to end, starts the USB device and begins streaming. Samples are
+dropped (and counted) until the host opens the device.
+
+`timeout` resets the chip after that many seconds, which is what brings the serial
+console back without touching the board: the way to run a timed recording on the
+bench. Without it the stream runs until `stop` over the web console, or a reset.
+
+### `status`
+
+Whether the host has connected and is recording, the stream and packet size against
+the budget, bytes sent and dropped, buffer overruns, how full the host-side buffer
+is, and — when the microphone is decimated in software — the decimator's cost in
+cycles per frame and as a share of one core.
+
+### `stop`
+
+Stops the stream and the USB device. The serial console comes back after a reset, not
+before.
+
+### `budget`
+
+Lists, for common rates and the open microphone's, the most channels a USB packet holds
+at 16 and 24 bits on this chip. Needs no microphone.

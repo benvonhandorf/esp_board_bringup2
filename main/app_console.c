@@ -28,6 +28,7 @@
 
 #include "app_status.h"
 #include "audio.h"
+#include "usb_stream.h"
 #include "aw9523b_cmd.h"
 #include "board.h"
 #include "cli.h"
@@ -888,6 +889,34 @@ static const cli_group_t sph0645_group = {
     .help_id = STR_AUDIO_SPH0645_GROUP_HELP,
 };
 
+static const cli_command_t usb_commands[] = {
+    {"config", NULL, NULL, cmd_audio_usb_config},
+    {"start",  NULL, NULL, cmd_audio_usb_start},
+    {"status", NULL, NULL, cmd_audio_usb_status},
+    {"stop",   NULL, NULL, cmd_audio_usb_stop},
+    {"budget", NULL, NULL, cmd_audio_usb_budget},
+};
+
+/* Parallel to usb_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t usb_text[] = {
+    {STR_AUDIO_USB_CONFIG_USAGE,  STR_AUDIO_USB_CONFIG_HELP},
+    {STR_AUDIO_USB_START_USAGE,   STR_AUDIO_USB_START_HELP},
+    {STR_AUDIO_USB_STATUS_USAGE,  STR_AUDIO_USB_STATUS_HELP},
+    {STR_AUDIO_USB_STOP_USAGE,    STR_AUDIO_USB_STOP_HELP},
+    {STR_AUDIO_USB_BUDGET_USAGE,  STR_AUDIO_USB_BUDGET_HELP},
+};
+_Static_assert(ARRAY_COUNT(usb_text) == ARRAY_COUNT(usb_commands),
+               "audio-usb help ids and commands must be the same length");
+
+static const cli_group_t usb_group = {
+    .name = "audio-usb",
+    .commands = usb_commands,
+    .command_count = ARRAY_COUNT(usb_commands),
+    .command_text = usb_text,
+    .help_id = STR_AUDIO_USB_GROUP_HELP,
+};
+
 /* ------------------------------------------------------------------ */
 /* sd                                                                  */
 /* ------------------------------------------------------------------ */
@@ -1288,6 +1317,7 @@ static const cli_group_t *const groups[] = {
     &es8311_group,
     &ns4168_group,
     &sph0645_group,
+    &usb_group,
     &uart_group,
     &spi_group,
     &sd_group,

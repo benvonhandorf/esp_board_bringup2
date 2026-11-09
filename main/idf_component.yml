@@ -129,3 +129,9 @@ dependencies:
     git: https://github.com/benvonhandorf/esp_components.git
     path: tone_gen
     version: tone_gen-v0.1.0
+  # USB Audio Class 2 microphone. Compiles to stubs on a chip with no USB OTG
+  # controller, so it is listed for every target.
+  usb_mic:
+    git: https://github.com/benvonhandorf/esp_components.git
+    path: usb_mic
+    version: usb_mic-v0.1.0

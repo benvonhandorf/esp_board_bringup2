@@ -227,6 +227,14 @@ anything that exposes credentials or changes the device.
   the spectrum floor is 20 dB too high; the `pdm_decimator` component builds itself `-O2`, `capture.c` and
   `pcm_stats.c` are `-O2` here, and the S3 defaults to 240 MHz. `audio pdmbits dump` plus a host decimator is
   how to tell an overrun from a real floor.
+- **`audio-usb start` ends the serial console.** The USB device and USB-Serial-JTAG
+  share the S3's one PHY, so the port is gone until reset; `start timeout <s>` resets the
+  chip afterwards, which is how to bench it without touching the board. Control during a
+  stream is the web console only. One USB packet holds 712 bytes on the S3 (the controller's
+  FIFO RAM, not the bus), which is what `audio-usb config` validates against; the `usb_mic`
+  component owns that arithmetic and its host test.
+- **A raw PDM receiver's `bclk_hz` from the driver is twice the pin's clock.** The pin runs
+  at 32 x `rate`; `audio_bus_pdm_clk_hz()` returns that for raw receivers.
 - **The image is on trial after an OTA.** `app_main()` confirms it at the very
   end, so firmware that crashes during start-up rolls back on the next reset. Do
   not move that call earlier.
