@@ -55,6 +55,15 @@ static int pin_pdm_clk = -1;
 static int pdm_raw_dins[AUDIO_PDM_MAX_LINES];
 static int pdm_raw_line_count;
 static int pdm_pcm_line_count;   /* hardware-filtered PDM: data lines in use */
+/* Options for the next audio_bus_open_pdm_lines(), consumed and reset by it. */
+static int pdm_opt_drive = -1;   /* clock pin drive strength 0-3, -1 for the default */
+static bool pdm_opt_clkinv;      /* invert the clock the receiver sends the microphones */
+
+void audio_bus_pdm_options(int clk_drive, bool clk_inv)
+{
+    pdm_opt_drive = clk_drive;
+    pdm_opt_clkinv = clk_inv;
+}
 
 /* Software-decimated ultrasonic PDM: set while audio_bus_open_pdm_ultra()'s
  * receiver is open. The channel underneath is a raw one. */
@@ -472,7 +481,7 @@ esp_err_t audio_bus_open_pdm_lines(int clk, const int *dins, int line_count,
 
     i2s_pdm_rx_gpio_config_t gpio_cfg = {
         .clk = (gpio_num_t)clk,
-        .invert_flags = {0},
+        .invert_flags = {.clk_inv = pdm_opt_clkinv},
     };
 #if SOC_I2S_PDM_MAX_RX_LINES > 1
     for (int i = 0; i < SOC_I2S_PDM_MAX_RX_LINES; i++) {
@@ -496,6 +505,11 @@ esp_err_t audio_bus_open_pdm_lines(int clk, const int *dins, int line_count,
         audio_bus_rx_close();
         return err;
     }
+
+    if (pdm_opt_drive >= 0) {
+        gpio_set_drive_capability((gpio_num_t)clk, (gpio_drive_cap_t)pdm_opt_drive);
+    }
+    audio_bus_pdm_options(-1, false);
 
     pdm_pcm_line_count = line_count;
     rx_mode = AUDIO_RX_PDM;
@@ -746,6 +760,10 @@ static esp_err_t pdm_ultra_start(int clk, int din)
     if (err != ESP_OK) {
         return err;
     }
+    /* Strongest clock drive: at 4.8 MHz on a metre of cable the default left the data
+     * saturated (measured on four microphones; see `audio pdm ... drive`). */
+    gpio_set_drive_capability((gpio_num_t)clk, GPIO_DRIVE_CAP_3);
+
     err = i2s_channel_enable(rx_chan);
     if (err != ESP_OK) {
         audio_bus_rx_close();

@@ -204,6 +204,12 @@ esp_err_t audio_bus_open_pdm(int clk, int din, const audio_format_t *fmt);
 esp_err_t audio_bus_open_pdm_lines(int clk, const int *dins, int line_count,
                                    const audio_format_t *fmt);
 
+/* Options for the NEXT audio_bus_open_pdm_lines(), which consumes them: the clock pin's
+ * drive strength (0 weakest to 3 strongest, -1 for the default) and inverting the clock
+ * the microphones see. Both are about a long cable: a weaker drive makes slower edges
+ * that couple less into the data lines, and inversion moves the sampling phase. */
+void audio_bus_pdm_options(int clk_drive, bool clk_inv);
+
 /* The ultrasonic entry for a receiver opened by audio_bus_open_pdm_lines() at a
  * standard-mode clock: leaves it running for the part to wake, then reclocks it in
  * place to 64 x rate_hz. The filter's ratio is fixed, so the clock must land in the

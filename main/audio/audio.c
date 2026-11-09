@@ -908,8 +908,25 @@ int cmd_audio_pdm(int argc, char **argv)
     }
 
     bool ultra = false;
+    bool clkinv = false;
+    int drive = -1;
     int index = 3;
     while (index < argc) {
+        if (strcasecmp(argv[index], "clkinv") == 0) {
+            clkinv = true;
+            index++;
+            continue;
+        }
+        if (strcasecmp(argv[index], "drive") == 0) {
+            if (index + 1 >= argc || cli_parse_int_arg(argv[index + 1], &drive) < 0 ||
+                drive < 0 || drive > 3) {
+                STRRES_ERROR(STR_AUDIO_PDM_DRIVE_RANGE);
+                free(dins);
+                return -1;
+            }
+            index += 2;
+            continue;
+        }
         if (strcasecmp(argv[index], "ultra") == 0) {
             ultra = true;
             index++;
@@ -965,6 +982,9 @@ int cmd_audio_pdm(int argc, char **argv)
         fmt.rate_hz = 32000;
     }
 
+    /* Ultrasonic clocks on a cabled array need the strongest edge: the default drive
+     * left four microphones on 1 m cables saturated at 4.8 MHz. */
+    audio_bus_pdm_options(ultra && drive < 0 ? 3 : drive, clkinv);
     esp_err_t err = audio_bus_open_pdm_lines(clk, dins, line_count, &fmt);
     free(dins);
     if (err == ESP_ERR_NOT_SUPPORTED) {

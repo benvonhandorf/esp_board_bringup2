@@ -163,7 +163,7 @@ does — there is no continuous form.
 
 Ends a continuous tone, ramping it down rather than cutting it.
 
-## `pdm <clk> <data1>[,<data2>,<data3>,<data4>] [rate <hz>] [ultra]`
+## `pdm <clk> <data1>[,<data2>,<data3>,<data4>] [rate <hz>] [ultra] [drive <0-3>] [clkinv]`
 
 Opens a PDM microphone — the SPM1423 on the Cardputer, the one on the XIAO
 Sense. PDM is not I2S with different pins: the part is clocked at a few
@@ -198,6 +198,16 @@ that: the way to get several ultrasonic microphones into one stream, but not the
 ultrasonic content, which needs `pdmultra`'s software filter and so one line.
 `audio pdm 10 11,12 rate 75000 ultra` is four ultrasonic-mode channels at 75 kHz. It
 cannot join an open standard bus, which sets its own clock.
+
+**Long cables.** Noise that rises steadily with the clock, worse on the right slot (the
+one sampled on the opposite edge), is a signal-integrity symptom, not the microphones:
+four microphones on 1 m cables were clean at 2.048 MHz, noisy by 3.584 MHz and saturated
+at 4.8 MHz. `drive <0-3>` sets the clock pin's drive strength (0 weakest: slower edges
+that couple less into the data lines) and `clkinv` inverts the clock the microphones see,
+which moves the sampling phase against their data. Both apply to this open only. With
+`ultra`, and in `pdmultra`, the clock pin already runs at drive 3: with the default drive,
+four microphones on 1 m cables were saturated at 4.8 MHz (thousands of LSB of noise), and
+with `drive 3` or `clkinv` they were clean (14-24 LSB) at 48, 64 and 75 kHz.
 
 ```
 > audio pdm 43 46
