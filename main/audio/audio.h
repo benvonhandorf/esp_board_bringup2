@@ -198,6 +198,12 @@ esp_err_t audio_bus_write(const void *data, size_t bytes, size_t *written,
  */
 esp_err_t audio_bus_open_pdm(int clk, int din, const audio_format_t *fmt);
 
+/* The same, for up to AUDIO_PDM_MAX_LINES data lines on one clock (two microphones per
+ * line), still decimated by the chip: audio_bus_rx_channels() is then 2 * line_count.
+ * The rate is the one filter's, so every line shares it. */
+esp_err_t audio_bus_open_pdm_lines(int clk, const int *dins, int line_count,
+                                   const audio_format_t *fmt);
+
 /*
  * Open up to AUDIO_PDM_MAX_LINES PDM data lines at once, sharing one clock.
  *

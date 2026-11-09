@@ -134,4 +134,4 @@ dependencies:
   usb_mic:
     git: https://github.com/benvonhandorf/esp_components.git
     path: usb_mic
-    version: usb_mic-v0.1.0
+    version: usb_mic-v0.1.1

@@ -54,6 +54,7 @@ static int pin_din = -1;
 static int pin_pdm_clk = -1;
 static int pdm_raw_dins[AUDIO_PDM_MAX_LINES];
 static int pdm_raw_line_count;
+static int pdm_pcm_line_count;   /* hardware-filtered PDM: data lines in use */
 
 /* Software-decimated ultrasonic PDM: set while audio_bus_open_pdm_ultra()'s
  * receiver is open. The channel underneath is a raw one. */
@@ -83,8 +84,9 @@ int audio_bus_rx_channels(void)
 {
     switch (rx_mode) {
     case AUDIO_RX_STD:
-    case AUDIO_RX_PDM:
         return 2;
+    case AUDIO_RX_PDM:
+        return 2 * (pdm_pcm_line_count > 0 ? pdm_pcm_line_count : 1);
     case AUDIO_RX_PDM_RAW:
         return 2 * pdm_raw_line_count;
     default:
@@ -302,6 +304,7 @@ void audio_bus_rx_close(void)
     pin_din = -1;
     pin_pdm_clk = -1;
     pdm_raw_line_count = 0;
+    pdm_pcm_line_count = 0;
     for (int i = 0; i < AUDIO_PDM_MAX_LINES; i++) {
         pdm_raw_dins[i] = -1;
     }
@@ -412,6 +415,19 @@ esp_err_t audio_bus_open(int bclk, int ws, int dout, int din,
 
 esp_err_t audio_bus_open_pdm(int clk, int din, const audio_format_t *fmt)
 {
+    return audio_bus_open_pdm_lines(clk, &din, 1, fmt);
+}
+
+esp_err_t audio_bus_open_pdm_lines(int clk, const int *dins, int line_count,
+                                   const audio_format_t *fmt)
+{
+    int max_lines = AUDIO_PDM_MAX_LINES;
+#if SOC_I2S_PDM_MAX_RX_LINES < AUDIO_PDM_MAX_LINES
+    max_lines = SOC_I2S_PDM_MAX_RX_LINES;
+#endif
+    if (line_count < 1 || line_count > max_lines) {
+        return ESP_ERR_INVALID_ARG;
+    }
     audio_bus_rx_close();
 
     /*
@@ -441,15 +457,38 @@ esp_err_t audio_bus_open_pdm(int clk, int din, const audio_format_t *fmt)
      * stays at whatever the second microphone would have put there, which on a
      * mono board is silence. Reporting both is how that gets discovered.
      */
+    /*
+     * ESP-IDF's PDM RX usage note: enable the slots in slot_mask first, then give the
+     * data GPIOs. A line whose slots are not in the mask has its dins[] pin ignored.
+     * Line n owns mask bits 2n (left) and 2n+1 (right).
+     */
+    i2s_pdm_rx_slot_config_t slot_cfg = I2S_PDM_RX_SLOT_PCM_FMT_DEFAULT_CONFIG(
+        I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+    uint32_t slot_mask = 0;
+    for (int i = 0; i < line_count; i++) {
+        slot_mask |= (uint32_t)(I2S_PDM_SLOT_LEFT | I2S_PDM_SLOT_RIGHT) << (2 * i);
+    }
+    slot_cfg.slot_mask = (i2s_pdm_slot_mask_t)slot_mask;
+
+    i2s_pdm_rx_gpio_config_t gpio_cfg = {
+        .clk = (gpio_num_t)clk,
+        .invert_flags = {0},
+    };
+#if SOC_I2S_PDM_MAX_RX_LINES > 1
+    for (int i = 0; i < SOC_I2S_PDM_MAX_RX_LINES; i++) {
+        gpio_cfg.dins[i] = -1;
+    }
+    for (int i = 0; i < line_count; i++) {
+        gpio_cfg.dins[i] = (gpio_num_t)dins[i];
+    }
+#else
+    gpio_cfg.din = (gpio_num_t)dins[0];
+#endif
+
     i2s_pdm_rx_config_t pdm_cfg = {
         .clk_cfg = I2S_PDM_RX_CLK_DEFAULT_CONFIG(format.rate_hz),
-        .slot_cfg = I2S_PDM_RX_SLOT_PCM_FMT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT,
-                                                           I2S_SLOT_MODE_STEREO),
-        .gpio_cfg = {
-            .clk = (gpio_num_t)clk,
-            .din = (gpio_num_t)din,
-            .invert_flags = {0},
-        },
+        .slot_cfg = slot_cfg,
+        .gpio_cfg = gpio_cfg,
     };
 
     err = i2s_channel_init_pdm_rx_mode(rx_chan, &pdm_cfg);
@@ -458,10 +497,11 @@ esp_err_t audio_bus_open_pdm(int clk, int din, const audio_format_t *fmt)
         return err;
     }
 
+    pdm_pcm_line_count = line_count;
     rx_mode = AUDIO_RX_PDM;
     rx_bits = 16;   /* the decimator's output width; PDM has no other option */
     pin_pdm_clk = clk;
-    pin_din = din;
+    pin_din = dins[0];
     return ESP_OK;
 }
 
@@ -485,6 +525,13 @@ esp_err_t audio_bus_open_pdm(int clk, int din, const audio_format_t *fmt)
     STRRES_PRINTF(STR_AUDIO_PDM_NO_FILTER_NOTE);
 #endif
     return ESP_ERR_NOT_SUPPORTED;
+}
+
+esp_err_t audio_bus_open_pdm_lines(int clk, const int *dins, int line_count,
+                                   const audio_format_t *fmt)
+{
+    (void)dins; (void)line_count;
+    return audio_bus_open_pdm(clk, 0, fmt);
 }
 
 #endif /* SOC_I2S_SUPPORTS_PDM_RX && SOC_I2S_SUPPORTS_PDM2PCM */
@@ -568,6 +615,11 @@ esp_err_t audio_bus_open_pdm_raw(int clk, const int *dins, int line_count,
      * distinction codec_sph0645.c has to make for the decimated path.
      */
     i2s_pdm_rx_slot_config_t slot_cfg = I2S_PDM_RX_SLOT_RAW_FMT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO);
+    /* The mask is what enables a line: the driver routes a dins[] pin only for a line
+     * whose slots are enabled here, and ESP-IDF's PDM RX usage note says to set the
+     * mask before the GPIOs. Left at the default (I2S_PDM_SLOT_BOTH) only line 0 is
+     * captured, however many pins are given. */
+    slot_cfg.slot_mask = (i2s_pdm_slot_mask_t)slot_mask;
 
     i2s_pdm_rx_config_t pdm_cfg = {
         .clk_cfg = I2S_PDM_RX_CLK_DEFAULT_CONFIG(format.rate_hz * PDM_RAW_OVERSAMPLE),
@@ -579,17 +631,14 @@ esp_err_t audio_bus_open_pdm_raw(int clk, const int *dins, int line_count,
     pdm_cfg.clk_cfg.sample_rate_hz = format.rate_hz * 32;
 
     /*
-     * NOT VERIFIED AGAINST REAL HARDWARE, and not fully verified against the
-     * driver either: ESP-IDF 6.0.2's i2s_pdm_rx_set_slot() (i2s_pdm.c in the
-     * pinned esp-idf) hardcodes total_slot/active_slot to 1-2 regardless of
-     * how many bits are set in slot_mask above, which is what sizes the DMA
-     * buffer i2s_channel_init_pdm_rx_mode() allocates below. The GPIO wiring
-     * and slot_mask bits say the hardware clocks line_count * 2 slots per
-     * frame; if the buffer stays sized for 2 regardless, reads will alias or
-     * overrun rather than fail loudly. Confirming that -- and, if needed,
-     * reaching into esp_private/i2s_private.h and hal/i2s_ll.h to resize the
-     * buffer and set rx_tdm_tot_chan_num by hand after this call -- is the
-     * experiment this function is a placeholder for.
+     * VERIFIED ON HARDWARE, AND IT DOES NOT WORK FOR MORE THAN ONE LINE. With the slot
+     * mask covering two lines (applied before the GPIOs, as ESP-IDF's PDM RX usage note
+     * says) and rx_tdm_tot_chan_num widened to four slots, the receiver still delivers
+     * only the first line's left and right, as [A, B, A', B'] at the two-slot rate;
+     * a floating pin listed first reads dead, listed second it is ignored. Capturing
+     * several lines needs the chip's PDM-to-PCM filter instead: see
+     * audio_bus_open_pdm_lines(), which does work (four channels, two lines). So the
+     * command refuses more than one line here.
      */
     err = i2s_channel_init_pdm_rx_mode(rx_chan, &pdm_cfg);
     if (err != ESP_OK) {
@@ -950,6 +999,13 @@ void audio_bus_rx_pdm_raw_pins(int *clk, int dins[AUDIO_PDM_MAX_LINES], int *lin
 esp_err_t audio_bus_open_pdm(int clk, int din, const audio_format_t *fmt)
 {
     (void)clk; (void)din; (void)fmt;
+    return ESP_ERR_NOT_SUPPORTED;
+}
+
+esp_err_t audio_bus_open_pdm_lines(int clk, const int *dins, int line_count,
+                                   const audio_format_t *fmt)
+{
+    (void)clk; (void)dins; (void)line_count; (void)fmt;
     return ESP_ERR_NOT_SUPPORTED;
 }
 

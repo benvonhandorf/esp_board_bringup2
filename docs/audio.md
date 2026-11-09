@@ -163,7 +163,7 @@ does — there is no continuous form.
 
 Ends a continuous tone, ramping it down rather than cutting it.
 
-## `pdm <clk> <data> [rate <hz>]`
+## `pdm <clk> <data1>[,<data2>,<data3>,<data4>] [rate <hz>]`
 
 Opens a PDM microphone — the SPM1423 on the Cardputer, the one on the XIAO
 Sense. PDM is not I2S with different pins: the part is clocked at a few
@@ -180,6 +180,14 @@ produced and says so when it lands outside that range.
 If the standard bus is already open, the microphone inherits its sample rate.
 Capture and playback share one rate deliberately: a loopback measured at two
 different rates would not mean anything.
+
+**Several data lines.** On the ESP32-S3, `audio pdm 10 11,12 rate 32000` takes two
+lines on one clock, each carrying a left and a right microphone, so four channels in the
+order the chip delivers them: line 1's two slots, then line 2's. Up to four lines
+(eight microphones) are allowed. They share the one filter and so one rate. The chip's
+documentation says the right slot of a line arrives first. This was verified on a board
+with four microphones on GPIO 11 and 12 and streams over [`audio-usb`](#usb-audio);
+`record`, `level` and `capture` still read the first two channels only.
 
 ```
 > audio pdm 43 46
@@ -250,14 +258,20 @@ Everything that takes decimated PCM (`record`, `level`) works on it. The sinc
 filter droops, about 6 dB by 80 kHz at 300 kHz, so read the spectrum for shape
 and for differences between microphones rather than absolute level.
 
-## `pdmraw <clk> <data1>[,<data2>,...] [rate <hz>]`
+## `pdmraw <clk> <data> [rate <hz>]`
 
-Opens up to four PDM data lines on one clock **without** the PDM-to-PCM
+Opens a PDM data line **without** the PDM-to-PCM
 filter, so the receiver delivers the raw bitstream. Nothing downstream decodes
 it yet (`record`, `level`, `loopback` and `capture` refuse it); use
 [`pdmbits`](#pdmbits-seconds--dump-frames) to see whether a microphone is responding. The
 bit clock is 32 times `rate`, and `rate` is accepted up to 640 kHz (20 MHz),
 well past what `pdm`'s filter can take.
+
+**One line only.** The receiver captures just the first data line on this chip, however
+many are listed: with two lines the data arrives as `[A, B, A', B']`, the first line's
+pair twice, and a line listed second is ignored even with the slot mask and frame width
+set as ESP-IDF documents. The command therefore refuses a list; use `pdm` with several
+lines, which decimates in hardware, for more than two microphones.
 
 ## `pdmbench [frames [channels]]`
 
@@ -696,19 +710,22 @@ before `audio close` or reopening the microphone.
   channels, at the rate the receiver produces.
 - An I2S microphone (`audio bus ... din`): the slots the bus carries, 16, 24 or 32
   bits.
-- An undecimated PDM receiver (`audio pdmraw`, `audio pdmultra ... raw`): any number
-  of lines, up to four, so up to eight microphones. The stream decimates it in
-  software with the sixth-order sinc filter, and the rate is the bit clock divided
-  by 64, 48, 32 or 16 — `config rate` picks one, and 64 (the standard PDM
-  oversampling) is the default. `audio pdmraw 10 11 rate 96000` runs a 3.072 MHz
-  clock, so 48 kHz by default; the same receiver at `rate 192000` runs 6.144 MHz.
-  The decimation costs processor time in proportion to the channels and the bit
-  clock; `status` reports it.
+- An undecimated single-line PDM receiver (`audio pdmraw`, `audio pdmultra ... raw`):
+  one line, two microphones. The stream decimates it in software with the sixth-order
+  sinc filter, and the rate is the bit clock divided by 64, 48, 32 or 16 — `config
+  rate` picks one, and 64 (the standard PDM oversampling) is the default. `audio
+  pdmraw 10 11 rate 96000` runs a 3.072 MHz clock, so 48 kHz by default.
 
-  Each line carries a left and a right microphone, and the order the receiver
-  delivers them is not the same on the raw path as on the filtered one: the same two
-  microphones came out swapped. Tap a microphone and look at which channel moves
-  before trusting the labels.
+- **Several lines go through `audio pdm`**, not `pdmraw`: `audio pdm 10 11,12 rate
+  32000` is four channels decimated by the chip, so it costs the processor nothing,
+  and its rate is the clock divided by 64. A standard-mode microphone wants 1 to 2.4
+  MHz at start-up, which is 16 to 37 kHz here; a clock above that needs the part's
+  ultrasonic entry sequence, which only `pdmultra` performs (one line).
+
+Each line carries a left and a right microphone, and the order the receiver delivers
+them is not the same on the raw path as on the filtered one: the same two microphones
+came out swapped. Tap a microphone and look at which channel moves before trusting the
+labels.
 
 On Linux the device appears as a USB microphone:
 

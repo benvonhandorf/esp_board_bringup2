@@ -800,41 +800,7 @@ int cmd_audio_stop(int argc, char **argv)
  * pad away from the first and the amplifier starts seeing a megahertz square
  * wave where its frame clock used to be.
  */
-static bool pdm_pins_free(int clk, int din)
-{
-    if (!audio_bus_ready()) {
-        return true;
-    }
-
-    int bclk = -1;
-    int ws = -1;
-    int dout = -1;
-    int bus_din = -1;
-    int mclk = -1;
-    audio_bus_pins(&bclk, &ws, &dout, &bus_din, &mclk);
-
-    const int used[] = {bclk, ws, dout, mclk};
-    const char *const names[] = {"BCLK", "WS", "DOUT", "MCLK"};
-
-    for (size_t i = 0; i < sizeof(used) / sizeof(used[0]); i++) {
-        if (used[i] < 0) {
-            continue;
-        }
-        const char *role = (used[i] == clk) ? "clock"
-                         : (used[i] == din) ? "data line" : NULL;
-        if (!role) {
-            continue;
-        }
-
-        STRRES_ERROR(STR_AUDIO_PDM_PIN_CONFLICT, used[i], names[i], role);
-        STRRES_PRINTF(STR_AUDIO_PDM_PIN_CONFLICT_NOTE);
-        return false;
-    }
-
-    return true;
-}
-
-/* As pdm_pins_free(), generalized to a set of data pins. */
+/* The pins a PDM receiver would take, checked against an open standard-mode bus. */
 static bool pdm_raw_pins_free(int clk, const int *dins, int line_count)
 {
     if (!audio_bus_ready()) {
@@ -884,8 +850,7 @@ int cmd_audio_pdm(int argc, char **argv)
     }
 
     int clk = 0;
-    int din = 0;
-    if (cli_parse_int_arg(argv[1], &clk) < 0 || cli_parse_int_arg(argv[2], &din) < 0) {
+    if (cli_parse_int_arg(argv[1], &clk) < 0) {
         STRRES_ERROR(STR_AUDIO_PDM_PINS_NUMERIC);
         return -1;
     }
@@ -893,13 +858,37 @@ int cmd_audio_pdm(int argc, char **argv)
         STRRES_ERROR(STR_AUDIO_PDM_CLK_INVALID, clk);
         return -1;
     }
-    if (!GPIO_IS_VALID_GPIO(din)) {
-        STRRES_ERROR(STR_AUDIO_PDM_DATA_INVALID, din);
+
+    /* One data pin, or several lines on the one clock (two microphones each). */
+    int *dins = NULL;
+    int line_count = 0;
+    if (cli_parse_pin_list(argv[2], &dins, &line_count) < 0) {
+        STRRES_ERROR(STR_AUDIO_PDM_PINS_NUMERIC);
         return -1;
     }
-    if (clk == din) {
-        STRRES_ERROR(STR_AUDIO_PDM_PINS_DISTINCT, clk);
+    if (line_count < 1 || line_count > AUDIO_PDM_MAX_LINES) {
+        STRRES_ERROR(STR_AUDIO_PDMRAW_LINE_COUNT, line_count, AUDIO_PDM_MAX_LINES);
+        free(dins);
         return -1;
+    }
+    for (int i = 0; i < line_count; i++) {
+        if (!GPIO_IS_VALID_GPIO(dins[i])) {
+            STRRES_ERROR(STR_AUDIO_PDM_DATA_INVALID, dins[i]);
+            free(dins);
+            return -1;
+        }
+        if (dins[i] == clk) {
+            STRRES_ERROR(STR_AUDIO_PDM_PINS_DISTINCT, clk);
+            free(dins);
+            return -1;
+        }
+        for (int j = 0; j < i; j++) {
+            if (dins[i] == dins[j]) {
+                STRRES_ERROR(STR_AUDIO_PDMRAW_PIN_REUSED, dins[i]);
+                free(dins);
+                return -1;
+            }
+        }
     }
 
     /*
@@ -922,32 +911,38 @@ int cmd_audio_pdm(int argc, char **argv)
     while (index < argc) {
         if (strcasecmp(argv[index], "rate") != 0) {
             STRRES_ERROR(STR_AUDIO_UNEXPECTED_ARGUMENT_PDM, argv[index]);
+            free(dins);
             return -1;
         }
         if (index + 1 >= argc) {
             STRRES_ERROR(STR_AUDIO_RATE_NEEDS_VALUE);
+            free(dins);
             return -1;
         }
         int rate = 0;
         if (cli_parse_int_arg(argv[index + 1], &rate) < 0 ||
             rate < MIN_RATE_HZ || rate > MAX_RATE_HZ) {
             STRRES_ERROR(STR_AUDIO_RATE_RANGE, MIN_RATE_HZ, MAX_RATE_HZ);
+            free(dins);
             return -1;
         }
         if (existing && (uint32_t)rate != existing->rate_hz) {
             STRRES_ERROR(STR_AUDIO_BUS_RATE_FIXED, (unsigned long)existing->rate_hz);
             STRRES_PRINTF(STR_AUDIO_BUS_RATE_FIXED_NOTE, rate);
+            free(dins);
             return -1;
         }
         fmt.rate_hz = (uint32_t)rate;
         index += 2;
     }
 
-    if (!pdm_pins_free(clk, din)) {
+    if (!pdm_raw_pins_free(clk, dins, line_count)) {
+        free(dins);
         return -1;
     }
 
-    esp_err_t err = audio_bus_open_pdm(clk, din, &fmt);
+    esp_err_t err = audio_bus_open_pdm_lines(clk, dins, line_count, &fmt);
+    free(dins);
     if (err == ESP_ERR_NOT_SUPPORTED) {
         return -1;   /* the transport has already explained */
     }
@@ -997,15 +992,22 @@ int cmd_audio_pdm_raw(int argc, char **argv)
         free(dins);
         return -1;
     }
+    if (line_count > 1) {
+        STRRES_ERROR(STR_AUDIO_PDMRAW_ONE_LINE);
+        free(dins);
+        return -1;
+    }
 
     for (int i = 0; i < line_count; i++) {
         if (!GPIO_IS_VALID_GPIO(dins[i])) {
             STRRES_ERROR(STR_AUDIO_PDM_DATA_INVALID, dins[i]);
             free(dins);
+            free(dins);
             return -1;
         }
         if (dins[i] == clk) {
             STRRES_ERROR(STR_AUDIO_PDMRAW_PIN_REUSED, dins[i]);
+            free(dins);
             free(dins);
             return -1;
         }
@@ -1013,7 +1015,8 @@ int cmd_audio_pdm_raw(int argc, char **argv)
             if (dins[i] == dins[j]) {
                 STRRES_ERROR(STR_AUDIO_PDMRAW_PIN_REUSED, dins[i]);
                 free(dins);
-                return -1;
+                free(dins);
+            return -1;
             }
         }
     }
@@ -1037,10 +1040,12 @@ int cmd_audio_pdm_raw(int argc, char **argv)
         if (strcasecmp(argv[index], "rate") != 0) {
             STRRES_ERROR(STR_AUDIO_UNEXPECTED_ARGUMENT_PDM, argv[index]);
             free(dins);
+            free(dins);
             return -1;
         }
         if (index + 1 >= argc) {
             STRRES_ERROR(STR_AUDIO_RATE_NEEDS_VALUE);
+            free(dins);
             free(dins);
             return -1;
         }
@@ -1049,11 +1054,13 @@ int cmd_audio_pdm_raw(int argc, char **argv)
             rate < MIN_RATE_HZ || rate > MAX_RAW_RATE_HZ) {
             STRRES_ERROR(STR_AUDIO_RATE_RANGE, MIN_RATE_HZ, MAX_RAW_RATE_HZ);
             free(dins);
+            free(dins);
             return -1;
         }
         if (existing && (uint32_t)rate != existing->rate_hz) {
             STRRES_ERROR(STR_AUDIO_BUS_RATE_FIXED, (unsigned long)existing->rate_hz);
             STRRES_PRINTF(STR_AUDIO_BUS_RATE_FIXED_NOTE, rate);
+            free(dins);
             free(dins);
             return -1;
         }

@@ -233,6 +233,11 @@ anything that exposes credentials or changes the device.
   stream is the web console only. One USB packet holds 712 bytes on the S3 (the controller's
   FIFO RAM, not the bus), which is what `audio-usb config` validates against; the `usb_mic`
   component owns that arithmetic and its host test.
+- **Raw PDM captures one line only; use `audio pdm` for more.** `pdm_raw` with two lines
+  delivers the first line's pair twice (`[A, B, A', B']`) and ignores the second line, even
+  with the slot mask applied before the GPIOs and `rx_tdm_tot_chan_num` widened, as ESP-IDF's
+  PDM RX usage note describes. `audio_bus_open_pdm_lines()` (hardware filter, mask set the
+  same way) does give four channels from two lines.
 - **A raw PDM receiver's `bclk_hz` from the driver is twice the pin's clock.** The pin runs
   at 32 x `rate`; `audio_bus_pdm_clk_hz()` returns that for raw receivers.
 - **The image is on trial after an OTA.** `app_main()` confirms it at the very

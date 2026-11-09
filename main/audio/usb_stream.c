@@ -17,6 +17,7 @@
 #include "usb_mic.h"
 
 #include "esp_cpu.h"
+#include "esp_rom_sys.h"
 #include "esp_timer.h"
 #include "freertos/semphr.h"
 
@@ -72,8 +73,19 @@ static struct {
     uint8_t *raw;
     size_t raw_frames;        /* raw frames per block */
     uint64_t dec_cycles, dec_frames;
-    int64_t deadline_us;      /* reset the chip at this time; 0 for never */
+    esp_timer_handle_t reset_timer;   /* resets the chip when `start timeout` expires */
 } run;
+
+/* On a timer rather than in the stream task: a stream that has stalled or died is
+ * exactly when the serial console needs to come back. */
+static void reset_cb(void *arg)
+{
+    (void)arg;
+    /* Not esp_restart(): its shutdown handlers flush the console, and the console is
+     * USB-Serial-JTAG, whose pins the USB device now owns -- a flush with no host can
+     * wait forever. This is the reset that cannot get stuck. */
+    esp_rom_software_reset_system();
+}
 
 /* ---- the source ------------------------------------------------------------------ */
 
@@ -366,9 +378,6 @@ static void stream_task(void *arg)
     unsigned consecutive = 0;
 
     while (!run.stop) {
-        if (run.deadline_us && esp_timer_get_time() >= run.deadline_us) {
-            esp_restart();      /* the only way the serial console comes back */
-        }
         if (!audio_bus_rx_ready()) {
             run.ended_gone = true;
             break;
@@ -501,13 +510,19 @@ int cmd_audio_usb_start(int argc, char **argv)
     }
     run.stop = run.ended_gone = run.ended_errors = false;
     run.read_errors = 0;
-    run.deadline_us = timeout_s ? esp_timer_get_time() + (int64_t)timeout_s * 1000000 + 300000 : 0;
 
     /* The serial console ends when USB takes the PHY: say so first, and give the
      * line time to leave. */
     STRRES_PRINTF(STR_AUDIO_USB_START_WARN);
+    /* Logging goes to the same console. */
+    esp_log_level_set("*", ESP_LOG_NONE);
     if (timeout_s) {
         STRRES_PRINTF(STR_AUDIO_USB_START_TIMEOUT, (unsigned)timeout_s);
+        if (!run.reset_timer) {
+            const esp_timer_create_args_t targs = {.callback = reset_cb, .name = "usb_reset"};
+            esp_timer_create(&targs, &run.reset_timer);
+        }
+        esp_timer_start_once(run.reset_timer, (uint64_t)timeout_s * 1000000 + 300000);
     }
     vTaskDelay(pdMS_TO_TICKS(200));
 
@@ -539,6 +554,9 @@ int cmd_audio_usb_stop(int argc, char **argv)
     if (!run.running) {
         STRRES_ERROR(STR_AUDIO_USB_NOT_RUNNING);
         return -1;
+    }
+    if (run.reset_timer) {
+        esp_timer_stop(run.reset_timer);
     }
     run.stop = true;
     xSemaphoreTake(run.exited, portMAX_DELAY);
