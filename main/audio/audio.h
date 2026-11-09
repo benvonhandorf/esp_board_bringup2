@@ -204,6 +204,14 @@ esp_err_t audio_bus_open_pdm(int clk, int din, const audio_format_t *fmt);
 esp_err_t audio_bus_open_pdm_lines(int clk, const int *dins, int line_count,
                                    const audio_format_t *fmt);
 
+/* The ultrasonic entry for a receiver opened by audio_bus_open_pdm_lines() at a
+ * standard-mode clock: leaves it running for the part to wake, then reclocks it in
+ * place to 64 x rate_hz. The filter's ratio is fixed, so the clock must land in the
+ * part's ultrasonic range, 3.072-4.8 MHz, which is these rates. */
+#define AUDIO_PDM_ULTRA_RATE_MIN 48000
+#define AUDIO_PDM_ULTRA_RATE_MAX 75000
+esp_err_t audio_bus_pdm_enter_ultra(uint32_t rate_hz);
+
 /*
  * Open up to AUDIO_PDM_MAX_LINES PDM data lines at once, sharing one clock.
  *

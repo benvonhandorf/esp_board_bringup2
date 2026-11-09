@@ -907,8 +907,14 @@ int cmd_audio_pdm(int argc, char **argv)
         fmt.rate_hz = existing->rate_hz;
     }
 
+    bool ultra = false;
     int index = 3;
     while (index < argc) {
+        if (strcasecmp(argv[index], "ultra") == 0) {
+            ultra = true;
+            index++;
+            continue;
+        }
         if (strcasecmp(argv[index], "rate") != 0) {
             STRRES_ERROR(STR_AUDIO_UNEXPECTED_ARGUMENT_PDM, argv[index]);
             free(dins);
@@ -941,6 +947,24 @@ int cmd_audio_pdm(int argc, char **argv)
         return -1;
     }
 
+    /* Ultrasonic: the part wakes at a standard clock and is then raised in place, so
+     * the receiver opens at 2.048 MHz (rate 32000) whatever rate was asked for. */
+    uint32_t final_rate = fmt.rate_hz;
+    if (ultra) {
+        if (existing) {
+            STRRES_ERROR(STR_AUDIO_PDM_ULTRA_BUS_OPEN);
+            free(dins);
+            return -1;
+        }
+        if (final_rate < AUDIO_PDM_ULTRA_RATE_MIN || final_rate > AUDIO_PDM_ULTRA_RATE_MAX) {
+            STRRES_ERROR(STR_AUDIO_PDM_ULTRA_RATE_RANGE, AUDIO_PDM_ULTRA_RATE_MIN,
+                         AUDIO_PDM_ULTRA_RATE_MAX);
+            free(dins);
+            return -1;
+        }
+        fmt.rate_hz = 32000;
+    }
+
     esp_err_t err = audio_bus_open_pdm_lines(clk, dins, line_count, &fmt);
     free(dins);
     if (err == ESP_ERR_NOT_SUPPORTED) {
@@ -956,6 +980,14 @@ int cmd_audio_pdm(int argc, char **argv)
         STRRES_ERROR(STR_AUDIO_RX_START_FAILED, esp_err_to_name(err));
         audio_bus_rx_close();
         return -1;
+    }
+
+    if (ultra) {
+        err = audio_bus_pdm_enter_ultra(final_rate);
+        if (err != ESP_OK) {
+            STRRES_ERROR(STR_AUDIO_PDM_ULTRA_FAILED, esp_err_to_name(err));
+            return -1;
+        }
     }
 
     print_input();

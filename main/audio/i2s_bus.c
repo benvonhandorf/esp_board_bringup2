@@ -505,6 +505,49 @@ esp_err_t audio_bus_open_pdm_lines(int clk, const int *dins, int line_count,
     return ESP_OK;
 }
 
+/*
+ * The part's ultrasonic entry for the chip's own PDM-to-PCM filter, several lines at
+ * once. An ultrasonic MEMS part must wake in standard mode (1 to 2.475 MHz) and have
+ * its clock raised to 3.072-4.8 MHz on the SAME running receiver; starting it
+ * directly in the higher range, or stopping the clock to change it, loses the entry.
+ * So the receiver is opened at a standard clock first (audio pdm does this at 2.048
+ * MHz), left to run for the part to wake, and then reclocked in place. The filter's
+ * ratio is fixed at 64, so the rate asked for is the clock over 64.
+ */
+esp_err_t audio_bus_pdm_enter_ultra(uint32_t rate_hz)
+{
+    if (!rx_chan || rx_mode != AUDIO_RX_PDM) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (rate_hz < AUDIO_PDM_ULTRA_RATE_MIN || rate_hz > AUDIO_PDM_ULTRA_RATE_MAX) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    /* The entry must start from a standard-mode clock. */
+    if (format.rate_hz * 64 > 2475000) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    esp_err_t err = audio_bus_rx_enable(true);
+    if (err != ESP_OK) {
+        return err;
+    }
+    vTaskDelay(pdMS_TO_TICKS(100));        /* let the part wake in standard mode */
+
+    err = audio_bus_rx_enable(false);
+    if (err == ESP_OK) {
+        i2s_pdm_rx_clk_config_t clk_cfg = I2S_PDM_RX_CLK_DEFAULT_CONFIG(rate_hz);
+        err = i2s_channel_reconfig_pdm_rx_clock(rx_chan, &clk_cfg);
+    }
+    if (err == ESP_OK) {
+        format.rate_hz = rate_hz;
+        err = audio_bus_rx_enable(true);
+    }
+    if (err != ESP_OK) {
+        audio_bus_rx_close();
+    }
+    return err;
+}
+
 #else /* no PDM receive, or no hardware decimator */
 
 esp_err_t audio_bus_open_pdm(int clk, int din, const audio_format_t *fmt)
@@ -532,6 +575,12 @@ esp_err_t audio_bus_open_pdm_lines(int clk, const int *dins, int line_count,
 {
     (void)dins; (void)line_count;
     return audio_bus_open_pdm(clk, 0, fmt);
+}
+
+esp_err_t audio_bus_pdm_enter_ultra(uint32_t rate_hz)
+{
+    (void)rate_hz;
+    return ESP_ERR_NOT_SUPPORTED;
 }
 
 #endif /* SOC_I2S_SUPPORTS_PDM_RX && SOC_I2S_SUPPORTS_PDM2PCM */
@@ -1009,6 +1058,12 @@ esp_err_t audio_bus_open_pdm_lines(int clk, const int *dins, int line_count,
                                    const audio_format_t *fmt)
 {
     (void)clk; (void)dins; (void)line_count; (void)fmt;
+    return ESP_ERR_NOT_SUPPORTED;
+}
+
+esp_err_t audio_bus_pdm_enter_ultra(uint32_t rate_hz)
+{
+    (void)rate_hz;
     return ESP_ERR_NOT_SUPPORTED;
 }
 

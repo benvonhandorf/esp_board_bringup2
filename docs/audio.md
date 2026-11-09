@@ -163,7 +163,7 @@ does — there is no continuous form.
 
 Ends a continuous tone, ramping it down rather than cutting it.
 
-## `pdm <clk> <data1>[,<data2>,<data3>,<data4>] [rate <hz>]`
+## `pdm <clk> <data1>[,<data2>,<data3>,<data4>] [rate <hz>] [ultra]`
 
 Opens a PDM microphone — the SPM1423 on the Cardputer, the one on the XIAO
 Sense. PDM is not I2S with different pins: the part is clocked at a few
@@ -188,6 +188,16 @@ order the chip delivers them: line 1's two slots, then line 2's. Up to four line
 documentation says the right slot of a line arrives first. This was verified on a board
 with four microphones on GPIO 11 and 12 and streams over [`audio-usb`](#usb-audio);
 `record`, `level` and `capture` still read the first two channels only.
+
+**`ultra`** is for ultrasonic MEMS parts (the SPH0641): they must wake in standard mode
+at 1 to 2.475 MHz and have the clock raised to 3.072-4.8 MHz on the same running
+receiver, so `ultra` opens at 2.048 MHz, lets the part run for 100 ms, and reclocks the
+receiver in place to 64 times `rate`. The filter's ratio is fixed, so `rate` must be
+48000 to 75000 (a 3.072 to 4.8 MHz clock), and the output is band-limited to half of
+that: the way to get several ultrasonic microphones into one stream, but not their
+ultrasonic content, which needs `pdmultra`'s software filter and so one line.
+`audio pdm 10 11,12 rate 75000 ultra` is four ultrasonic-mode channels at 75 kHz. It
+cannot join an open standard bus, which sets its own clock.
 
 ```
 > audio pdm 43 46
@@ -720,7 +730,8 @@ before `audio close` or reopening the microphone.
   32000` is four channels decimated by the chip, so it costs the processor nothing,
   and its rate is the clock divided by 64. A standard-mode microphone wants 1 to 2.4
   MHz at start-up, which is 16 to 37 kHz here; a clock above that needs the part's
-  ultrasonic entry sequence, which only `pdmultra` performs (one line).
+  ultrasonic entry sequence: `audio pdm … rate 48000..75000 ultra` performs it for
+several lines, and `pdmultra` for one line with a software filter.
 
 Each line carries a left and a right microphone, and the order the receiver delivers
 them is not the same on the raw path as on the filtered one: the same two microphones
