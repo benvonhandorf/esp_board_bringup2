@@ -115,6 +115,22 @@ dependencies:
       registry_url: https://components.espressif.com/
       type: service
     version: 1.1.0
+  espressif/tinyusb:
+    component_hash: a40b7f67df6ac254a4afd96c6401cc56f2059ae747d6d7e66b568bca53ad0edc
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    targets:
+    - esp32s2
+    - esp32s3
+    - esp32p4
+    - esp32h4
+    - esp32s31
+    version: 0.19.0~3
   http_server:
     component_hash: 6b402f4d3696f1758b1ce94a81ff3ca2f41601b35ed93f629f4a5eb49c7bcd59
     dependencies:
@@ -349,6 +365,27 @@ dependencies:
       path: tone_gen
       type: git
     version: 8f2840c9d9df537de152d1e5ba7e8d7d03ab4b09
+  usb_mic:
+    component_hash: 234f96dc30d1d76112273cab44ac3939bf096a7acb02c49d58fe0411d0065e04
+    dependencies:
+    - name: idf
+      version: '>=5.3'
+    - name: espressif/tinyusb
+      rules:
+      - if: target in [esp32s2, esp32s3, esp32p4, esp32s31]
+      version: ^0.19.0~3
+    source:
+      git: https://github.com/benvonhandorf/esp_components.git
+      path: usb_mic
+      type: git
+    targets:
+    - esp32s2
+    - esp32s3
+    - esp32p4
+    - esp32s31
+    - esp32c3
+    - esp32
+    version: a03b14166a858af13bb8815dd76d2c0c87bb8ab0
   wifi_manager:
     component_hash: 7afe9a23273da7ec70d23c102a17feb056c34d2f86a75479f362fe6291e11721
     dependencies:
@@ -395,7 +432,8 @@ direct_dependencies:
 - rx8130ce
 - sht4x
 - tone_gen
+- usb_mic
 - wifi_manager
-manifest_hash: 961b0bd9b466147cb9b82b4b252cf60afa1efa4d260d9206fda486dc287b8b8b
+manifest_hash: 0d68ac5aaec353897a7356d985a5469795fcbefa4f1f78dccbcf1a977b8b4ce6
 target: esp32s3
 version: 3.0.0
