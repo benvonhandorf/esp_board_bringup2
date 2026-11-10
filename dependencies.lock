@@ -75,37 +75,37 @@ dependencies:
       type: git
     version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
   cli:
-    component_hash: fc095719558e45ba4f3fdacab5c4b6a64d9053bf3feafe8c2abbad0b1f39a314
+    component_hash: d5aeabae929b8ae1fe8fc131484183346463847c36594a13693f8768576a8ec2
     dependencies:
     - name: idf
       version: '>=5.0'
     - git: https://github.com/benvonhandorf/esp_components.git
       name: diag
       path: diag
-      version: diag-v0.1.0
+      version: diag-v0.1.1
     source:
       git: https://github.com/benvonhandorf/esp_components.git
       path: cli
       type: git
-    version: c6127f64c68c5ae888d8292c707327186a668d7d
+    version: 06070a357b217f765622f1a5dd5835985641c820
   cli_web:
-    component_hash: be14693f5f056e49c66881dd42f5e867aa2d0efd5dcadfdac796376f318673d8
+    component_hash: 7fe101a772b1ac574a03796dcc44760e223960b8b7815c978ecaf3350f70b8ca
     dependencies:
     - name: idf
       version: '>=5.0'
     - git: https://github.com/benvonhandorf/esp_components.git
       name: cli
       path: cli
-      version: cli-v0.2.0
+      version: cli-v0.2.2
     - git: https://github.com/benvonhandorf/esp_components.git
       name: diag
       path: diag
-      version: diag-v0.1.0
+      version: diag-v0.1.1
     source:
       git: https://github.com/benvonhandorf/esp_components.git
       path: cli_web
       type: git
-    version: 6d15b4fe72f3b4340ebd357d5849aa9f6883c5df
+    version: b8f0cbd9e877f4a5ee42073911d96b13a3547727
   config_store:
     component_hash: ea578a7d14204ada91876d51ef1c701e0e3eecb134268bd0aba129b4305ee8ea
     dependencies:
@@ -117,7 +117,7 @@ dependencies:
       type: git
     version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
   diag:
-    component_hash: 7b26adfefae0a88fe555bd0d72f8c8adb532d643d302db574533d6f1334da6f5
+    component_hash: 2c2a5a062b261aad7f7d65c4ae844bd8f83d5949880c4c346398f6ce0247c1e2
     dependencies:
     - name: idf
       version: '>=5.0'
@@ -125,7 +125,7 @@ dependencies:
       git: https://github.com/benvonhandorf/esp_components.git
       path: diag
       type: git
-    version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
+    version: 4d217d69e8255418d2d97dadfccf5768a4c28ffa
   es8311:
     component_hash: 5f317701fbd0ba22ff41ad6f189a16c6b53c675ee6c1329bb26508b3c41fc7fc
     dependencies:
@@ -137,7 +137,7 @@ dependencies:
       type: git
     version: 0238d66d63cb555d836572a1555b229ff2a64b6a
   espressif/iperf:
-    component_hash: 9c95e1c897e9bce78a811682041a284ce22dac888fb61c3988867d5cb09b5961
+    component_hash: 347409903a97d7b2a03c51c1cdca3ebca98b72d5b4db150dab18b10a752d7a0b
     dependencies:
     - name: idf
       require: private
@@ -145,21 +145,21 @@ dependencies:
     source:
       registry_url: https://components.espressif.com
       type: service
-    version: 1.0.3
+    version: 1.0.4
   espressif/iperf-cmd:
-    component_hash: ac7c2fe10545367f79c3a10d72bcd497cc0d626e6424786c1a433b3538ee0327
+    component_hash: a57aac97272ddc4f4e6f7f20734a78d44d5341667e56b644ca075c2ed04741be
     dependencies:
     - name: espressif/iperf
       registry_url: https://components.espressif.com
       require: private
-      version: =1.0.3
+      version: =1.0.4
     - name: idf
       require: private
       version: '>=4.3'
     source:
       registry_url: https://components.espressif.com/
       type: service
-    version: 1.0.3
+    version: 1.0.4
   espressif/mdns:
     component_hash: 2fa43caa78cc170842255bc7bf71f306bc815cae12e9496bfb12372423019ac7
     dependencies:
@@ -259,7 +259,7 @@ dependencies:
       type: git
     version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
   joltwallet/littlefs:
-    component_hash: 3af20a3d75c49db9dc2286fd50862c34055c9f578419ad1f2bf7ed3ed01391fe
+    component_hash: e1a0f4a6adf821759cb34703a91107bbdce5d7ff6f4728f40ab012bb87842974
     dependencies:
     - name: idf
       require: private
@@ -267,7 +267,7 @@ dependencies:
     source:
       registry_url: https://components.espressif.com/
       type: service
-    version: 1.22.3
+    version: 1.23.1
   js2c:
     component_hash: 29f3210fb356397915316e92e3008d454958d6e110fd509aecc36773bb7dd0a1
     dependencies:
@@ -502,6 +502,6 @@ direct_dependencies:
 - tone_gen
 - usb_mic
 - wifi_manager
-manifest_hash: 8e00c2bb46d06abfccad7ffd62500a4ba79fad16bf7988be412be8d1163829d0
+manifest_hash: 12647eb52fe3a01e602e08f8836896171b11c6593d35970ddf7978a7ddd58620
 target: esp32s3
 version: 3.0.0
