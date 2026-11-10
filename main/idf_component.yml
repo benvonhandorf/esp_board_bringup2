@@ -32,11 +32,6 @@ dependencies:
     git: https://github.com/benvonhandorf/esp_components.git
     path: config_store
     version: config_store-v0.1.0
-  # NOTE: this asks for v0.1.1 and the build resolves v0.1.0. cli, cli_web and
-  # mqtt_manager each pin diag-v0.1.0 themselves, and the solver takes those over
-  # the direct pin here without reporting a conflict -- check `dependencies.lock`,
-  # not this line, for what was actually fetched. Nothing is lost by it: v0.1.1
-  # changes only a comment in diag.h. It takes effect once those three are retagged.
   diag:
     git: https://github.com/benvonhandorf/esp_components.git
     path: diag
@@ -68,7 +63,7 @@ dependencies:
   ota:
     git: https://github.com/benvonhandorf/esp_components.git
     path: ota
-    version: ota-v0.1.0
+    version: ota-v0.1.1
   wifi_manager:
     git: https://github.com/benvonhandorf/esp_components.git
     path: wifi_manager

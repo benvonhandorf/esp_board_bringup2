@@ -367,19 +367,19 @@ dependencies:
       type: git
     version: 4ccc94ca74775fc5b0585ed60560f345303f878c
   ota:
-    component_hash: d3039d5bc7c0e9637388df7cf775bab2f10425d989d77fa3e1247889662c786f
+    component_hash: d7a3309a39d0111124ad1d730477ed8eafad3ddb09a0473f892ae0272d25a9b9
     dependencies:
     - name: idf
       version: '>=5.0'
     - git: https://github.com/benvonhandorf/esp_components.git
       name: http_server
       path: http_server
-      version: http_server-v0.1.0
+      version: http_server-v0.2.0
     source:
       git: https://github.com/benvonhandorf/esp_components.git
       path: ota
       type: git
-    version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
+    version: 620f2c59fbfb5b7a4acc452bf1a4111be5357755
   pdm_decimator:
     component_hash: f9ed73b0a2b47cd29a1f1fdf5e285e6af7f0228d954164a2cf3bb327dc818313
     dependencies:
@@ -502,6 +502,6 @@ direct_dependencies:
 - tone_gen
 - usb_mic
 - wifi_manager
-manifest_hash: 12647eb52fe3a01e602e08f8836896171b11c6593d35970ddf7978a7ddd58620
+manifest_hash: 08b1cc9e19571a4c13d187a6acdf11125a0322fbe2b5bb928b912d69ea414231
 target: esp32s3
 version: 3.0.0
