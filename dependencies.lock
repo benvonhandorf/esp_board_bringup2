@@ -1,4 +1,69 @@
 dependencies:
+  audio_stream:
+    component_hash: 269b445769870996c2ad0ca0b68b57990093ae176a3d5abc97d074ef637e15f7
+    dependencies:
+    - name: idf
+      version: '>=5.3'
+    - git: https://github.com/benvonhandorf/esp_components.git
+      name: pdm_decimator
+      path: pdm_decimator
+      version: pdm_decimator-v0.1.0
+    source:
+      git: https://github.com/benvonhandorf/esp_components.git
+      path: audio_stream
+      type: git
+    targets:
+    - esp32
+    - esp32s2
+    - esp32s3
+    - esp32c3
+    - esp32p4
+    version: d69e919ca78c98c47a169d873c6dbcb7d6f5935b
+  audio_stream_http:
+    component_hash: 1ac45e3d61954b46815c4d3da38d6ab638894699e7e0ba0e4095b1ec7b6fd54e
+    dependencies:
+    - name: idf
+      version: '>=5.3'
+    - git: https://github.com/benvonhandorf/esp_components.git
+      name: audio_stream
+      path: audio_stream
+      version: audio_stream-v0.1.0
+    source:
+      git: https://github.com/benvonhandorf/esp_components.git
+      path: audio_stream_http
+      type: git
+    targets:
+    - esp32
+    - esp32s2
+    - esp32s3
+    - esp32c3
+    - esp32p4
+    version: 744d62634a363c0f613b18c58dfa11ba57be050e
+  audio_stream_usb:
+    component_hash: 34ca7dc939d3d804c5ad920c3bff2c0feb4aa2fe27f9ad6bb4c09ff4cb7b2e1d
+    dependencies:
+    - name: idf
+      version: '>=5.3'
+    - git: https://github.com/benvonhandorf/esp_components.git
+      name: audio_stream
+      path: audio_stream
+      version: audio_stream-v0.1.0
+    - git: https://github.com/benvonhandorf/esp_components.git
+      name: usb_mic
+      path: usb_mic
+      version: usb_mic-v0.1.1
+    source:
+      git: https://github.com/benvonhandorf/esp_components.git
+      path: audio_stream_usb
+      type: git
+    targets:
+    - esp32s2
+    - esp32s3
+    - esp32p4
+    - esp32s31
+    - esp32c3
+    - esp32
+    version: 14afb70041bcd903bd234f46bc1a43d248a5e031
   aw9523b:
     component_hash: 7374ef9fee7b9aa1caf9424620404226ea4cf7e64c1fb5e922e108669d4efc7b
     dependencies:
@@ -96,7 +161,7 @@ dependencies:
       type: service
     version: 1.0.3
   espressif/mdns:
-    component_hash: e81ca7a7f53ea34e78274df054da692c272e1315572876b237b1748e267c013b
+    component_hash: 2fa43caa78cc170842255bc7bf71f306bc815cae12e9496bfb12372423019ac7
     dependencies:
     - name: idf
       require: private
@@ -104,7 +169,7 @@ dependencies:
     source:
       registry_url: https://components.espressif.com/
       type: service
-    version: 1.11.3
+    version: 1.15.1
   espressif/mqtt:
     component_hash: fb18bc3b65aa8c94693a9811ffc322cca8a65d92d5ec84983d3e385080e3969c
     dependencies:
@@ -405,6 +470,9 @@ dependencies:
       type: git
     version: fba07e28b12833539a6067749cf4b283187efeb8
 direct_dependencies:
+- audio_stream
+- audio_stream_http
+- audio_stream_usb
 - aw9523b
 - cli
 - cli_web
@@ -434,6 +502,6 @@ direct_dependencies:
 - tone_gen
 - usb_mic
 - wifi_manager
-manifest_hash: e6df38b89a0b15397d1c57ec2c75dfc9721565d4cbc0455831a75032f7493c0a
+manifest_hash: 8e00c2bb46d06abfccad7ffd62500a4ba79fad16bf7988be412be8d1163829d0
 target: esp32s3
 version: 3.0.0

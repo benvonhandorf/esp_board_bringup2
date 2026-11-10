@@ -129,6 +129,20 @@ dependencies:
     git: https://github.com/benvonhandorf/esp_components.git
     path: tone_gen
     version: tone_gen-v0.1.0
+  # Streaming a microphone: the base (format, runner, buffer) and one component per sink.
+  # `audio-usb` uses audio_stream_usb, `audio-net` uses audio_stream_http.
+  audio_stream:
+    git: https://github.com/benvonhandorf/esp_components.git
+    path: audio_stream
+    version: audio_stream-v0.1.0
+  audio_stream_http:
+    git: https://github.com/benvonhandorf/esp_components.git
+    path: audio_stream_http
+    version: audio_stream_http-v0.1.0
+  audio_stream_usb:
+    git: https://github.com/benvonhandorf/esp_components.git
+    path: audio_stream_usb
+    version: audio_stream_usb-v0.1.0
   # USB Audio Class 2 microphone. Compiles to stubs on a chip with no USB OTG
   # controller, so it is listed for every target.
   usb_mic:

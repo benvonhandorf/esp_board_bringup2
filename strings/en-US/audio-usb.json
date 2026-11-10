@@ -2,8 +2,6 @@
   "section": "audio-usb",
   "strings": {
     "already_running": "Already streaming; run 'audio-usb stop' first",
-    "bits_invalid": "bits must be 16 or 24",
-    "bits_unavailable": "The microphone delivers %d bits; 24-bit output needs a 24- or 32-bit source",
     "budget.help": "List what fits in a USB packet at common rates",
     "budget.usage": "",
     "budget_full": "full",
@@ -12,9 +10,6 @@
     "budget_open_hint": "The open microphone runs at %u Hz.\n",
     "budget_raw_hint": "The open microphone is undecimated and can be streamed at %u, %u, %u or %u Hz.\n",
     "budget_row": "%7u Hz: up to %2u channel(s) at 16-bit, %2u at 24-bit\n",
-    "ch_duplicate": "Channel %d is listed twice",
-    "ch_invalid": "'%s' is not a comma-separated list of channel numbers",
-    "ch_range": "Channel %d does not exist: the microphone has %d channel(s), numbered from 0",
     "config.help": "Choose rate, channels and width, and check they fit the USB bandwidth",
     "config.usage": "[rate <hz>] [ch <list>] [bits <16|24>]",
     "config_fit_channels": "At %u Hz, %u channel(s) fit.\n",
@@ -23,18 +18,12 @@
     "config_ok": "%u channel(s) at %u Hz, %u-bit: %u of %u bytes per USB packet. OK\n",
     "config_over": "%u channel(s) at %u Hz, %u-bit: needs %u bytes per USB packet but only %u fit",
     "config_start_next": "Run 'audio-usb start' to present it to the USB host.\n",
-    "decimator_failed": "Could not set up the decimator: %s",
     "group.help": "Stream the open microphone to a USB host as a USB audio device",
-    "no_receiver": "No microphone is open. Open one first with 'audio pdm', 'audio pdmultra' or 'audio bus ... din'",
     "no_usb_chip": "This chip (%s) has no USB device controller",
     "not_running": "Not streaming",
-    "rate_invalid": "rate needs a number of hertz",
-    "rate_mismatch": "The microphone runs at %u Hz and the stream cannot resample, so %u Hz is not possible. Reopen the microphone at the rate you want",
-    "raw_rate_options": "%u Hz is not one this microphone clock offers. The raw clock allows %u, %u, %u or %u Hz",
     "start.help": "Present the stream to the USB host (ends the serial console until reset)",
     "start.usage": "[timeout <seconds>]",
     "start_failed": "USB start failed: %s",
-    "start_no_task": "Could not start the stream task",
     "start_timeout": "The device will reset after %u s so the serial console returns.\n",
     "start_warn": "USB audio starts now. The serial console ends here and returns after a reset; use the web console to watch or stop it.\n",
     "started": "Streaming %u channel(s) at %u Hz; waiting for the host to open the device\n",
@@ -53,7 +42,6 @@
     "stop.help": "Stop the stream and the USB device",
     "stop.usage": "",
     "stopped": "USB stream stopped. The serial console returns after a reset.\n",
-    "timeout_invalid": "timeout needs a number of seconds from 1 to 86400",
-    "unexpected_argument": "Unexpected argument '%s'"
+    "timeout_invalid": "timeout needs a number of seconds from 1 to 86400"
   }
 }

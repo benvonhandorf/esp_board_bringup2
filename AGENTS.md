@@ -46,7 +46,10 @@ main/
                             bus writes, rate measurement -- the waveform is the
                             `tone_gen` component),
                             capture.c (input statistics, FFT, tone detection),
-                            pcm_stats.c (the statistics), audio.c (the group + codec registry), codec_*.c
+                            pcm_stats.c (the statistics), audio.c (the group + codec registry), codec_*.c,
+                            stream_common.c (the open microphone as an `audio_stream` source, and the
+                            words for a refusal), usb_stream.c (`audio-usb`), net_stream.c (`audio-net`
+                            and its HTTP handler)
   board/board.c             named pinouts and per-subsystem setup presets
   display/                  display.c (SPI transport, panel registry, test
                             patterns), panel_st7789.c
@@ -114,6 +117,14 @@ a pull model, no heap. `tone.c` only packs those samples into the bus frame and 
 them, and `audio_play_dtmf()` reuses the same player. Do not add waveform code to
 `tone.c`; add it to the component, where its host test (`make -C
 ../esp_components/tone_gen/test`) can check it.
+
+**Streaming a microphone** is three components in `esp_components`: `audio_stream` (resolve a
+request against the source, decimate a raw PDM source, convert, run the stream task, a WAV
+header, and a buffer-and-drain queue that lives in PSRAM when there is some), and one sink each,
+`audio_stream_usb` and `audio_stream_http`. What is here is the console half: `stream_common.c`
+describes the open receiver (`audio_bus_*`) as an `audio_stream_source_t` and words the refusals,
+`usb_stream.c` and `net_stream.c` are the two groups. A new transport is a new sink component,
+not code in `main/`; a new refusal is a code in `audio_stream_why_t` and a row in `stream_report()`.
 
 **Codecs** attach through `audio_codec_t`. `es8311` and `nau8822` are both
 register-driver components in `esp_components` plus a `codec_*.c` shim here. The ES8311
@@ -210,6 +221,26 @@ anything that exposes credentials or changes the device.
 - **`audio/i2s_bus.c` is the only file that includes `driver/i2s_*.h`**, which is
   what keeps the `#if SOC_I2S_SUPPORTED` guard to one file; the `#else` half
   provides stubs so everything above builds on a chip with no I2S.
+- **One microphone stream at a time, across both sinks.** `audio-usb` and `audio-net` read the
+  same receiver, and two readers would each get every other block, so `audio_stream_start()`
+  refuses the second with `AUDIO_STREAM_ERR_BUSY` and `stream_report_start_error()` names the
+  owner. The owner tags (`"audio-usb"`, `"audio-net"`) are the group names on purpose: the
+  message says `run '<owner> stop' first`. A USB stream that ended by itself keeps its place
+  until `audio-usb stop` (the device is still up); an HTTP one frees it at once.
+- **`audio-net` does not stream from the httpd task.** `audio_stream_http_serve()`
+  takes an async copy of the request so the handler returns at once; the shared server is also the
+  web console's. Async requests are exempt from the server's LRU purge. The route is
+  `require_auth`: it is what the microphones hear.
+- **A new component needs a commit and a tag before this project can build it, even with
+  `ESP_COMPONENTS_DIR`.** The component manager reads each component's files from its tagged
+  commit and checks the tag exists on the remote, whatever the override says. To build before
+  pushing, make the commit and annotated tags locally in `esp_components`, then point git at the
+  local repo and the manager at a throwaway cache so nothing of yours is touched:
+  `IDF_COMPONENT_CACHE_PATH=/tmp/cm GIT_CONFIG_COUNT=1
+  GIT_CONFIG_KEY_0=url.file:///abs/esp_components.insteadOf
+  GIT_CONFIG_VALUE_0=https://github.com/benvonhandorf/esp_components.git idf.py ... build`.
+  Restore `dependencies.lock` afterwards (`git checkout dependencies.lock`) and regenerate it with
+  `idf.py reconfigure` once the tags are pushed.
 - **Two codecs attach at once, one per direction.** `detach()` powers a part down,
   so a single slot would make attaching a microphone silently stop the amplifier.
 - **`audio bus` leaves the transmitter running**, sending silence. Codecs mute or

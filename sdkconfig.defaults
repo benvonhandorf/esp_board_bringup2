@@ -32,6 +32,14 @@ CONFIG_CLI_MAX_GROUPS=48
 CONFIG_LWIP_SNTP_MAX_SERVERS=2
 # Feeds link statistics to the status report.
 CONFIG_LWIP_STATS=y
+# `audio-net` sends a microphone over one TCP connection. lwIP's default window of four
+# segments (5760 bytes) lets a sender move one window per round trip, which capped a stream
+# at about 3.7 Mbit/s on a strong link: four microphones at 64 kHz fell 4% behind and at
+# 75 kHz a quarter of the audio was dropped. At 32 kB the same streams ran at 100% with
+# nothing dropped. It is a limit, not an allocation: memory is used only for data actually
+# queued. Applies to every connection, which is the price of a shared default.
+CONFIG_LWIP_TCP_SND_BUF_DEFAULT=32768
+CONFIG_LWIP_TCP_WND_DEFAULT=32768
 
 # --- Diagnostics -----------------------------------------------------------
 # Keep the panic handler talking to the console rather than silently rebooting,

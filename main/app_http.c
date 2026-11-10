@@ -9,6 +9,7 @@
 #include "config_reader.h"
 #include "config_store.h"
 #include "esp_log.h"
+#include "net_stream.h"
 #include "http_server.h"
 
 static const char *TAG = "app_http";
@@ -132,6 +133,8 @@ static const http_route_t routes[] = {
     {"/api/config", HTTP_POST, handle_config_post, NULL, true},
     /* Protected: it is whatever the microphones heard. */
     {"/api/capture", HTTP_GET, handle_capture,     NULL, true},
+    /* Protected: it is what the microphones hear, live. */
+    {"/api/audio/stream", HTTP_GET, net_stream_handle, NULL, true},
 };
 
 esp_err_t app_http_register(void)

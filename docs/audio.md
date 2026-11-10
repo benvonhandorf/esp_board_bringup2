@@ -722,7 +722,12 @@ uses the controller the firmware is running on.
 the microphone at the rate you want (`audio pdm ... rate <hz>`, `audio pdmultra ...
 maxhz <hz>`); `config` checks that it fits and refuses a `rate` the microphone is not
 running at. Close nothing the stream depends on while it runs: run `audio-usb stop`
-before `audio close` or reopening the microphone.
+before `audio close` or reopening the microphone. If you do, the stream ends and
+`status` says the microphone was closed under it.
+
+**One stream at a time.** `audio-usb` and [`audio-net`](#network-audio) read the same
+receiver, and two readers would each get every other block, so the second to start is
+refused and told who has the microphone.
 
 **Three kinds of microphone can be streamed.**
 
@@ -795,3 +800,79 @@ before.
 
 Lists, for common rates and the open microphone's, the most channels a USB packet holds
 at 16 and 24 bits on this chip. Needs no microphone.
+
+## Network audio
+
+`audio-net` streams the open microphone over WiFi as a WAV file with no end, which
+`ffplay`, VLC, sox, a script or a browser's `<audio>` element plays as it arrives. It
+works on every chip, leaves the serial console alone, and needs no cable.
+
+There is no `start`: the listener's request starts the stream, and the microphone is held
+for as long as it stays connected. `config` only sets what a listener gets when it does
+not ask for anything particular.
+
+```sh
+curl -su <user>:<password> http://<device>/api/audio/stream | ffplay -nodisp -
+curl -su <user>:<password> http://<device>/api/audio/stream | sox -t wav - take.wav trim 0 10
+curl -su <user>:<password> 'http://<device>/api/audio/stream?ch=1&bits=24' > right.wav
+```
+
+The user and password are the `http` section's of the configuration. The route needs them
+because it is whatever the microphones hear. `rate`, `bits` and `ch` in the query mean what
+they do in `audio-net config`, and override it for that listener.
+
+**One listener.** A second request is refused with `409` and the name of what has the
+microphone; so is one that arrives just after a listener left, while its buffer is still
+closing (try again). A listener that disconnects frees the microphone at once.
+
+**The buffer is what makes WiFi usable.** The receiver overruns if it is not read every few
+milliseconds, and a socket send stalls for as long as WiFi does. So the stream writes into a
+buffer and a second task empties it into the socket: when WiFi stalls the buffer fills, and
+when it is full whole blocks are dropped and counted. A stall costs a gap in the recording,
+never an overrun in the receiver.
+
+- **On a board with PSRAM the buffer lives there**, and a second of 4-channel 48 kHz audio
+  (384 kB) costs nothing that matters. `buffer <ms>` sets how much to hold, from 20 ms to 10 s
+  (the default is one second).
+- **Without PSRAM it is internal RAM**, shared with WiFi, so the buffer is capped to leave
+  40 kB free; `config` says when the one you asked for does not fit and what you get instead.
+  The ESP32-C3 has room for a few hundred milliseconds of speech-rate audio and little more.
+- **A bigger buffer is also more delay.** After a stall a live listener hears the backlog, not
+  the present. Hold only as much as the stalls you want to ride out.
+
+**What the radio can carry.** Measured on an ESP32-S3 over 802.11n at 20 MHz: four
+microphones at 75 kHz (4.8 Mbit/s) streamed at 100% with nothing dropped, and a link that
+`wifi iperf` measured at 5 Mbit/s with a weak signal carried about 7.5 Mbit/s of stream when
+the signal was strong. Stereo at 300 kHz needs 9.6 Mbit/s, which this link does not carry.
+Throughput moves a lot with signal, so measure yours with [`wifi iperf`](wifi.md) and let
+`status` tell you: it counts what was dropped, and a stall of a second or two does happen.
+The firmware raises lwIP's TCP send window to 32 kB for this (`sdkconfig.defaults`); at its
+default of 5760 bytes a stream could not exceed about 3.7 Mbit/s whatever the link could do.
+`wifi.power_save` (off unless the configuration turns it on) puts the radio to sleep between
+beacons, which makes a stream stutter; leave it off. A board whose radio will not join at full
+power (the Sinn) needs `wifi txpower 8` first, and that lowers the signal the stream sees.
+
+The rate is the microphone's, as for USB: nothing is resampled, and a request for another one
+is refused with the rate it runs at.
+
+### `audio-net config [rate <hz>] [ch <list>] [bits <16|24>] [buffer <ms>]`
+
+Chooses what a listener gets by default, checks it against the open microphone, and prints the
+bit rate it will use, the buffer and where it lives. `rate`, `ch` and `bits` are as for
+[`audio-usb config`](#config-rate-hz-ch-list-bits-1624). Every call states the whole
+configuration: anything left out goes back to following the microphone, and the buffer to one
+second. Nothing starts; the first request does.
+
+### `audio-net status`
+
+Whether a listener is connected and who, the format, how long it has been connected, bytes sent
+and the average bit rate, the buffer's fill and its high-water mark in milliseconds (how close
+the stream came to dropping), what was dropped and how many read errors there were, and, for a
+microphone decimated in software, the decimator's cost. After a listener leaves, the same
+numbers stay, with the reason it ended: it was stopped, the listener went away, or the
+microphone was closed or stopped delivering.
+
+### `audio-net stop`
+
+Disconnects the listener and releases the microphone. The listener sees the response end after
+the audio still in the buffer.

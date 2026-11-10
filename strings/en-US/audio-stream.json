@@ -1,0 +1,20 @@
+{
+  "section": "audio-stream",
+  "strings": {
+    "bits_invalid": "bits must be 16 or 24",
+    "bits_unavailable": "The microphone delivers %d bits; 24-bit output needs a 24- or 32-bit source",
+    "busy": "The microphone is already being streamed by '%s'; run '%s stop' first",
+    "busy_closing": "The previous stream is still closing; try again in a moment",
+    "ch_duplicate": "Channel %d is listed twice",
+    "ch_invalid": "'%s' is not a comma-separated list of channel numbers",
+    "ch_range": "Channel %d does not exist: the microphone has %d channel(s), numbered from 0",
+    "no_memory": "Not enough memory to start the stream",
+    "no_receiver": "No microphone is open. Open one first with 'audio pdm', 'audio pdmultra' or 'audio bus ... din'",
+    "no_source": "The open microphone cannot be streamed: it has no usable rate or channel layout",
+    "rate_invalid": "rate needs a number of hertz",
+    "rate_mismatch": "The microphone runs at %u Hz and the stream cannot resample, so %u Hz is not possible. Reopen the microphone at the rate you want",
+    "raw_rate_options": "%u Hz is not one this microphone clock offers. The raw clock allows %u, %u, %u or %u Hz",
+    "start_failed": "Could not start the stream: %s",
+    "unexpected_argument": "Unexpected argument '%s'"
+  }
+}

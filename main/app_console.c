@@ -29,6 +29,7 @@
 #include "app_status.h"
 #include "audio.h"
 #include "usb_stream.h"
+#include "net_stream.h"
 #include "aw9523b_cmd.h"
 #include "board.h"
 #include "cli.h"
@@ -919,6 +920,30 @@ static const cli_group_t usb_group = {
     .help_id = STR_AUDIO_USB_GROUP_HELP,
 };
 
+static const cli_command_t anet_commands[] = {
+    {"config", NULL, NULL, cmd_audio_net_config},
+    {"status", NULL, NULL, cmd_audio_net_status},
+    {"stop",   NULL, NULL, cmd_audio_net_stop},
+};
+
+/* Parallel to anet_commands[]. A row here and a row there must stay in step;
+ * the count is checked below. */
+static const cli_command_text_t anet_text[] = {
+    {STR_AUDIO_NET_CONFIG_USAGE,  STR_AUDIO_NET_CONFIG_HELP},
+    {STR_AUDIO_NET_STATUS_USAGE,  STR_AUDIO_NET_STATUS_HELP},
+    {STR_AUDIO_NET_STOP_USAGE,    STR_AUDIO_NET_STOP_HELP},
+};
+_Static_assert(ARRAY_COUNT(anet_text) == ARRAY_COUNT(anet_commands),
+               "audio-net help ids and commands must be the same length");
+
+static const cli_group_t anet_group = {
+    .name = "audio-net",
+    .commands = anet_commands,
+    .command_count = ARRAY_COUNT(anet_commands),
+    .command_text = anet_text,
+    .help_id = STR_AUDIO_NET_GROUP_HELP,
+};
+
 /* ------------------------------------------------------------------ */
 /* sd                                                                  */
 /* ------------------------------------------------------------------ */
@@ -1320,6 +1345,7 @@ static const cli_group_t *const groups[] = {
     &ns4168_group,
     &sph0645_group,
     &usb_group,
+    &anet_group,
     &uart_group,
     &spi_group,
     &sd_group,

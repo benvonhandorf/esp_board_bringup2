@@ -1,0 +1,32 @@
+{
+  "section": "audio-net",
+  "strings": {
+    "buffer_invalid": "buffer needs a number of milliseconds from %d to %d",
+    "config.help": "Choose rate, channels, width and buffer for the WiFi stream",
+    "config.usage": "[rate <hz>] [ch <list>] [bits <16|24>] [buffer <ms>]",
+    "config_buffer_internal": "Buffer: %u ms, %u bytes, in internal RAM\n",
+    "config_buffer_psram": "Buffer: %u ms, %u bytes, in PSRAM\n",
+    "config_buffer_shrunk": "Buffer: %u ms does not fit in internal RAM beside WiFi; it will be %u bytes, about %u ms\n",
+    "config_listen": "Listen with: curl -u <user>:<password> http://<device>/api/audio/stream | ffplay -nodisp -\n",
+    "config_ok": "%u channel(s) at %u Hz, %u-bit: %u kbit/s\n",
+    "group.help": "Stream the open microphone over WiFi as a WAV stream",
+    "not_running": "No listener is being served",
+    "status.help": "Show the listener, what was sent and what was dropped",
+    "status.usage": "",
+    "status_buffer": "Buffer: %u of %u bytes in %s; most used %u bytes (%u ms)\n",
+    "status_counts": "Dropped %llu bytes in %u block(s), %u read error(s)\n",
+    "status_decimator": "Decimator: %.0f cycles per frame, %.1f%% of one core\n",
+    "status_ended_errors": "It ended because the microphone stopped delivering after repeated read errors.\n",
+    "status_ended_gone": "It ended because the microphone was closed under it.\n",
+    "status_ended_listener": "It ended because the listener went away.\n",
+    "status_ended_stopped": "It ended because it was stopped.\n",
+    "status_frames": "Produced %llu frames, %.1f kHz average (the microphone runs at %u Hz)\n",
+    "status_idle": "No listener yet. Run 'audio-net config', then fetch /api/audio/stream.\n",
+    "status_last": "Last listener: %s, %u s\n",
+    "status_listener": "Listener: %s, %u channel(s), %u Hz, %u-bit, for %u s\n",
+    "status_sent": "Sent %llu bytes (%u kbit/s average)\n",
+    "stop.help": "Disconnect the listener and release the microphone",
+    "stop.usage": "",
+    "stopped": "The listener was disconnected.\n"
+  }
+}
