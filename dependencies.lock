@@ -240,7 +240,7 @@ dependencies:
       type: git
     version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
   mqtt_manager:
-    component_hash: 769ccd1c120b59919a1c6cc60253cc072be687010a1514f41df093c16e4e597b
+    component_hash: aeb297abee6432f913ac554fabba71ce2aba7666e3d20d31e0ea0328bd7a5a95
     dependencies:
     - name: idf
       version: '>=5.0'
@@ -257,12 +257,12 @@ dependencies:
     - git: https://github.com/benvonhandorf/esp_components.git
       name: diag
       path: diag
-      version: diag-v0.1.0
+      version: diag-v0.1.1
     source:
       git: https://github.com/benvonhandorf/esp_components.git
       path: mqtt_manager
       type: git
-    version: c7c244b1fc67d3b590ea2b68134d6282cc37ea7f
+    version: 337744e986115ce90ef39c3dc6616659e7711be7
   nau7802:
     component_hash: 051f2402ae90595d5697155808be25c8e57bc7b589866742d2208667e2b5c2fa
     dependencies:
@@ -434,6 +434,6 @@ direct_dependencies:
 - tone_gen
 - usb_mic
 - wifi_manager
-manifest_hash: 0d68ac5aaec353897a7356d985a5469795fcbefa4f1f78dccbcf1a977b8b4ce6
+manifest_hash: e6df38b89a0b15397d1c57ec2c75dfc9721565d4cbc0455831a75032f7493c0a
 target: esp32s3
 version: 3.0.0

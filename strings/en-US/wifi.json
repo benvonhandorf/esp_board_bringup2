@@ -79,10 +79,16 @@
     "status.help": "Association, PHY, signal and addresses",
     "status.usage": "",
     "stopping_ap": "Stopping the access point to join as a station\n",
+    "txpower.help": "Show or set the transmit power ceiling",
+    "txpower.usage": "[<dBm>|default]",
+    "txpower_range": "TX power must be 2 to 20 dBm, or 'default'",
+    "txpower_report": "TX power: ceiling %d dBm (0 = driver default), driver reports %d dBm\n",
+    "txpower_set_failed": "Setting the TX power: %s",
     "unknown_argument_ap": "Unknown argument '%s'. Expected 'stop'.",
     "usage_ap": "Usage: wifi ap [stop]\n",
     "usage_connect": "Usage: wifi connect <SSID> [password]\n",
     "usage_iperf": "Usage: wifi iperf <server>[:<port>] [continuous]\n",
-    "usage_iperf_stop": "       wifi iperf stop\n"
+    "usage_iperf_stop": "       wifi iperf stop\n",
+    "usage_txpower": "Usage: wifi txpower [<dBm>|default]\n"
   }
 }

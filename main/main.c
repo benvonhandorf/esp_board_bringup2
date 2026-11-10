@@ -20,6 +20,7 @@
 #include "ntp_manager.h"
 #include "ota.h"
 #include "ota_http.h"
+#include "wifi.h"
 #include "wifi_manager.h"
 
 static const char *TAG = "main";
@@ -124,6 +125,7 @@ void app_main(void)
 
     /* 6. WiFi last. It is what makes NET_EVENT_LINK_UP happen, so everything
      *    that reacts to it is already listening by the time it can fire. */
+    wifi_tx_power_init(s_config.top.wifi_tx_power_dbm);
     ESP_ERROR_CHECK(wifi_manager_init(&s_config.wifi));
     ESP_ERROR_CHECK(wifi_manager_start_station_mode());
     wifi_manager_scan_and_connect();

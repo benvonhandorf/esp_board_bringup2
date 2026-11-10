@@ -27,5 +27,18 @@ int cmd_wifi_off(int argc, char **argv);
 int cmd_wifi_on(int argc, char **argv);
 int cmd_wifi_iperf(int argc, char **argv);
 int cmd_wifi_netstats(int argc, char **argv);
+int cmd_wifi_txpower(int argc, char **argv);
+
+/*
+ * Cap the transmit power at `dbm` (2..20), or 0 to leave the driver's default.
+ *
+ * The driver forgets the cap every time the radio stops and starts -- a switch
+ * to access point mode and back, `wifi off` and `on` -- so this registers a
+ * handler that reapplies it on each STA_START and AP_START rather than setting
+ * it once. Call it before wifi_manager_init() so the first start is covered.
+ * That is also why the cap is not wifi_manager's to set: it is a property of
+ * this board's RF, not of the network being joined.
+ */
+void wifi_tx_power_init(int dbm);
 
 #endif /* WIFI_H */

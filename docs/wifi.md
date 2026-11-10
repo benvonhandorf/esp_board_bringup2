@@ -129,3 +129,28 @@ layers. Counts are cumulative since boot, not since the last command, so read
 `err` count during the run points at packet loss or buffer pressure in the
 network stack rather than the radio link (compare against `wifi status`'s
 RSSI/PHY/bandwidth, which cover the radio side).
+
+## `txpower [<dBm>|default]`
+
+Shows or sets the ceiling on the transmit power, 2 to 20 dBm. `default` returns
+to the driver's own 20 dBm. With no argument it reports the ceiling this
+command or `config.json` set (`0` meaning none) and what the driver reports.
+
+The point is a board whose RF output stage cannot authenticate at full power.
+The symptom is a station that scans well — it hears every access point — but
+whose `auth` frames go unanswered: `wifi_manager` logs `init -> auth`, a one
+second timeout and `reason 2` (`AUTH_EXPIRE`) on every attempt, at a healthy
+RSSI, and a board's own access point cannot be seen from a metre away. Lowering
+the ceiling is the experiment that separates a transmit-side fault from a
+router that is refusing the board. It is a workaround, not a fix: a part that
+needs 8 dBm to work is telling you something about the board.
+
+A new ceiling governs frames sent from then on; an association already in place
+was negotiated at the old one. To test a join, set the power and then `wifi on`
+after a `wifi off`, or `wifi connect`.
+
+The same setting is `wifi_tx_power_dbm` in `config.json` (`0`, the default,
+leaves the driver alone). The driver forgets the ceiling whenever the radio
+restarts — a switch to access point mode and back, `wifi off` and `on` — so the
+firmware reapplies it on every start rather than once. A value set with this
+command lasts until reset; the config key is the one that survives it.

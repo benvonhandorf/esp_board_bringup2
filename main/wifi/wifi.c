@@ -9,6 +9,7 @@
 #include "app_bringup.h"
 #include "wifi.h"
 
+#include "esp_event.h"
 #include "esp_mac.h"
 #include "esp_netif.h"
 #include "esp_wifi.h"
@@ -655,5 +656,81 @@ int cmd_wifi_iperf(int argc, char **argv)
     vTaskDelay(pdMS_TO_TICKS((IPERF_SINGLE_DURATION_S + 2) * 1000));
     iperf_stop_instance(running_iperf);
     running_iperf = -1;
+    return 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* txpower                                                             */
+/* ------------------------------------------------------------------ */
+
+#define TX_POWER_MIN_DBM     2
+#define TX_POWER_MAX_DBM     20    /* the driver's own ceiling on the S3 and C3 */
+
+/* 0 leaves the driver alone. Written by the executor task, read by the event
+ * task; a plain int is atomic enough for a bench setting. */
+static volatile int s_tx_power_dbm;
+
+static esp_err_t apply_tx_power(int dbm)
+{
+    /* The driver counts in quarter-dBm. */
+    return esp_wifi_set_max_tx_power((int8_t)(dbm * 4));
+}
+
+static void tx_power_on_wifi_event(void *arg, esp_event_base_t base, int32_t id, void *data)
+{
+    (void)arg;
+    (void)base;
+    (void)data;
+    int dbm = s_tx_power_dbm;
+    if (dbm != 0 && (id == WIFI_EVENT_STA_START || id == WIFI_EVENT_AP_START)) {
+        apply_tx_power(dbm);
+    }
+}
+
+void wifi_tx_power_init(int dbm)
+{
+    s_tx_power_dbm = dbm;
+    esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, tx_power_on_wifi_event, NULL);
+}
+
+int cmd_wifi_txpower(int argc, char **argv)
+{
+    if (argc > 2) {
+        STRRES_PRINTF(STR_WIFI_USAGE_TXPOWER);
+        return -1;
+    }
+    if (!require_radio_on()) {
+        return -1;
+    }
+
+    if (argc == 2) {
+        int dbm = TX_POWER_MAX_DBM;   /* "default" is the driver's own ceiling */
+        if (strcasecmp(argv[1], "default") == 0) {
+            s_tx_power_dbm = 0;
+        } else {
+            if (cli_parse_int_arg(argv[1], &dbm) < 0 ||
+                dbm < TX_POWER_MIN_DBM || dbm > TX_POWER_MAX_DBM) {
+                STRRES_ERROR(STR_WIFI_TXPOWER_RANGE);
+                return -1;
+            }
+            s_tx_power_dbm = dbm;
+        }
+        esp_err_t err = apply_tx_power(dbm);
+        if (err != ESP_OK) {
+            STRRES_ERROR(STR_WIFI_TXPOWER_SET_FAILED, esp_err_to_name(err));
+            return -1;
+        }
+        /* The new ceiling governs frames sent from here on; the association in
+         * place was negotiated at the old one, so a join test wants `wifi on`
+         * or a reconnect after changing it. */
+    }
+
+    int8_t quarter = 0;
+    esp_err_t err = esp_wifi_get_max_tx_power(&quarter);
+    if (err != ESP_OK) {
+        STRRES_ERROR(STR_WIFI_TXPOWER_SET_FAILED, esp_err_to_name(err));
+        return -1;
+    }
+    STRRES_PRINTF(STR_WIFI_TXPOWER_REPORT, s_tx_power_dbm, quarter / 4);
     return 0;
 }

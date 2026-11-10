@@ -253,6 +253,7 @@ static const cli_command_t wifi_commands[] = {
     {"on",       NULL, NULL, cmd_wifi_on},
     {"iperf",    NULL, NULL, cmd_wifi_iperf},
     {"netstats", NULL, NULL, cmd_wifi_netstats},
+    {"txpower",  NULL, NULL, cmd_wifi_txpower},
 };
 
 /* Parallel to wifi_commands[]. A row here and a row there must stay in step;
@@ -266,6 +267,7 @@ static const cli_command_text_t wifi_text[] = {
     {STR_WIFI_ON_USAGE,        STR_WIFI_ON_HELP},
     {STR_WIFI_IPERF_USAGE,     STR_WIFI_IPERF_HELP},
     {STR_WIFI_NETSTATS_USAGE,  STR_WIFI_NETSTATS_HELP},
+    {STR_WIFI_TXPOWER_USAGE,   STR_WIFI_TXPOWER_HELP},
 };
 _Static_assert(ARRAY_COUNT(wifi_text) == ARRAY_COUNT(wifi_commands),
                "wifi help ids and commands must be the same length");
