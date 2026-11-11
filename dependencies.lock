@@ -40,7 +40,7 @@ dependencies:
     - esp32p4
     version: 744d62634a363c0f613b18c58dfa11ba57be050e
   audio_stream_usb:
-    component_hash: 34ca7dc939d3d804c5ad920c3bff2c0feb4aa2fe27f9ad6bb4c09ff4cb7b2e1d
+    component_hash: 645f6aca8d0d57f8526b53a117e2dd00ccca010f250a5ab2d20dd335eb21eeb8
     dependencies:
     - name: idf
       version: '>=5.3'
@@ -51,7 +51,7 @@ dependencies:
     - git: https://github.com/benvonhandorf/esp_components.git
       name: usb_mic
       path: usb_mic
-      version: usb_mic-v0.1.1
+      version: usb_mic-v0.2.0
     source:
       git: https://github.com/benvonhandorf/esp_components.git
       path: audio_stream_usb
@@ -63,7 +63,7 @@ dependencies:
     - esp32s31
     - esp32c3
     - esp32
-    version: 14afb70041bcd903bd234f46bc1a43d248a5e031
+    version: 0a258257307c080e348ed1224170956e27a55326
   aw9523b:
     component_hash: 7374ef9fee7b9aa1caf9424620404226ea4cf7e64c1fb5e922e108669d4efc7b
     dependencies:
@@ -181,7 +181,7 @@ dependencies:
       type: service
     version: 1.1.0
   espressif/tinyusb:
-    component_hash: a40b7f67df6ac254a4afd96c6401cc56f2059ae747d6d7e66b568bca53ad0edc
+    component_hash: e7f993ae9b1b0eb8779c04dd26b5f8900108a19e5e4534b19946e18f1edd8895
     dependencies:
     - name: idf
       require: private
@@ -195,7 +195,7 @@ dependencies:
     - esp32p4
     - esp32h4
     - esp32s31
-    version: 0.19.0~3
+    version: 0.21.0~4
   http_server:
     component_hash: 6b402f4d3696f1758b1ce94a81ff3ca2f41601b35ed93f629f4a5eb49c7bcd59
     dependencies:
@@ -431,14 +431,14 @@ dependencies:
       type: git
     version: 8f2840c9d9df537de152d1e5ba7e8d7d03ab4b09
   usb_mic:
-    component_hash: 234f96dc30d1d76112273cab44ac3939bf096a7acb02c49d58fe0411d0065e04
+    component_hash: ef5f8ae40a4def8224e0427f002fecf3c9b75d9165ed3076d029ea9f91c17038
     dependencies:
     - name: idf
       version: '>=5.3'
     - name: espressif/tinyusb
       rules:
       - if: target in [esp32s2, esp32s3, esp32p4, esp32s31]
-      version: ^0.19.0~3
+      version: ^0.21.0~4
     source:
       git: https://github.com/benvonhandorf/esp_components.git
       path: usb_mic
@@ -450,7 +450,7 @@ dependencies:
     - esp32s31
     - esp32c3
     - esp32
-    version: a03b14166a858af13bb8815dd76d2c0c87bb8ab0
+    version: ab14ac777a14f475fd099b22957363546f169cea
   wifi_manager:
     component_hash: 7afe9a23273da7ec70d23c102a17feb056c34d2f86a75479f362fe6291e11721
     dependencies:
@@ -502,6 +502,6 @@ direct_dependencies:
 - tone_gen
 - usb_mic
 - wifi_manager
-manifest_hash: 08b1cc9e19571a4c13d187a6acdf11125a0322fbe2b5bb928b912d69ea414231
+manifest_hash: ad2226a9234669f7f7b078af553a7331d724b8086dc08e32b740e24675f993f9
 target: esp32s3
 version: 3.0.0
