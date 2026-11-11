@@ -25,6 +25,9 @@
 #define BUFFER_BYTES_MAX     (8u * 1024 * 1024)
 /* What audio_stream_queue keeps free in internal RAM when it has to buffer there. */
 #define INTERNAL_RESERVE     40960
+/* Bytes per socket send. 4 kB (the component default) cost three sends per chunk and
+ * capped 300 kHz stereo near 7.8 Mbit/s; see results/audio_net_300khz_stereo_findings.md. */
+#define SEND_CHUNK_BYTES     16384
 
 /* What `config` last accepted: the defaults a listener gets without a query. A listener
  * reads these from the HTTP task while the console may be writing them; a torn read costs
@@ -179,6 +182,7 @@ esp_err_t net_stream_handle(httpd_req_t *req)
     const audio_stream_http_options_t opt = {
         .stream = {.owner = OWNER, .core = stream_task_core()},
         .queue = {.bytes = buffer_bytes(&fmt, buffer_ms), .use_psram = true,
+                  .chunk_bytes = SEND_CHUNK_BYTES,
                   .reserve_internal_bytes = INTERNAL_RESERVE},
     };
     esp_err_t err = audio_stream_http_serve(req, &src, &fmt, &opt);

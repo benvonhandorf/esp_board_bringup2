@@ -2,6 +2,8 @@
 
 Status: **open, abandoned for now (2026-11-10).** Nothing below is a conclusion except where it says measured.
 
+**Superseded 2026-11-11 by `audio_net_300khz_stereo_findings.md`**: cause found, now 98% (294 kHz).
+
 ## The problem
 
 Streaming the `pdmultra` source at its 300 kHz decimated rate, two channels (9.6 Mbit/s nominal),

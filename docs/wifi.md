@@ -145,6 +145,12 @@ the ceiling is the experiment that separates a transmit-side fault from a
 router that is refusing the board. It is a workaround, not a fix: a part that
 needs 8 dBm to work is telling you something about the board.
 
+Lower can also be faster. On the Sinn board (RSSI -31 dBm throughout) `wifi iperf`
+measured 0.9 Mbit/s at 8 dBm, 14-15 at 6, 16-17 at 5 and 18-22 at 4, and the board
+would not rejoin at 14 or above. Streaming 300 kHz stereo over `audio-net` needs
+9.6 Mbit/s, so on that board use 4 or 5. Measure with `wifi iperf` after each change
+rather than assuming 8 is safe; see `results/audio_net_300khz_stereo_findings.md`.
+
 A new ceiling governs frames sent from then on; an association already in place
 was negotiated at the old one. To test a join, set the power and then `wifi on`
 after a `wifi off`, or `wifi connect`.
