@@ -1,6 +1,6 @@
 dependencies:
   audio_stream:
-    component_hash: 269b445769870996c2ad0ca0b68b57990093ae176a3d5abc97d074ef637e15f7
+    component_hash: 9a4e9faafbddbcaa6976075104990d08d8acddfea57a610a665b8b78d3eb6d5b
     dependencies:
     - name: idf
       version: '>=5.3'
@@ -18,16 +18,16 @@ dependencies:
     - esp32s3
     - esp32c3
     - esp32p4
-    version: d69e919ca78c98c47a169d873c6dbcb7d6f5935b
+    version: fe463bd277e44cb701e04faf436d432653e6537c
   audio_stream_http:
-    component_hash: 1ac45e3d61954b46815c4d3da38d6ab638894699e7e0ba0e4095b1ec7b6fd54e
+    component_hash: ec6de1512f994720e5502bd2b12a56e0e838efc2c5cb78e0d61b77e03f491a84
     dependencies:
     - name: idf
       version: '>=5.3'
     - git: https://github.com/benvonhandorf/esp_components.git
       name: audio_stream
       path: audio_stream
-      version: audio_stream-v0.1.0
+      version: audio_stream-v0.1.1
     source:
       git: https://github.com/benvonhandorf/esp_components.git
       path: audio_stream_http
@@ -38,16 +38,16 @@ dependencies:
     - esp32s3
     - esp32c3
     - esp32p4
-    version: 744d62634a363c0f613b18c58dfa11ba57be050e
+    version: 295295ada46cfbc0ea74157e91a6306f346014aa
   audio_stream_usb:
-    component_hash: 645f6aca8d0d57f8526b53a117e2dd00ccca010f250a5ab2d20dd335eb21eeb8
+    component_hash: 073fa089a7836baa70c619b13dcf869eeba5869af383b08e84cbaac9d45cb996
     dependencies:
     - name: idf
       version: '>=5.3'
     - git: https://github.com/benvonhandorf/esp_components.git
       name: audio_stream
       path: audio_stream
-      version: audio_stream-v0.1.0
+      version: audio_stream-v0.1.1
     - git: https://github.com/benvonhandorf/esp_components.git
       name: usb_mic
       path: usb_mic
@@ -63,7 +63,7 @@ dependencies:
     - esp32s31
     - esp32c3
     - esp32
-    version: 0a258257307c080e348ed1224170956e27a55326
+    version: a4d2bc92e9753544b14deb793855db7f7a47f856
   aw9523b:
     component_hash: 7374ef9fee7b9aa1caf9424620404226ea4cf7e64c1fb5e922e108669d4efc7b
     dependencies:
@@ -502,6 +502,6 @@ direct_dependencies:
 - tone_gen
 - usb_mic
 - wifi_manager
-manifest_hash: ad2226a9234669f7f7b078af553a7331d724b8086dc08e32b740e24675f993f9
+manifest_hash: 82980b7da044e3e651185d21a05fc3268c7d9d60d8a228b2e28622a49a055892
 target: esp32s3
 version: 3.0.0

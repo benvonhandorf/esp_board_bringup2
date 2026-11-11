@@ -129,15 +129,15 @@ dependencies:
   audio_stream:
     git: https://github.com/benvonhandorf/esp_components.git
     path: audio_stream
-    version: audio_stream-v0.1.0
+    version: audio_stream-v0.1.1
   audio_stream_http:
     git: https://github.com/benvonhandorf/esp_components.git
     path: audio_stream_http
-    version: audio_stream_http-v0.1.0
+    version: audio_stream_http-v0.1.1
   audio_stream_usb:
     git: https://github.com/benvonhandorf/esp_components.git
     path: audio_stream_usb
-    version: audio_stream_usb-v0.1.1
+    version: audio_stream_usb-v0.1.2
   # USB Audio Class 2 microphone. Compiles to stubs on a chip with no USB OTG
   # controller, so it is listed for every target.
   usb_mic:
