@@ -89,11 +89,38 @@ Cheapest first; none tried.
    captures one line only"), or a second receiver. Software decimation for four channels would roughly
    double the decimator's share, to about 45% of a core by estimate.
 
+## One-hour soak: two mics at 150 kHz (2026-11-11)
+
+Setup: `audio pdmultra 10 11 sinc6 maxhz 50000` (150 kHz stereo; the default two-stage filter always
+gives 300 kHz, so `sinc6` is what makes 150 kHz), TX power 4 dBm, build ebd6051 from the pushed tags,
+one client connection for 3600 s (`GET /api/audio/stream`, 16 kB reads, a reading every 60 s).
+
+| Measure | Result |
+|---|---|
+| Received | 2.1 GB, 98.9% of nominal on average (594 kB/s of 600); per-minute range 95.8-99.3%, 8 of 59 minutes below 98.5% |
+| Produced (device) | 148.6 kHz average, 99.1% of 150 kHz |
+| Dropped (device) | 4.07 MB in 1355 blocks, about 0.2% of the stream |
+| Read errors, disconnects | 0, 0 |
+| Longest gap between client reads | 2.7 s; 7 of the 59 minutes had a gap over 1 s |
+| Decimator | 636 cycles per frame, 39.8% of one core |
+| Internal RAM at the end | 111 KB free, low water 1 KB |
+
+Reading: capture held, since the produced rate matches the received rate within about 1%. The loss is
+the sender: the 1 s ring reached 999 ms and dropped blocks during stalls of up to 2.7 s, which points at
+the WiFi link or the send path and not at the microphone. The stream tolerates an hour but not a
+no-loss requirement. For one, either a larger ring (PSRAM has room, 2 MB total; the ring is 600 kB at
+this rate) or finding the stall; approach 3 above (ring write off the stream task) and a client-side
+`wifi iperf` run during a stall would be the first things to look at. Internal RAM stays thin
+(low water 1 KB); do not add IRAM or internal buffers.
+
+Not run: 150 kHz with four mics (not reachable, finding 6), or a soak at 300 kHz stereo.
+
 ## Context
 
 The microphones are good to about 80 kHz, which needs at least 160 ksps. So the 300 kHz test exceeds what the
 microphones can use; two microphones at 150-160 ksps is the realistic software target and should sit well
-inside the budget (the decimator still runs per raw word, the output and network halve). Not run.
+inside the budget (the decimator still runs per raw word, the output and network halve). Run for an
+hour with `sinc6`: see the soak section above.
 
 ## Housekeeping
 
